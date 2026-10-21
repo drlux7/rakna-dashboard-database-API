@@ -1,0 +1,221 @@
+// Rakna Database Schema (Prisma)
+// Supports both SQLite (local development) and PostgreSQL (production)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String         @id @default(uuid())
+  phone                 String         @unique
+  name                  String         @default("صاحب المركبة")
+  isVerified            Boolean        @default(false)
+  isBlocked             Boolean        @default(false)
+  notificationsEnabled  Boolean        @default(true)
+  themePreference       String         @default("system") // system, light, dark
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  cars                  Car[]
+  tags                  Tag[]          // Unassigned or owned tags
+  orders                Order[]
+  notifications         Notification[]
+
+  @@map("users")
+}
+
+model AdminUser {
+  id                    String         @id @default(uuid())
+  email                 String         @unique
+  name                  String
+  passwordHash          String
+  role                  String         @default("ADMIN") // SUPER_ADMIN, ADMIN, LOGISTICS, SUPPORT
+  isActive              Boolean        @default(true)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@map("admin_users")
+}
+
+model Car {
+  id                    String         @id @default(uuid())
+  userId                String
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  brand                 String         @default("Toyota")
+  model                 String         @default("Corolla")
+  year                  String         @default("")
+  plateNumber           String         @default("")
+  colorName             String         @default("أبيض لؤلؤي")
+  nickname              String?
+  
+  isActivated           Boolean        @default(false)
+  isTagActive           Boolean        @default(false)
+  
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  // 1 Car = 1 Tag Rule enforced via unique relation
+  tag                   Tag?
+  chats                 Chat[]
+  notifications         Notification[]
+
+  @@map("cars")
+}
+
+model Tag {
+  id                    String         @id @default(uuid())
+  tagCode               String         @unique // e.g. "#A247" or "TAG-8821"
+  secretToken           String         @unique // Encrypted token embedded in NFC chip
+  tagType               String         @default("TRUNK_BADGE") // TRUNK_BADGE, NANO_GLASS
+  status                String         @default("IN_STOCK") // IN_STOCK, UNASSIGNED, ACTIVE, PAUSED, REVOKED
+  
+  batchNumber           String?
+  qrCodeSvg             String?        // Pre-generated SVG QR for printing
+
+  userId                String?
+  user                  User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // 1 Car = 1 Tag: carId is UNIQUE so a tag can belong to at most 1 car
+  carId                 String?        @unique
+  car                   Car?           @relation(fields: [carId], references: [id], onDelete: SetNull)
+
+  activatedAt           DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  scanLogs              TagScanLog[]
+
+  @@map("tags")
+}
+
+model Chat {
+  id                    String         @id @default(uuid())
+  carId                 String
+  car                   Car            @relation(fields: [carId], references: [id], onDelete: Cascade)
+
+  reporterSessionToken  String         // Anonymous token for reporter
+  contactReason         String         // CAR_BLOCKING, LIGHTS_ON, CAR_INCIDENT, CONSTRUCTION, OTHER
+  status                String         @default("ACTIVE") // ACTIVE, RESOLVED, BLOCKED, EXPIRED
+
+  expiresAt             DateTime?
+  lastMessageAt         DateTime       @default(now())
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  messages              Message[]
+
+  @@map("chats")
+}
+
+model Message {
+  id                    String         @id @default(uuid())
+  chatId                String
+  chat                  Chat           @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  senderType            String         // REPORTER, OWNER, SYSTEM
+  content               String         // Up to 500 characters
+  imageUrl              String?        // Secure path if live camera image was taken
+  
+  isViewOnce            Boolean        @default(false)
+  isViewed              Boolean        @default(false)
+  isRead                Boolean        @default(false)
+
+  createdAt             DateTime       @default(now())
+
+  @@map("messages")
+}
+
+model Product {
+  id                    String         @id @default(uuid())
+  name                  String
+  slug                  String         @unique
+  subtitle              String
+  price                 Float
+  imageAsset            String
+  badgeText             String?
+  description           String?
+  inStock               Boolean        @default(true)
+  createdAt             DateTime       @default(now())
+
+  orderItems            OrderItem[]
+
+  @@map("products")
+}
+
+model Order {
+  id                    String         @id @default(uuid())
+  orderNumber           String         @unique // e.g. "#RK-48219"
+  userId                String?
+  user                  User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  recipientName         String
+  phone                 String
+  governorate           String
+  addressDetails        String
+  
+  paymentMethod         String         @default("COD") // COD (Cash on Delivery)
+  totalPrice            Float
+  status                String         @default("PENDING") // PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  items                 OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id                    String         @id @default(uuid())
+  orderId               String
+  order                 Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId             String?
+  product               Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  productName           String
+  unitPrice             Float
+  quantity              Int            @default(1)
+
+  @@map("order_items")
+}
+
+model Notification {
+  id                    String         @id @default(uuid())
+  userId                String
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  carId                 String?
+  car                   Car?           @relation(fields: [carId], references: [id], onDelete: SetNull)
+
+  tagCode               String?
+  type                  String         @default("SYSTEM") // CAR_ALERT, TAG_SCAN, SECURITY, CHAT, SYSTEM
+  title                 String
+  message               String
+  actionLabel           String?
+  isRead                Boolean        @default(false)
+
+  createdAt             DateTime       @default(now())
+
+  @@map("notifications")
+}
+
+model TagScanLog {
+  id                    String         @id @default(uuid())
+  tagId                 String
+  tag                   Tag            @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  method                String         @default("QR") // NFC, QR
+  ipAddress             String?
+  userAgent             String?
+
+  createdAt             DateTime       @default(now())
+
+  @@map("tag_scan_logs")
+}
