@@ -116,6 +116,89 @@ class AdminApiService {
       body: JSON.stringify({ phone, text }),
     });
   }
+
+  async getWhatsAppConfig() {
+    return this.request('/admin/whatsapp/config');
+  }
+
+  async updateWhatsAppConfig(config) {
+    return this.request('/admin/whatsapp/config', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+
+  async testWhatsAppGateway(phone) {
+    return this.request('/admin/whatsapp/test', {
+      method: 'POST',
+      body: JSON.stringify({ phone }),
+    });
+  }
+
+  async resendWhatsApp(id) {
+    return this.request(`/admin/whatsapp/${id}/resend`, {
+      method: 'POST',
+    });
+  }
+
+  async getWhatsAppQrCode() {
+    return this.request('/admin/whatsapp/qr');
+  }
+
+  async getWhatsAppState() {
+    return this.request('/admin/whatsapp/state');
+  }
+
+  async rebootWhatsApp() {
+    return this.request('/admin/whatsapp/reboot', {
+      method: 'POST',
+    });
+  }
+
+  async logoutWhatsApp() {
+    return this.request('/admin/whatsapp/logout', {
+      method: 'POST',
+    });
+  }
+
+  // Live Customer Support Desk
+  async getSupportThreads() {
+    return this.request('/admin/support/threads');
+  }
+
+  async getSupportThreadMessages(userId) {
+    return this.request(`/admin/support/threads/${userId}/messages`);
+  }
+
+  async replySupportThread(threadId, content, imageUrl) {
+    return this.request(`/admin/support/threads/${threadId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ content, imageUrl }),
+    });
+  }
+
+  async closeSupportThread(threadId) {
+    return this.request(`/admin/support/threads/${threadId}/close`, {
+      method: 'POST',
+    });
+  }
+
+  // Abuse Reports & Chat Moderation
+  async getAbuseReports(status = 'ALL') {
+    return this.request(`/admin/abuse-reports?status=${status}`);
+  }
+
+  async getReportMessages(reportId) {
+    return this.request(`/admin/abuse-reports/${reportId}/messages`);
+  }
+
+  async takeReportAction(reportId, action, notes) {
+    return this.request(`/admin/abuse-reports/${reportId}/action`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action, notes }),
+    });
+  }
 }
 
 export const api = new AdminApiService();
+

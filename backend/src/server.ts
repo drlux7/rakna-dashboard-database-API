@@ -17,6 +17,7 @@ import { ChatsController } from './controllers/chats.controller';
 import { StoreController } from './controllers/store.controller';
 import { NotificationsController } from './controllers/notifications.controller';
 import { AdminController } from './controllers/admin.controller';
+import { SupportController } from './controllers/support.controller';
 import { setupChatGateway } from './sockets/chat.gateway';
 
 const app = express();
@@ -101,6 +102,7 @@ reporterRouter.get('/resolve-tag/:tagCode', ReporterController.resolveTag);
 reporterRouter.post('/session/init', ReporterController.initSession);
 reporterRouter.post('/chats', ReporterController.createChat);
 reporterRouter.post('/chats/:chatId/messages', ReporterController.sendReporterMessage);
+reporterRouter.post('/chats/:chatId/report', ReporterController.reportChat);
 apiRouter.use('/reporter', reporterRouter);
 
 // ──────────────── Owner Chats Routes ────────────────
@@ -109,7 +111,14 @@ chatsRouter.get('/', authenticateOwner, ChatsController.getChats);
 chatsRouter.get('/:id/messages', authenticateOwner, ChatsController.getMessages);
 chatsRouter.post('/:id/reply', authenticateOwner, ChatsController.reply);
 chatsRouter.post('/:id/block', authenticateOwner, ChatsController.block);
+chatsRouter.post('/:id/report', authenticateOwner, ChatsController.reportChat);
 apiRouter.use('/chats', chatsRouter);
+
+// ──────────────── Customer Support Routes (App User) ────────────────
+const supportRouter = express.Router();
+supportRouter.get('/messages', authenticateOwner, SupportController.getMyMessages);
+supportRouter.post('/messages', authenticateOwner, SupportController.sendMessage);
+apiRouter.use('/support', supportRouter);
 
 // ──────────────── Store & Orders Routes ────────────────
 const storeRouter = express.Router();
@@ -139,6 +148,26 @@ adminRouter.patch('/users/:id/toggle-block', authenticateAdmin, AdminController.
 adminRouter.get('/whatsapp/outbox', authenticateAdmin, AdminController.getWhatsAppOutbox);
 adminRouter.patch('/whatsapp/:id/mark-sent', authenticateAdmin, AdminController.markWhatsAppSent);
 adminRouter.post('/whatsapp/send-custom', authenticateAdmin, AdminController.sendCustomWhatsApp);
+adminRouter.get('/whatsapp/config', authenticateAdmin, AdminController.getWhatsAppConfig);
+adminRouter.post('/whatsapp/config', authenticateAdmin, AdminController.updateWhatsAppConfig);
+adminRouter.post('/whatsapp/test', authenticateAdmin, AdminController.testWhatsAppGateway);
+adminRouter.post('/whatsapp/:id/resend', authenticateAdmin, AdminController.resendWhatsAppMessage);
+adminRouter.get('/whatsapp/qr', authenticateAdmin, AdminController.getWhatsAppQrCode);
+adminRouter.get('/whatsapp/state', authenticateAdmin, AdminController.getWhatsAppState);
+adminRouter.post('/whatsapp/reboot', authenticateAdmin, AdminController.rebootWhatsApp);
+adminRouter.post('/whatsapp/logout', authenticateAdmin, AdminController.logoutWhatsApp);
+
+// Customer Support Desk
+adminRouter.get('/support/threads', authenticateAdmin, AdminController.getSupportThreads);
+adminRouter.get('/support/threads/:threadId/messages', authenticateAdmin, AdminController.getSupportThreadMessages);
+adminRouter.post('/support/threads/:threadId/reply', authenticateAdmin, AdminController.replySupportThread);
+adminRouter.post('/support/threads/:threadId/close', authenticateAdmin, AdminController.closeSupportThread);
+
+// Abuse Reports & Chat Moderation
+adminRouter.get('/abuse-reports', authenticateAdmin, AdminController.getAbuseReports);
+adminRouter.get('/abuse-reports/:reportId/messages', authenticateAdmin, AdminController.getReportMessages);
+adminRouter.patch('/abuse-reports/:reportId/action', authenticateAdmin, AdminController.takeReportAction);
+
 apiRouter.use('/admin', adminRouter);
 
 // Mount API Prefix (/api/v1)

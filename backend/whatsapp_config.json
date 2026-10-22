@@ -1,0 +1,14 @@
+{
+  "provider": "GREEN_API",
+  "isAutoSendEnabled": true,
+  "greenApiIdInstance": "710722777618",
+  "greenApiToken": "5f8886b3723e44ba92b69bd7b290b77920544f4b721f441796",
+  "greenApiHost": "https://api.green-api.com",
+  "metaToken": "",
+  "metaPhoneNumberId": "",
+  "ultraMsgInstanceId": "",
+  "ultraMsgToken": "",
+  "customEndpoint": "",
+  "customAuthHeader": "",
+  "otpTemplate": "🚗 *ركنة | كود التحقق*\n\nكود التحقق لتسجيل الدخول إلى حسابك هو: *{code}*\n\n⏱️ الكود صالح لمدة 10 دقائق.\n🔒 لا تشارك هذا الرمز مع أي شخص لحماية حسابك وسياراتك.\n\n_شكراً لاستخدامك ركنة (Rakna)_"
+}

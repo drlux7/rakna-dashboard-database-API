@@ -25,6 +25,8 @@ model User {
   tags                  Tag[]          // Unassigned or owned tags
   orders                Order[]
   notifications         Notification[]
+  supportMessages       SupportMessage[]
+  supportTickets        SupportTicket[]
 
   @@map("users")
 }
@@ -109,6 +111,7 @@ model Chat {
   updatedAt             DateTime       @updatedAt
 
   messages              Message[]
+  reports               ChatReport[]
 
   @@map("chats")
 }
@@ -219,3 +222,49 @@ model TagScanLog {
 
   @@map("tag_scan_logs")
 }
+
+model ChatReport {
+  id                    String         @id @default(uuid())
+  chatId                String
+  chat                  Chat           @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  reporterType          String         @default("OWNER") // OWNER, REPORTER
+  reason                String         // PROFANITY, INAPPROPRIATE_IMAGE, HARASSMENT, BOUNDARY_VIOLATION, OTHER
+  details               String?
+  status                String         @default("PENDING") // PENDING, RESOLVED, DISMISSED
+  adminNotes            String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@map("chat_reports")
+}
+
+model SupportTicket {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                String            @default("OPEN") // OPEN, CLOSED
+  closedAt              DateTime?
+  closedBy              String?           // ADMIN, USER, SYSTEM
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  messages              SupportMessage[]
+
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticketId              String?
+  ticket                SupportTicket?    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderType            String            // USER, SUPPORT
+  content               String
+  imageUrl              String?
+  isRead                Boolean           @default(false)
+  createdAt             DateTime          @default(now())
+
+  @@map("support_messages")
+}
+

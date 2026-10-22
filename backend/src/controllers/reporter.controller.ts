@@ -232,4 +232,42 @@ export class ReporterController {
       res.status(500).json({ success: false, message: 'تعذر إرسال الرسالة' });
     }
   }
+
+  /**
+   * إبلاغ المُبلّغ المجهول عن محادثة مسيئة أو صورة غير لائقة
+   */
+  static async reportChat(req: Request, res: Response): Promise<void> {
+    try {
+      const chatId = req.params.chatId as string;
+      const { reason, details } = req.body;
+
+      const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+      });
+
+      if (!chat) {
+        res.status(404).json({ success: false, message: 'المحادثة غير موجودة' });
+        return;
+      }
+
+      const report = await prisma.chatReport.create({
+        data: {
+          chatId: chat.id,
+          reporterType: 'REPORTER',
+          reason: reason || 'HARASSMENT',
+          details: details || null,
+          status: 'PENDING',
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'تم استلام البلاغ بنجاح وسيقوم فريق الرقابة بفحص المحادثة فوراً 🛡️',
+        report,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تقديم البلاغ' });
+    }
+  }
 }
+

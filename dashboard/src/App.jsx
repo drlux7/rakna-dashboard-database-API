@@ -28,6 +28,24 @@ import {
   Send,
   Copy,
   Smartphone,
+  Settings,
+  Key,
+  Globe,
+  Zap,
+  Check,
+  AlertTriangle,
+  Play,
+  HelpCircle,
+  Edit3,
+  RotateCcw,
+  Sparkles,
+  Headphones,
+  ShieldAlert,
+  Flag,
+  X,
+  Ban,
+  MessageCircle,
+  CheckCheck,
 } from 'lucide-react';
 import { api } from './services/api';
 
@@ -68,6 +86,56 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedTags, setGeneratedTags] = useState([]);
 
+  const [waConfig, setWaConfig] = useState({
+    provider: 'GREEN_API',
+    isAutoSendEnabled: true,
+    greenApiIdInstance: '',
+    greenApiToken: '',
+    greenApiHost: 'https://api.green-api.com',
+    metaToken: '',
+    metaPhoneNumberId: '',
+    ultraMsgInstanceId: '',
+    ultraMsgToken: '',
+    customEndpoint: '',
+    customAuthHeader: '',
+    otpTemplate:
+      '🚗 *ركنة | كود التحقق*\n\nكود التحقق لتسجيل الدخول إلى حسابك هو: *{code}*\n\n⏱️ الكود صالح لمدة 10 دقائق.\n🔒 لا تشارك هذا الرمز مع أي شخص لحماية حسابك وسياراتك.\n\n_شكراً لاستخدامك ركنة (Rakna)_',
+  });
+  const DEFAULT_OTP_TEMPLATE =
+    '🚗 *ركنة | كود التحقق*\n\nكود التحقق لتسجيل الدخول إلى حسابك هو: *{code}*\n\n⏱️ الكود صالح لمدة 10 دقائق.\n🔒 لا تشارك هذا الرمز مع أي شخص لحماية حسابك وسياراتك.\n\n_شكراً لاستخدامك ركنة (Rakna)_';
+  const [otpTemplate, setOtpTemplate] = useState(DEFAULT_OTP_TEMPLATE);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [isSavingWaConfig, setIsSavingWaConfig] = useState(false);
+  const [testOtpPhone, setTestOtpPhone] = useState('+2010');
+  const [isTestingWa, setIsTestingWa] = useState(false);
+  const [testFeedback, setTestFeedback] = useState(null);
+
+  // Green-API QR Code & Pairing State
+  const [qrImage, setQrImage] = useState(null);
+  const [qrType, setQrType] = useState(null);
+  const [instanceState, setInstanceState] = useState('notAuthorized');
+  const [isLoadingQr, setIsLoadingQr] = useState(false);
+
+  // Customer Support State
+  const [supportThreads, setSupportThreads] = useState([]);
+  const [selectedSupportUserId, setSelectedSupportUserId] = useState(null);
+  const [selectedSupportTicket, setSelectedSupportTicket] = useState(null);
+  const [supportFilter, setSupportFilter] = useState('ALL'); // 'ALL' | 'OPEN' | 'CLOSED'
+  const [isClosingThread, setIsClosingThread] = useState(false);
+  const [supportMessages, setSupportMessages] = useState([]);
+  const [selectedSupportUser, setSelectedSupportUser] = useState(null);
+  const [supportReplyText, setSupportReplyText] = useState('');
+  const [isSendingReply, setIsSendingReply] = useState(false);
+  const [isLoadingSupportMsgs, setIsLoadingSupportMsgs] = useState(false);
+  const [supportSearch, setSupportSearch] = useState('');
+
+  // Abuse Reports & Moderation State
+  const [abuseReports, setAbuseReports] = useState([]);
+  const [abuseFilter, setAbuseFilter] = useState('ALL');
+  const [activeReportDetails, setActiveReportDetails] = useState(null);
+  const [isLoadingReportDetails, setIsLoadingReportDetails] = useState(false);
+  const [isActingReport, setIsActingReport] = useState(false);
+
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -77,12 +145,15 @@ export default function App() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const [statsRes, tagsRes, ordersRes, usersRes, waRes] = await Promise.all([
+      const [statsRes, tagsRes, ordersRes, usersRes, waRes, waConfRes, supportRes, abuseRes] = await Promise.all([
         api.getStats().catch(() => null),
         api.listTags().catch(() => null),
         api.listOrders().catch(() => null),
         api.listUsers().catch(() => null),
         api.getWhatsAppOutbox().catch(() => null),
+        api.getWhatsAppConfig().catch(() => null),
+        api.getSupportThreads().catch(() => null),
+        api.getAbuseReports('ALL').catch(() => null),
       ]);
 
       if (statsRes && statsRes.stats) setStats(statsRes.stats);
@@ -93,10 +164,49 @@ export default function App() {
         setWhatsappMessages(waRes.messages);
         if (waRes.stats) setWhatsappStats(waRes.stats);
       }
+      if (waConfRes && waConfRes.config) {
+        setWaConfig((prev) => ({ ...prev, ...waConfRes.config }));
+        if (waConfRes.config.otpTemplate) {
+          setOtpTemplate(waConfRes.config.otpTemplate);
+        }
+      }
+      if (supportRes && supportRes.threads) {
+        setSupportThreads(supportRes.threads);
+        if (!selectedSupportUserId && supportRes.threads.length > 0) {
+          setSelectedSupportUserId(supportRes.threads[0].userId);
+          loadSupportMessages(supportRes.threads[0].userId, true);
+        }
+      }
+      if (abuseRes && abuseRes.reports) {
+        setAbuseReports(abuseRes.reports);
+      }
     } catch (err) {
       console.error('Data load error:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadQrAndState = async () => {
+    setIsLoadingQr(true);
+    try {
+      const res = await api.getWhatsAppQrCode();
+      if (res && res.qrData) {
+        setQrType(res.qrData.type);
+        if (res.qrData.type === 'qrCode' && res.qrData.message) {
+          setQrImage(`data:image/png;base64,${res.qrData.message}`);
+        } else if (res.qrData.type === 'alreadyLogged') {
+          setInstanceState('authorized');
+          setQrImage(null);
+        }
+      }
+      if (res && res.state) {
+        setInstanceState(res.state.stateInstance);
+      }
+    } catch (err) {
+      console.error('QR Load error:', err);
+    } finally {
+      setIsLoadingQr(false);
     }
   };
 
@@ -105,6 +215,52 @@ export default function App() {
       loadAllData();
     }
   }, [token]);
+
+  useEffect(() => {
+    let interval;
+    if (token && currentTab === 'whatsapp' && waConfig.provider === 'GREEN_API') {
+      loadQrAndState();
+      interval = setInterval(async () => {
+        try {
+          const res = await api.getWhatsAppState();
+          if (res && res.state) {
+            setInstanceState(res.state.stateInstance);
+            if (res.state.stateInstance === 'authorized') {
+              setQrImage(null);
+            }
+          }
+        } catch (_) {}
+      }, 4500);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [token, currentTab, waConfig.provider]);
+
+  useEffect(() => {
+    let interval;
+    if (token && currentTab === 'support') {
+      loadSupportThreads(true);
+      if (selectedSupportUserId) {
+        loadSupportMessages(selectedSupportUserId, true);
+      }
+      interval = setInterval(() => {
+        loadSupportThreads(true);
+        if (selectedSupportUserId) {
+          loadSupportMessages(selectedSupportUserId, true);
+        }
+      }, 3500);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [token, currentTab, selectedSupportUserId]);
+
+  useEffect(() => {
+    if (token && currentTab === 'abuse') {
+      loadAbuseReports();
+    }
+  }, [token, currentTab, abuseFilter]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -379,6 +535,266 @@ export default function App() {
     }
   };
 
+  const handleSaveWaConfig = async (e) => {
+    e.preventDefault();
+    setIsSavingWaConfig(true);
+    try {
+      const res = await api.updateWhatsAppConfig(waConfig);
+      if (res.success) {
+        showToast(res.message || 'تم حفظ وتفعيل إعدادات الواتساب بنجاح ⚡');
+        if (res.config) setWaConfig(res.config);
+        loadAllData();
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر حفظ إعدادات الواتساب');
+    } finally {
+      setIsSavingWaConfig(false);
+    }
+  };
+
+  const handleSaveOtpTemplate = async (e) => {
+    if (e) e.preventDefault();
+    if (!otpTemplate.includes('{code}')) {
+      alert('تنبيه: يجب أن يحتوي نص الرسالة على المتغير {code} ليتم استبداله تلقائياً بكود التحقق!');
+      return;
+    }
+    setIsSavingTemplate(true);
+    try {
+      const res = await api.updateWhatsAppConfig({ ...waConfig, otpTemplate });
+      if (res.success) {
+        setWaConfig((prev) => ({ ...prev, otpTemplate }));
+        showToast('تم حفظ نموذج رسالة الـ OTP بنجاح! 💾✨');
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر حفظ نص الرسالة');
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
+
+  const handleResetOtpTemplate = () => {
+    if (window.confirm('هل تريد استعادة نموذج رسالة الـ OTP الافتراضي؟')) {
+      setOtpTemplate(DEFAULT_OTP_TEMPLATE);
+      showToast('تمت استعادة النموذج الافتراضي ↩️');
+    }
+  };
+
+  const handleInsertCodeTag = () => {
+    if (!otpTemplate.includes('{code}')) {
+      setOtpTemplate((prev) => prev.trim() + ' {code}');
+      showToast('تمت إضافة المتغير {code} بنجاح ✅');
+    } else {
+      showToast('المتغير {code} مدمج بالفعل في الرسالة ℹ️');
+    }
+  };
+
+  const handleTestWhatsApp = async (e) => {
+    e.preventDefault();
+    if (!testOtpPhone || testOtpPhone.length < 8) {
+      showToast('يرجى إدخال رقم هاتف صحيح مسبوقاً بكود الدولة');
+      return;
+    }
+    setIsTestingWa(true);
+    setTestFeedback(null);
+    try {
+      const res = await api.testWhatsAppGateway(testOtpPhone);
+      setTestFeedback(res);
+      if (res.success) {
+        showToast('تم إرسال كود الـ OTP التجريبي بنجاح عبر الواتساب! 🚀');
+      } else {
+        showToast(res.message || 'تعذر إرسال رسالة الاختبار');
+      }
+      loadAllData();
+    } catch (err) {
+      setTestFeedback({ success: false, message: err.message });
+      showToast(err.message || 'خطأ أثناء اختبار الاتصال');
+    } finally {
+      setIsTestingWa(false);
+    }
+  };
+
+  const handleResendWhatsApp = async (msgId) => {
+    try {
+      const res = await api.resendWhatsApp(msgId);
+      if (res.success) {
+        showToast('تمت إعادة إرسال الرسالة بنجاح ⚡');
+        loadAllData();
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر إعادة الإرسال');
+    }
+  };
+
+  const handleLogoutInstance = async () => {
+    if (!window.confirm('هل تريد فصل الرقم الحالي ومسح كود QR جديد لربط رقم هاتف آخر؟')) return;
+    try {
+      await api.logoutWhatsApp();
+      showToast('تم تسجيل الخروج بنجاح. جاري طلب رمز QR جديد...');
+      setQrImage(null);
+      setInstanceState('notAuthorized');
+      setTimeout(loadQrAndState, 2000);
+    } catch (err) {
+      showToast(err.message || 'تعذر تسجيل الخروج');
+    }
+  };
+
+  const handleRebootInstance = async () => {
+    try {
+      await api.rebootWhatsApp();
+      showToast('جاري إعادة تشغيل النسخة لتحديث الاتصال...');
+      setTimeout(loadQrAndState, 3000);
+    } catch (err) {
+      showToast(err.message || 'تعذر إعادة التشغيل');
+    }
+  };
+
+  // Support Handlers
+  const loadSupportThreads = async (silent = false) => {
+    if (!token) return;
+    if (!silent) setIsLoadingSupportMsgs(true);
+    try {
+      const res = await api.getSupportThreads();
+      if (res && res.threads) {
+        setSupportThreads(res.threads);
+        if (!selectedSupportTicket && !selectedSupportUserId && res.threads.length > 0) {
+          setSelectedSupportTicket(res.threads[0]);
+          setSelectedSupportUserId(res.threads[0].userId);
+          loadSupportMessages(res.threads[0].ticketId || res.threads[0].userId, silent);
+        } else if (selectedSupportTicket) {
+          const updated = res.threads.find(t => t.ticketId === selectedSupportTicket.ticketId);
+          if (updated) setSelectedSupportTicket(updated);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading support threads:', e);
+    } finally {
+      if (!silent) setIsLoadingSupportMsgs(false);
+    }
+  };
+
+  const loadSupportMessages = async (threadId, silent = false) => {
+    if (!token || !threadId) return;
+    try {
+      const res = await api.getSupportThreadMessages(threadId);
+      if (res && res.success) {
+        setSupportMessages(res.messages || []);
+        setSelectedSupportUser(res.user);
+        if (res.ticket) {
+          setSelectedSupportTicket(prev => prev ? { ...prev, ...res.ticket } : res.ticket);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading support messages:', e);
+    }
+  };
+
+  const handleSelectSupportThread = (thread) => {
+    setSelectedSupportTicket(thread);
+    setSelectedSupportUserId(thread.userId);
+    loadSupportMessages(thread.ticketId || thread.userId);
+  };
+
+  const handleCloseSupportThread = async () => {
+    const targetId = selectedSupportTicket?.ticketId || selectedSupportUserId;
+    if (!targetId) return;
+
+    const isConfirmed = window.confirm(
+      'هل أنت متأكد من رغبتك في إغلاق هذه المحادثة؟\n\n' +
+      '• ستظل المحادثة محفوظة ومؤرشفة في الداشبورد للرجوع إليها في أي وقت.\n' +
+      '• لن يتمكن أحد من الكتابة أو إرسال ردود جديدة في هذه المحادثة نهائياً.\n' +
+      '• ستتم إزالة المحادثة من شاشة العميل في التطبيق، وعندما يضغط العميل على "تواصل مع الدعم" مرة أخرى سيفتح محادثة جديدة نظيفة.'
+    );
+    if (!isConfirmed) return;
+
+    setIsClosingThread(true);
+    try {
+      const res = await api.closeSupportThread(targetId);
+      if (res && res.success) {
+        showToast('تم إغلاق المحادثة بنجاح وأرشفتها 🔒');
+        setSelectedSupportTicket(prev => prev ? { ...prev, ticketStatus: 'CLOSED', status: 'CLOSED' } : null);
+        await loadSupportMessages(targetId, true);
+        await loadSupportThreads(true);
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر إغلاق المحادثة');
+    } finally {
+      setIsClosingThread(false);
+    }
+  };
+
+  const handleSendSupportReply = async (e) => {
+    if (e) e.preventDefault();
+    if (!supportReplyText.trim() || (!selectedSupportTicket && !selectedSupportUserId)) return;
+
+    if (selectedSupportTicket && (selectedSupportTicket.ticketStatus === 'CLOSED' || selectedSupportTicket.status === 'CLOSED')) {
+      showToast('⚠️ لا يمكن الإرسال، هذه المحادثة مغلقة ومؤرشفة!');
+      return;
+    }
+
+    setIsSendingReply(true);
+    try {
+      const targetId = selectedSupportTicket?.ticketId || selectedSupportUserId;
+      const res = await api.replySupportThread(targetId, supportReplyText.trim());
+      if (res && res.success) {
+        setSupportReplyText('');
+        showToast('تم إرسال الرد للعميل وإشعاره بنجاح! 💬✨');
+        loadSupportMessages(targetId, true);
+        loadSupportThreads(true);
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر إرسال الرد');
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
+
+  // Abuse Reports Handlers
+  const loadAbuseReports = async () => {
+    if (!token) return;
+    try {
+      const res = await api.getAbuseReports(abuseFilter);
+      if (res && res.reports) {
+        setAbuseReports(res.reports);
+      }
+    } catch (e) {
+      console.error('Error loading abuse reports:', e);
+    }
+  };
+
+  const handleOpenReportDetails = async (reportId) => {
+    setIsLoadingReportDetails(true);
+    try {
+      const res = await api.getReportMessages(reportId);
+      if (res && res.success) {
+        setActiveReportDetails(res);
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر جلب تفاصيل المحادثة');
+    } finally {
+      setIsLoadingReportDetails(false);
+    }
+  };
+
+  const handleTakeReportAction = async (reportId, action, notes) => {
+    setIsActingReport(true);
+    try {
+      const res = await api.takeReportAction(reportId, action, notes);
+      if (res && res.success) {
+        showToast(res.message);
+        setActiveReportDetails(null);
+        loadAbuseReports();
+        loadAllData();
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر تنفيذ الإجراء');
+    } finally {
+      setIsActingReport(false);
+    }
+  };
+
+  const totalUnreadSupport = supportThreads.reduce((acc, t) => acc + (t.unreadCount || 0), 0);
+  const pendingAbuseCount = abuseReports.filter((r) => r.status === 'PENDING').length;
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
       {/* Toast Notification */}
@@ -580,6 +996,82 @@ export default function App() {
                 borderRadius: '12px',
               }}>
                 {whatsappMessages.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              setCurrentTab('support');
+              loadSupportThreads();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '11px 14px',
+              borderRadius: '10px',
+              border: 'none',
+              background: currentTab === 'support' ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+              color: currentTab === 'support' ? '#38bdf8' : 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              textAlign: 'right',
+              transition: 'all 0.18s ease',
+            }}
+          >
+            <Headphones size={20} color={currentTab === 'support' ? '#38bdf8' : 'currentColor'} />
+            <span>خدمة العملاء والدعم الفني</span>
+            {totalUnreadSupport > 0 && (
+              <span style={{
+                marginRight: 'auto',
+                background: '#38bdf8',
+                color: '#000',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                padding: '2px 8px',
+                borderRadius: '12px',
+              }}>
+                {totalUnreadSupport} جديد
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              setCurrentTab('abuse');
+              loadAbuseReports();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '11px 14px',
+              borderRadius: '10px',
+              border: 'none',
+              background: currentTab === 'abuse' ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+              color: currentTab === 'abuse' ? '#f87171' : 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              textAlign: 'right',
+              transition: 'all 0.18s ease',
+            }}
+          >
+            <ShieldAlert size={20} color={currentTab === 'abuse' ? '#f87171' : 'currentColor'} />
+            <span>بلاغات المحادثات والرقابة</span>
+            {pendingAbuseCount > 0 && (
+              <span style={{
+                marginRight: 'auto',
+                background: '#ef4444',
+                color: '#fff',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                padding: '2px 8px',
+                borderRadius: '12px',
+              }}>
+                {pendingAbuseCount} بلاغ
               </span>
             )}
           </button>
@@ -1355,6 +1847,604 @@ export default function App() {
               ═══════════════════════════════════════════════════════════════════ */}
           {currentTab === 'whatsapp' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* WhatsApp QR Code Device Pairing Card */}
+              <div className="kpi-card gold-glow-border fade-in" style={{
+                padding: '28px',
+                background: 'linear-gradient(135deg, rgba(20, 27, 39, 0.98) 0%, rgba(16, 24, 38, 0.98) 100%)',
+                border: instanceState === 'authorized' ? '1px solid rgba(37, 211, 102, 0.4)' : '1px solid var(--border-gold)',
+                boxShadow: instanceState === 'authorized' ? '0 8px 32px rgba(37, 211, 102, 0.15)' : 'var(--shadow-gold)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '12px',
+                      background: instanceState === 'authorized' ? 'rgba(37, 211, 102, 0.2)' : 'rgba(245, 190, 24, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <QrCode color={instanceState === 'authorized' ? '#25D366' : 'var(--gold-primary)'} size={24} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>ربط رقم الواتساب عبر QR Code (WhatsApp Phone Pairing)</span>
+                        {instanceState === 'authorized' ? (
+                          <span style={{
+                            background: '#25D366',
+                            color: '#000',
+                            fontSize: '0.72rem',
+                            fontWeight: 800,
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                          }}>
+                            متصل ونشط 🟢
+                          </span>
+                        ) : (
+                          <span style={{
+                            background: 'rgba(239, 68, 68, 0.2)',
+                            color: '#f87171',
+                            fontSize: '0.72rem',
+                            fontWeight: 800,
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                          }}>
+                            بانتظار المسح بالهاتف 📷
+                          </span>
+                        )}
+                      </h3>
+                      <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        امسح الـ QR Code من تطبيق واتساب بهاتفك لربط الرقم الذي سيقوم بإرسال رسائل الـ OTP تلقائياً للعملاء.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      onClick={loadQrAndState}
+                      disabled={isLoadingQr}
+                      className="btn-ghost"
+                      style={{ fontSize: '0.82rem', gap: '6px' }}
+                    >
+                      <RefreshCw size={14} className={isLoadingQr ? 'animate-spin' : ''} />
+                      <span>{isLoadingQr ? 'جاري التحميل...' : 'تحديث الـ QR'}</span>
+                    </button>
+                    {instanceState === 'authorized' && (
+                      <button
+                        onClick={handleLogoutInstance}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          color: '#f87171',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          padding: '7px 14px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        فصل الرقم وربط رقم آخر
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {instanceState === 'authorized' ? (
+                  <div style={{
+                    padding: '24px',
+                    borderRadius: '14px',
+                    background: 'rgba(37, 211, 102, 0.08)',
+                    border: '1px solid rgba(37, 211, 102, 0.25)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '18px',
+                    flexWrap: 'wrap',
+                  }}>
+                    <div style={{
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '50%',
+                      background: 'rgba(37, 211, 102, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <CheckCircle2 color="#25D366" size={32} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: '#fff', fontWeight: 800, fontSize: '1.1rem' }}>
+                        تم ربط وتوثيق رقم الواتساب بنجاح! 🚀
+                      </div>
+                      <p style={{ color: '#a7f3d0', fontSize: '0.85rem', margin: '4px 0 0', lineHeight: 1.5 }}>
+                        النسخة متصلة ومصرح لها بالإرسال. عند قيام أي مستخدم بطلب كود OTP في تطبيق الهاتف، سيتم إرساله تلقائياً من رقمك المسجل هنا.
+                      </p>
+                      <div style={{ display: 'flex', gap: '16px', marginTop: '10px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        <span>معرّف النسخة: <strong style={{ color: 'var(--gold-primary)' }}>{waConfig.greenApiIdInstance}</strong></span>
+                        <span>الحالة: <strong style={{ color: '#25D366' }}>Active / Authorized</strong></span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'auto 1fr',
+                    gap: '24px',
+                    alignItems: 'center',
+                    background: 'rgba(0,0,0,0.3)',
+                    padding: '20px',
+                    borderRadius: '16px',
+                    border: '1px solid var(--border-subtle)',
+                  }}>
+                    {/* QR Code Container */}
+                    <div style={{
+                      width: '240px',
+                      height: '240px',
+                      background: '#fff',
+                      padding: '12px',
+                      borderRadius: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                      position: 'relative',
+                    }}>
+                      {isLoadingQr ? (
+                        <div style={{ textAlign: 'center', color: '#000' }}>
+                          <RefreshCw size={28} className="animate-spin" color="#000" style={{ margin: '0 auto 8px' }} />
+                          <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>جاري استخراج الـ QR...</div>
+                        </div>
+                      ) : qrImage ? (
+                        <img
+                          src={qrImage}
+                          alt="WhatsApp QR Code"
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                        />
+                      ) : (
+                        <div style={{ textAlign: 'center', color: '#000' }}>
+                          <QrCode size={40} color="#000" style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+                          <button
+                            onClick={loadQrAndState}
+                            style={{
+                              background: '#25D366',
+                              color: '#000',
+                              border: 'none',
+                              padding: '6px 14px',
+                              borderRadius: '8px',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              fontSize: '0.8rem',
+                            }}
+                          >
+                            عرض رمز الـ QR
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Step-by-Step Instructions */}
+                    <div>
+                      <div style={{ color: 'var(--gold-primary)', fontWeight: 800, fontSize: '1rem', marginBottom: '12px' }}>
+                        خطوات مسح الـ QR وتوثيق الرقم:
+                      </div>
+                      <ol style={{
+                        paddingRight: '20px',
+                        margin: 0,
+                        color: 'var(--text-secondary)',
+                        fontSize: '0.88rem',
+                        lineHeight: 1.8,
+                      }}>
+                        <li>افتح تطبيق <strong>واتساب</strong> على هاتفك المحمول.</li>
+                        <li>اضغط على <strong>القائمة (⋮)</strong> في أندرويد أو <strong>الإعدادات</strong> في آيفون.</li>
+                        <li>اختر <strong>الأجهزة المرتبطة (Linked Devices)</strong>.</li>
+                        <li>اضغط على <strong>ربط جهاز (Link a Device)</strong> ووجّه كاميرا الهاتف نحو الـ QR المقابل.</li>
+                        <li>سيتم التعرف على الرقم وتحديث حالته إلى <strong>متصل 🟢</strong> تلقائياً في ثوانٍ!</li>
+                      </ol>
+
+                      <div style={{
+                        marginTop: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        background: 'rgba(245, 190, 24, 0.08)',
+                        padding: '10px 14px',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(245, 190, 24, 0.2)',
+                        fontSize: '0.8rem',
+                        color: 'var(--gold-primary)',
+                      }}>
+                        <Clock size={16} />
+                        <span>يتجدد رمز الـ QR تلقائياً كل دقيقة لضمان الأمان.</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ═══════════════════════════════════════════════════════════════
+                  BOX: OTP MESSAGE TEMPLATE CUSTOMIZATION & LIVE PREVIEW
+                  ═══════════════════════════════════════════════════════════════ */}
+              <div className="kpi-card gold-glow-border fade-in" style={{
+                padding: '28px',
+                background: 'linear-gradient(135deg, rgba(20, 27, 39, 0.98) 0%, rgba(16, 24, 38, 0.98) 100%)',
+              }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '12px',
+                      background: 'rgba(245, 190, 24, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <Edit3 color="var(--gold-primary)" size={24} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>صندوق تعديل رسالة الواتساب مع كود الـ OTP</span>
+                        <span style={{
+                          background: 'rgba(245, 190, 24, 0.2)',
+                          color: 'var(--gold-primary)',
+                          fontSize: '0.72rem',
+                          fontWeight: 800,
+                          padding: '3px 8px',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(245, 190, 24, 0.3)',
+                        }}>
+                          تخصيص مباشر ✍️
+                        </span>
+                      </h3>
+                      <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        عدّل النص الذي يصل للعملاء على واتساب عند تسجيل الدخول أو طلب رمز التحقق في تطبيق ركنة.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={handleResetOtpTemplate}
+                      className="btn-ghost"
+                      style={{ fontSize: '0.82rem', gap: '6px' }}
+                      title="استعادة النص المقترح الافتراضي"
+                    >
+                      <RotateCcw size={14} />
+                      <span>الافتراضي</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveOtpTemplate}
+                      disabled={isSavingTemplate}
+                      style={{
+                        background: 'linear-gradient(135deg, #f5be18 0%, #e5aa09 100%)',
+                        color: '#000',
+                        fontWeight: 800,
+                        border: 'none',
+                        padding: '9px 18px',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 2px 10px rgba(245, 190, 24, 0.35)',
+                      }}
+                    >
+                      {isSavingTemplate ? (
+                        <>
+                          <RefreshCw size={14} className="animate-spin" />
+                          <span>جاري الحفظ...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check size={16} />
+                          <span>حفظ التعديلات</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Grid: Editor (Left) & WhatsApp Preview (Right) */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+                  gap: '24px',
+                  alignItems: 'start',
+                }}>
+                  {/* Left: Textarea & Helper tags */}
+                  <div>
+                    {/* Variable insertion bar */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '10px',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                    }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                        نص الرسالة (Message Body):
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleInsertCodeTag}
+                        style={{
+                          background: 'rgba(245, 190, 24, 0.12)',
+                          color: 'var(--gold-primary)',
+                          border: '1px solid rgba(245, 190, 24, 0.35)',
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                        }}
+                        title="إدراج متغير كود التحقق في الرسالة"
+                      >
+                        <Sparkles size={12} />
+                        <span>إدراج رمز الكود: <strong>{'{code}'}</strong></span>
+                      </button>
+                    </div>
+
+                    {/* Textarea */}
+                    <div style={{ position: 'relative' }}>
+                      <textarea
+                        value={otpTemplate}
+                        onChange={(e) => setOtpTemplate(e.target.value)}
+                        rows={8}
+                        className="admin-input"
+                        style={{
+                          width: '100%',
+                          minHeight: '180px',
+                          fontFamily: 'inherit',
+                          fontSize: '0.92rem',
+                          lineHeight: '1.7',
+                          padding: '14px 16px',
+                          borderRadius: '12px',
+                          resize: 'vertical',
+                          borderColor: !otpTemplate.includes('{code}') ? '#ef4444' : 'var(--border-subtle)',
+                        }}
+                        placeholder="اكتب نص الرسالة هنا، وتأكد من تضمين {code}..."
+                      />
+                    </div>
+
+                    {/* Warning if {code} is missing */}
+                    {!otpTemplate.includes('{code}') ? (
+                      <div style={{
+                        marginTop: '10px',
+                        padding: '8px 12px',
+                        background: 'rgba(239, 68, 68, 0.12)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        borderRadius: '8px',
+                        color: '#f87171',
+                        fontSize: '0.8rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}>
+                        <AlertTriangle size={16} />
+                        <span>تحذير: الرسالة لا تحتوي على <strong>{'{code}'}</strong>! لن يصل كود التحقق للمستخدم بدون هذا المتغير.</span>
+                      </div>
+                    ) : (
+                      <div style={{
+                        marginTop: '10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        fontSize: '0.78rem',
+                        color: 'var(--text-muted)',
+                      }}>
+                        <span style={{ color: '#34d399', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <CheckCircle2 size={13} />
+                          <span>المتغير <strong>{'{code}'}</strong> مدمج بشكل صحيح</span>
+                        </span>
+                        <span>{otpTemplate.length} حرف | {otpTemplate.split('\n').length} أسطر</span>
+                      </div>
+                    )}
+
+                    {/* WhatsApp formatting tips */}
+                    <div style={{
+                      marginTop: '14px',
+                      padding: '10px 14px',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      borderRadius: '10px',
+                      border: '1px solid var(--border-subtle)',
+                      fontSize: '0.76rem',
+                      color: 'var(--text-secondary)',
+                      lineHeight: '1.6',
+                    }}>
+                      <strong style={{ color: 'var(--gold-primary)' }}>💡 تلميحات تنسيق واتساب:</strong>
+                      <span style={{ marginRight: '8px' }}>ضع <code>*نص*</code> لجعله <strong>عريضاً</strong></span>
+                      <span style={{ marginRight: '8px' }}>• ضع <code>_نص_</code> لجعله <em>مائلاً</em></span>
+                      <span style={{ marginRight: '8px' }}>• ضع <code>~نص~</code> لجعله <del>مشطوباً</del></span>
+                    </div>
+                  </div>
+
+                  {/* Right: Realistic WhatsApp Chat Bubble Preview */}
+                  <div>
+                    <div style={{
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      color: 'var(--text-secondary)',
+                      marginBottom: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Smartphone size={16} color="#25D366" />
+                        <span>معاينة حية على واتساب (Live Preview)</span>
+                      </span>
+                      <span style={{ fontSize: '0.74rem', color: '#25D366' }}>شكل الرسالة في الهاتف</span>
+                    </div>
+
+                    {/* WhatsApp Device Container */}
+                    <div style={{
+                      background: '#0b141a',
+                      borderRadius: '16px',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      overflow: 'hidden',
+                      boxShadow: '0 12px 30px rgba(0, 0, 0, 0.6)',
+                    }}>
+                      {/* WhatsApp Chat Top Header */}
+                      <div style={{
+                        background: '#202c33',
+                        padding: '10px 14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #f5be18, #d97706)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#000',
+                            fontWeight: 900,
+                            fontSize: '0.9rem',
+                          }}>
+                            🚗
+                          </div>
+                          <div>
+                            <div style={{ color: '#e9edef', fontSize: '0.88rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                              <span>ركنة | Rakna OTP</span>
+                              <CheckCircle2 size={13} color="#25D366" />
+                            </div>
+                            <div style={{ color: '#8696a0', fontSize: '0.72rem' }}>متصل الآن (Online)</div>
+                          </div>
+                        </div>
+                        <div style={{ color: '#8696a0', fontSize: '0.72rem' }}>WhatsApp</div>
+                      </div>
+
+                      {/* WhatsApp Chat Body */}
+                      <div style={{
+                        padding: '16px',
+                        minHeight: '200px',
+                        background: 'radial-gradient(circle, rgba(17, 27, 33, 0.95) 0%, rgba(11, 20, 26, 0.98) 100%)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                      }}>
+                        {/* WhatsApp Message Bubble */}
+                        <div style={{
+                          alignSelf: 'flex-start',
+                          maxWidth: '92%',
+                          background: '#005c4b',
+                          color: '#e9edef',
+                          padding: '12px 14px 8px',
+                          borderRadius: '12px 12px 12px 2px',
+                          fontSize: '0.86rem',
+                          lineHeight: '1.65',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                          position: 'relative',
+                        }}>
+                          {otpTemplate ? (
+                            otpTemplate.replace(/\{code\}/g, '489201')
+                          ) : (
+                            <span style={{ color: '#8696a0', fontStyle: 'italic' }}>اكتب نص الرسالة في الصندوق المقابل للمعاينة...</span>
+                          )}
+
+                          {/* WhatsApp Timestamp & ticks */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            gap: '4px',
+                            marginTop: '6px',
+                            fontSize: '0.68rem',
+                            color: '#8696a0',
+                          }}>
+                            <span>12:45 م</span>
+                            <span style={{ color: '#53bdeb', fontWeight: 800 }}>✓✓</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Test Dispatcher Box */}
+              <div className="kpi-card" style={{ padding: '24px', background: 'rgba(255, 190, 24, 0.03)', border: '1px dashed var(--border-gold)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+                  <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    <Zap color="#f5be18" size={20} />
+                    <span>اختبار بوابة الواتساب الآن (Send Test OTP)</span>
+                  </h4>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    المزود النشط: <strong style={{ color: '#25D366' }}>{waConfig.provider}</strong>
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                  أدخل رقم هاتفك مسبوقاً بكود الدولة (مثل +201012345678) للتأكد من وصول كود التحقق لهاتفك فوراً عبر الـ API.
+                </p>
+
+                <form onSubmit={handleTestWhatsApp} style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    value={testOtpPhone}
+                    onChange={(e) => setTestOtpPhone(e.target.value)}
+                    placeholder="+2010XXXXXXXX"
+                    className="admin-input"
+                    style={{ direction: 'ltr', textAlign: 'right', width: '220px' }}
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={isTestingWa}
+                    style={{
+                      background: '#25D366',
+                      color: '#000',
+                      fontWeight: 800,
+                      border: 'none',
+                      padding: '11px 20px',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      fontSize: '0.88rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      boxShadow: '0 2px 10px rgba(37, 211, 102, 0.3)',
+                    }}
+                  >
+                    <Play size={16} />
+                    <span>{isTestingWa ? 'جاري الإرسال...' : 'إرسال كود OTP تجريبي الآن'}</span>
+                  </button>
+                </form>
+
+                {testFeedback && (
+                  <div style={{
+                    marginTop: '14px',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    background: testFeedback.success ? 'rgba(37, 211, 102, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                    border: `1px solid ${testFeedback.success ? 'rgba(37, 211, 102, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                    color: testFeedback.success ? '#34d399' : '#f87171',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}>
+                    {testFeedback.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+                    <span>{testFeedback.message}</span>
+                  </div>
+                )}
+              </div>
+
               {/* WhatsApp KPIs */}
               <div style={{
                 display: 'grid',
@@ -1380,13 +2470,13 @@ export default function App() {
                     {whatsappMessages.length}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                    <span>رسائل صادرة ومسجلة في النظام</span>
+                    <span>رسائل مسجلة في النظام</span>
                   </div>
                 </div>
 
                 <div className="kpi-card">
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>تم فتحها / إرسالها للواتساب</span>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>أُرسلت بنجاح عبر API</span>
                     <div style={{
                       width: '40px',
                       height: '40px',
@@ -1403,13 +2493,13 @@ export default function App() {
                     {whatsappMessages.filter((m) => m.status === 'SENT').length}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    <span>تم فتح المحادثة وتأكيد الإرسال</span>
+                    <span>تم تسليمها للعميل تلقائياً</span>
                   </div>
                 </div>
 
                 <div className="kpi-card">
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>قيد الانتظار (جاهزة للنقر)</span>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>قيد الانتظار / اليدوي</span>
                     <div style={{
                       width: '40px',
                       height: '40px',
@@ -1423,10 +2513,10 @@ export default function App() {
                     </div>
                   </div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f5be18', marginTop: '8px' }}>
-                    {whatsappMessages.filter((m) => m.status === 'QUEUED').length}
+                    {whatsappMessages.filter((m) => m.status === 'QUEUED' || m.status === 'SIMULATED').length}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    <span>رسائل جديدة بانتظار فتح الواتساب</span>
+                    <span>متاح إرسالها أو فتحها بـ WhatsApp Web</span>
                   </div>
                 </div>
               </div>
@@ -1440,7 +2530,7 @@ export default function App() {
                       صندوق صادر رسائل الواتساب (WhatsApp Live Outbox)
                     </h3>
                     <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                      يتم رصد كل طلب كود تحقق (OTP) يتم في التطبيق هنا لحظياً. اضغط على "فتح في واتساب" لإرسال الكود للعميل مجاناً بدون اشتراكات مدفوعة.
+                      سجل لحظي لكل طلب OTP تم عبر التطبيق مع كود التحقق وحالة الإرسال وزر الإرسال الفوري.
                     </p>
                   </div>
                   <button onClick={loadAllData} className="btn-ghost" style={{ fontSize: '0.82rem', gap: '6px' }}>
@@ -1460,7 +2550,7 @@ export default function App() {
                     <MessageSquare size={44} color="#25D366" style={{ margin: '0 auto 14px', opacity: 0.6 }} />
                     <div style={{ color: '#fff', fontWeight: 700, fontSize: '1.05rem' }}>لا توجد رسائل واتساب صادرة حتى الآن</div>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '6px', maxWidth: '420px', margin: '6px auto 0' }}>
-                      عندما يقوم أي مستخدم بإدخال رقم هاتفه في التطبيق أو طلب كود تحقق، ستظهر الرسالة هنا مباشرة برابط فتح المحادثة الجاهز.
+                      عندما يقوم أي مستخدم بإدخال رقم هاتفه في التطبيق أو طلب كود تحقق، ستظهر الرسالة هنا مباشرة.
                     </p>
                   </div>
                 ) : (
@@ -1471,9 +2561,9 @@ export default function App() {
                           <th>رقم الهاتف</th>
                           <th>كود التحقق (OTP)</th>
                           <th>وقت الطلب</th>
-                          <th>الحالة</th>
+                          <th>الحالة / المزود</th>
                           <th>معاينة الرسالة</th>
-                          <th>الإجراء السريع</th>
+                          <th>الإجراءات السريعة</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1522,7 +2612,15 @@ export default function App() {
                             <td>
                               {msg.status === 'SENT' ? (
                                 <span className="badge badge-active" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#34d399' }}>
-                                  تم الفتح / الإرسال
+                                  أُرسل بنجاح ({msg.providerUsed || 'API'})
+                                </span>
+                              ) : msg.status === 'FAILED' ? (
+                                <span
+                                  className="badge"
+                                  title={msg.errorMessage}
+                                  style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', cursor: 'help' }}
+                                >
+                                  فشل الإرسال ⚠️
                                 </span>
                               ) : (
                                 <span className="badge badge-pending" style={{ background: 'rgba(245, 190, 24, 0.2)', color: '#f5be18' }}>
@@ -1542,6 +2640,27 @@ export default function App() {
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <button
+                                  onClick={() => handleResendWhatsApp(msg.id)}
+                                  title="إعادة إرسال عبر الـ API"
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    background: 'rgba(245, 190, 24, 0.15)',
+                                    color: 'var(--gold-primary)',
+                                    fontWeight: 700,
+                                    border: '1px solid rgba(245, 190, 24, 0.3)',
+                                    padding: '7px 12px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.78rem',
+                                  }}
+                                >
+                                  <RefreshCw size={13} />
+                                  <span>إعادة عبر API</span>
+                                </button>
+
+                                <button
                                   onClick={() => handleOpenWhatsApp(msg)}
                                   style={{
                                     display: 'flex',
@@ -1551,17 +2670,14 @@ export default function App() {
                                     color: '#000',
                                     fontWeight: 800,
                                     border: 'none',
-                                    padding: '8px 14px',
+                                    padding: '7px 13px',
                                     borderRadius: '8px',
                                     cursor: 'pointer',
-                                    fontSize: '0.82rem',
-                                    boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)',
-                                    transition: 'all 0.15s ease',
+                                    fontSize: '0.8rem',
+                                    boxShadow: '0 2px 8px rgba(37, 211, 102, 0.25)',
                                   }}
-                                  onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-1px)')}
-                                  onMouseOut={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
                                 >
-                                  <ExternalLink size={15} />
+                                  <ExternalLink size={14} />
                                   <span>فتح في واتساب</span>
                                 </button>
                               </div>
@@ -1636,6 +2752,987 @@ export default function App() {
                     <span>إرسال واتساب</span>
                   </button>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              TAB: LIVE CUSTOMER SUPPORT CHAT (خدمة العملاء والدعم الفني)
+              ═══════════════════════════════════════════════════════════════════ */}
+          {currentTab === 'support' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Header Card */}
+              <div className="kpi-card gold-glow-border fade-in" style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '12px',
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <Headphones color="#38bdf8" size={24} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                        مركز محادثات خدمة العملاء والدعم الفني المباشر
+                      </h3>
+                      <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px', margin: 0 }}>
+                        تواصل لحظي حي مع مستخدمي تطبيق ركنة عند ضغطهم على زر "تواصل مع الدعم".
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <button
+                      onClick={() => loadSupportThreads()}
+                      className="btn-ghost"
+                      style={{ fontSize: '0.82rem', gap: '6px' }}
+                    >
+                      <RefreshCw size={14} className={isLoadingSupportMsgs ? 'animate-spin' : ''} />
+                      <span>تحديث فوري</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Two-Pane Support Desk */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '320px 1fr',
+                gap: '20px',
+                minHeight: '620px',
+                alignItems: 'stretch',
+              }}>
+                {/* Right Pane: Users / Conversations List */}
+                <div className="kpi-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={16} style={{ position: 'absolute', right: '12px', top: '12px', color: 'var(--text-muted)' }} />
+                    <input
+                      type="text"
+                      value={supportSearch}
+                      onChange={(e) => setSupportSearch(e.target.value)}
+                      placeholder="بحث بالاسم أو الهاتف..."
+                      className="admin-input"
+                      style={{ paddingRight: '36px', fontSize: '0.82rem' }}
+                    />
+                  </div>
+
+                  {/* Filter Tabs: All, Open, Closed */}
+                  <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '10px' }}>
+                    {[
+                      { id: 'ALL', label: 'الكل', count: supportThreads.length },
+                      { id: 'OPEN', label: 'النشطة 🟢', count: supportThreads.filter(t => t.ticketStatus !== 'CLOSED').length },
+                      { id: 'CLOSED', label: 'المغلقة 🔒', count: supportThreads.filter(t => t.ticketStatus === 'CLOSED').length },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setSupportFilter(tab.id)}
+                        style={{
+                          flex: 1,
+                          padding: '6px 4px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          background: supportFilter === tab.id ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+                          color: supportFilter === tab.id ? '#38bdf8' : 'var(--text-muted)',
+                          transition: 'all 0.15s ease',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {tab.label} ({tab.count})
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', maxHeight: '500px' }}>
+                    {supportThreads
+                      .filter(t => {
+                        const matchesSearch = !supportSearch || t.phone.includes(supportSearch) || (t.userName && t.userName.includes(supportSearch));
+                        const matchesFilter =
+                          supportFilter === 'ALL' ||
+                          (supportFilter === 'OPEN' && t.ticketStatus !== 'CLOSED') ||
+                          (supportFilter === 'CLOSED' && t.ticketStatus === 'CLOSED');
+                        return matchesSearch && matchesFilter;
+                      }).length === 0 ? (
+                      <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        لا توجد محادثات تطابق هذا التصفية
+                      </div>
+                    ) : (
+                      supportThreads
+                        .filter(t => {
+                          const matchesSearch = !supportSearch || t.phone.includes(supportSearch) || (t.userName && t.userName.includes(supportSearch));
+                          const matchesFilter =
+                            supportFilter === 'ALL' ||
+                            (supportFilter === 'OPEN' && t.ticketStatus !== 'CLOSED') ||
+                            (supportFilter === 'CLOSED' && t.ticketStatus === 'CLOSED');
+                          return matchesSearch && matchesFilter;
+                        })
+                        .map((thread) => {
+                          const isSelected = selectedSupportTicket
+                            ? (selectedSupportTicket.ticketId === thread.ticketId)
+                            : (selectedSupportUserId === thread.userId);
+                          const isThreadClosed = thread.ticketStatus === 'CLOSED';
+
+                          return (
+                            <div
+                              key={thread.ticketId || thread.userId}
+                              onClick={() => handleSelectSupportThread(thread)}
+                              style={{
+                                padding: '12px 14px',
+                                borderRadius: '12px',
+                                background: isSelected ? 'rgba(56, 189, 248, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                                border: isSelected ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid var(--border-subtle)',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                opacity: isThreadClosed && !isSelected ? 0.75 : 1,
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span style={{ fontWeight: 800, fontSize: '0.88rem', color: isSelected ? '#38bdf8' : '#fff' }}>
+                                  {thread.userName || 'مستخدم ركنة'}
+                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  {isThreadClosed ? (
+                                    <span style={{
+                                      fontSize: '0.64rem',
+                                      color: '#f87171',
+                                      background: 'rgba(239, 68, 68, 0.15)',
+                                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                                      padding: '1px 6px',
+                                      borderRadius: '6px',
+                                      fontWeight: 800,
+                                    }}>
+                                      🔒 مغلقة
+                                    </span>
+                                  ) : (
+                                    <span style={{
+                                      fontSize: '0.64rem',
+                                      color: '#34d399',
+                                      background: 'rgba(16, 185, 129, 0.15)',
+                                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                                      padding: '1px 6px',
+                                      borderRadius: '6px',
+                                      fontWeight: 800,
+                                    }}>
+                                      🟢 نشطة
+                                    </span>
+                                  )}
+                                  {thread.unreadCount > 0 && (
+                                    <span style={{
+                                      background: '#38bdf8',
+                                      color: '#000',
+                                      fontSize: '0.68rem',
+                                      fontWeight: 900,
+                                      padding: '2px 6px',
+                                      borderRadius: '10px',
+                                    }}>
+                                      {thread.unreadCount} جديد
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--gold-primary)', direction: 'ltr', textAlign: 'right', fontWeight: 600 }}>
+                                {thread.phone}
+                              </div>
+                              <div style={{
+                                fontSize: '0.75rem',
+                                color: 'var(--text-secondary)',
+                                marginTop: '4px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}>
+                                {thread.lastMessage}
+                              </div>
+                              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'left' }}>
+                                {new Date(thread.lastMessageTime).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
+                </div>
+
+                {/* Left Pane: Active Chat Conversation */}
+                <div className="kpi-card" style={{ padding: '0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  {selectedSupportUser ? (
+                    <>
+                      {/* Chat Header Bar */}
+                      {(() => {
+                        const isClosed = selectedSupportTicket?.ticketStatus === 'CLOSED' || selectedSupportTicket?.status === 'CLOSED';
+                        return (
+                          <div style={{
+                            padding: '16px 20px',
+                            background: 'rgba(255, 255, 255, 0.03)',
+                            borderBottom: '1px solid var(--border-subtle)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: '10px',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <div style={{
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '50%',
+                                background: isClosed
+                                  ? 'linear-gradient(135deg, #64748b, #475569)'
+                                  : 'linear-gradient(135deg, #38bdf8, #0284c7)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 900,
+                                color: isClosed ? '#fff' : '#000',
+                              }}>
+                                {selectedSupportUser.name ? selectedSupportUser.name.charAt(0) : 'U'}
+                              </div>
+                              <div>
+                                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span>{selectedSupportUser.name || 'مستخدم ركنة'}</span>
+                                  {isClosed ? (
+                                    <span style={{
+                                      fontSize: '0.72rem',
+                                      color: '#f87171',
+                                      background: 'rgba(239, 68, 68, 0.15)',
+                                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                                      padding: '2px 8px',
+                                      borderRadius: '10px',
+                                      fontWeight: 800,
+                                    }}>
+                                      🔒 محادثة مغلقة ومؤرشفة
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 700 }}>🟢 متصل بالتطبيق</span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', direction: 'ltr', textAlign: 'right' }}>
+                                  {selectedSupportUser.phone} {selectedSupportUser.cars && selectedSupportUser.cars.length > 0 && `• ${selectedSupportUser.cars.map(c => `${c.brand} ${c.model}`).join(', ')}`}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {/* زر إغلاق المحادثة المطلوب من المستخدم */}
+                              {!isClosed ? (
+                                <button
+                                  type="button"
+                                  onClick={handleCloseSupportThread}
+                                  disabled={isClosingThread}
+                                  style={{
+                                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.3) 100%)',
+                                    color: '#fca5a5',
+                                    border: '1px solid rgba(239, 68, 68, 0.45)',
+                                    padding: '7px 14px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 800,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    transition: 'all 0.2s',
+                                    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.2)',
+                                  }}
+                                  title="إغلاق وأرشفة هذه المحادثة (تُمسح من شاشة التطبيق ويتمكن العميل من فتح محادثة جديدة لاحقاً)"
+                                >
+                                  <Lock size={14} />
+                                  <span>{isClosingThread ? 'جاري الإغلاق...' : 'إغلاق المحادثة 🔒'}</span>
+                                </button>
+                              ) : (
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  color: '#fca5a5',
+                                  fontSize: '0.76rem',
+                                  background: 'rgba(239, 68, 68, 0.1)',
+                                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                                  padding: '6px 12px',
+                                  borderRadius: '8px',
+                                  fontWeight: 700,
+                                }}>
+                                  <Lock size={13} />
+                                  <span>مغلقة بواسطة {selectedSupportTicket?.closedBy || 'الدعم'}</span>
+                                </div>
+                              )}
+
+                              <button
+                                onClick={() => window.open(`https://wa.me/${selectedSupportUser.phone.replace(/\D/g, '')}`, '_blank')}
+                                className="btn-ghost"
+                                style={{ fontSize: '0.78rem', gap: '6px', color: '#25D366' }}
+                                title="فتح محادثة واتساب خارجية"
+                              >
+                                <MessageSquare size={14} />
+                                <span>محادثة واتساب</span>
+                              </button>
+                              <button
+                                onClick={() => handleToggleUserBlock(selectedSupportUser.id)}
+                                style={{
+                                  background: selectedSupportUser.isBlocked ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                  color: selectedSupportUser.isBlocked ? '#34d399' : '#f87171',
+                                  border: '1px solid rgba(255,255,255,0.1)',
+                                  padding: '6px 12px',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {selectedSupportUser.isBlocked ? 'فك الحظر' : 'حظر الحساب'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Messages Flow Area */}
+                      <div style={{
+                        flex: 1,
+                        padding: '20px',
+                        overflowY: 'auto',
+                        maxHeight: '420px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        background: 'radial-gradient(circle, rgba(14, 19, 29, 0.95) 0%, rgba(7, 9, 14, 0.98) 100%)',
+                      }}>
+                        {supportMessages.length === 0 ? (
+                          <div style={{ textAlign: 'center', color: 'var(--text-muted)', margin: 'auto' }}>
+                            لا توجد رسائل سابقة في هذه المحادثة
+                          </div>
+                        ) : (
+                          supportMessages.map((msg) => {
+                            const isSupport = msg.senderType === 'SUPPORT';
+                            return (
+                              <div
+                                key={msg.id}
+                                style={{
+                                  alignSelf: isSupport ? 'flex-start' : 'flex-end',
+                                  maxWidth: '75%',
+                                  background: isSupport
+                                    ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.18) 0%, rgba(2, 132, 199, 0.18) 100%)'
+                                    : 'rgba(255, 255, 255, 0.08)',
+                                  border: isSupport ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid rgba(255, 255, 255, 0.1)',
+                                  color: '#fff',
+                                  padding: '10px 14px',
+                                  borderRadius: isSupport ? '14px 14px 14px 2px' : '14px 14px 2px 14px',
+                                  fontSize: '0.88rem',
+                                  lineHeight: 1.6,
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                }}
+                              >
+                                <div style={{
+                                  fontSize: '0.7rem',
+                                  fontWeight: 800,
+                                  color: isSupport ? '#38bdf8' : 'var(--gold-primary)',
+                                  marginBottom: '4px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}>
+                                  {isSupport ? '🎧 فريق الدعم الفني (ركنة)' : '👤 العميل'}
+                                </div>
+                                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                  {msg.content}
+                                </div>
+                                <div style={{
+                                  fontSize: '0.65rem',
+                                  color: 'var(--text-muted)',
+                                  textAlign: 'left',
+                                  marginTop: '4px',
+                                }}>
+                                  {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Bottom Reply Area: Locked Banner when closed, or Reply Form when open */}
+                      {(selectedSupportTicket?.ticketStatus === 'CLOSED' || selectedSupportTicket?.status === 'CLOSED') ? (
+                        <div style={{
+                          padding: '18px 24px',
+                          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(15, 23, 42, 0.85) 100%)',
+                          borderTop: '1px solid rgba(239, 68, 68, 0.25)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '16px',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '10px',
+                              background: 'rgba(239, 68, 68, 0.18)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              flexShrink: 0,
+                            }}>
+                              <Lock size={20} color="#f87171" />
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 800, color: '#fca5a5', fontSize: '0.9rem' }}>
+                                هذه المحادثة مغلقة ومؤرشفة للقراءة فقط 🔒
+                              </div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '3px', lineHeight: 1.5 }}>
+                                تم إغلاق هذه المحادثة وحفظها في الأرشيف ولا يمكن لأي طرف الكتابة فيها مجدداً. تم مسحها تلقائياً من شاشة تطبيق العميل، وعندما يضغط العميل على "تواصل مع الدعم" مرة أخرى سيفتح محادثة جديدة نظيفة.
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Quick Canned Replies */}
+                          <div style={{
+                            padding: '8px 16px',
+                            background: 'rgba(0,0,0,0.2)',
+                            borderTop: '1px solid var(--border-subtle)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            overflowX: 'auto',
+                          }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>ردود سريعة:</span>
+                            {[
+                              'أهلاً بك يا فندم 👋 كيف يمكننا مساعدتك اليوم؟',
+                              'مدة توصيل الملصق من 24 إلى 48 ساعة كحد أقصى مع المندوب 🚚',
+                              'الملصق مصنوع بمواد نانو كربونية مقاومة للماء والحرارة 100% 🛡️',
+                              'تم حل المشكلة وتحديث بيانات سيارتك بنجاح ✨',
+                            ].map((canned, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setSupportReplyText(canned)}
+                                style={{
+                                  background: 'rgba(255,255,255,0.05)',
+                                  border: '1px solid var(--border-subtle)',
+                                  color: 'var(--text-secondary)',
+                                  padding: '3px 10px',
+                                  borderRadius: '12px',
+                                  fontSize: '0.72rem',
+                                  cursor: 'pointer',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {canned.substring(0, 32)}...
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Reply Input Bar */}
+                          <form
+                            onSubmit={handleSendSupportReply}
+                            style={{
+                              padding: '12px 16px',
+                              background: 'rgba(255, 255, 255, 0.02)',
+                              borderTop: '1px solid var(--border-subtle)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={supportReplyText}
+                              onChange={(e) => setSupportReplyText(e.target.value)}
+                              placeholder="اكتب ردك للعميل هنا واضغط Enter للإرسال الفوري..."
+                              className="admin-input"
+                              style={{ flex: 1, padding: '12px 14px', fontSize: '0.88rem' }}
+                              required
+                            />
+                            <button
+                              type="submit"
+                              disabled={isSendingReply || !supportReplyText.trim()}
+                              style={{
+                                background: 'linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)',
+                                color: '#000',
+                                fontWeight: 800,
+                                border: 'none',
+                                padding: '11px 22px',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                fontSize: '0.88rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                boxShadow: '0 2px 10px rgba(56, 189, 248, 0.3)',
+                              }}
+                            >
+                              {isSendingReply ? (
+                                <>
+                                  <RefreshCw size={16} className="animate-spin" />
+                                  <span>جاري الإرسال...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Send size={16} />
+                                  <span>إرسال الرد</span>
+                                </>
+                              )}
+                            </button>
+                          </form>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ margin: 'auto', textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+                      <Headphones size={48} color="#38bdf8" style={{ margin: '0 auto 16px', opacity: 0.5 }} />
+                      <div style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 800 }}>اختر عميلاً من القائمة لبدء المحادثة</div>
+                      <p style={{ fontSize: '0.82rem', marginTop: '6px' }}>
+                        ستظهر جميع رسائل الدعم الفني الواردة من مستخدمي التطبيق هنا فوراً.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              TAB: ABUSE REPORTS & CHAT MODERATION (بلاغات المحادثات والرقابة)
+              ═══════════════════════════════════════════════════════════════════ */}
+          {currentTab === 'abuse' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Header Card */}
+              <div className="kpi-card gold-glow-border fade-in" style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '12px',
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <ShieldAlert color="#ef4444" size={24} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                        سجل بلاغات المحادثات والرقابة الأخلاقية (Chat Abuse Moderation)
+                      </h3>
+                      <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px', margin: 0 }}>
+                        فحص وتدقيق المحادثات المبلّغ عنها لوجود ألفاظ خارجة، صور غير لائقة، أو تعدي للحدود والخصوصية.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={loadAbuseReports}
+                    className="btn-ghost"
+                    style={{ fontSize: '0.82rem', gap: '6px' }}
+                  >
+                    <RefreshCw size={14} />
+                    <span>تحديث البلاغات</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* KPIs Row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                <div className="kpi-card">
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>إجمالي البلاغات المسجلة</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fff', marginTop: '6px' }}>{abuseReports.length}</div>
+                </div>
+                <div className="kpi-card" style={{ borderColor: 'rgba(239, 68, 68, 0.4)' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#f87171', fontWeight: 600 }}>بانتظار المراجعة الفورية 🚨</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#ef4444', marginTop: '6px' }}>{pendingAbuseCount}</div>
+                </div>
+                <div className="kpi-card">
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>بلاغات ألفاظ خارجة 🤬</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--gold-primary)', marginTop: '6px' }}>
+                    {abuseReports.filter(r => r.reason === 'PROFANITY').length}
+                  </div>
+                </div>
+                <div className="kpi-card">
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>بلاغات صور غير لائقة 🚫</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#38bdf8', marginTop: '6px' }}>
+                    {abuseReports.filter(r => r.reason === 'INAPPROPRIATE_IMAGE').length}
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter Tabs */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {[
+                  { id: 'ALL', label: 'جميع البلاغات' },
+                  { id: 'PENDING', label: 'قيد المراجعة 🚨' },
+                  { id: 'RESOLVED', label: 'تم اتخاذ إجراء 🔒' },
+                  { id: 'DISMISSED', label: 'تم التجاهل ✓' },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setAbuseFilter(f.id)}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '10px',
+                      border: '1px solid var(--border-subtle)',
+                      background: abuseFilter === f.id ? 'var(--gold-primary)' : 'rgba(255,255,255,0.03)',
+                      color: abuseFilter === f.id ? '#000' : 'var(--text-secondary)',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontSize: '0.82rem',
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Reports Table */}
+              <div className="kpi-card" style={{ padding: '20px' }}>
+                {abuseReports.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <ShieldCheck size={44} color="#10b981" style={{ margin: '0 auto 12px' }} />
+                    <div style={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>لا توجد بلاغات مسجلة في هذا التصنيف</div>
+                    <p style={{ fontSize: '0.82rem', marginTop: '4px' }}>جميع المحادثات بين العملاء تتبع إرشادات الأمان والخصوصية.</p>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="admin-table" style={{ width: '100%' }}>
+                      <thead>
+                        <tr>
+                          <th>المركبة والـ Tag</th>
+                          <th>مقدّم البلاغ</th>
+                          <th>نوع المخالفة</th>
+                          <th>تفاصيل الشكوى</th>
+                          <th>الوقت</th>
+                          <th>الحالة</th>
+                          <th>الإجراء</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {abuseReports
+                          .filter(r => abuseFilter === 'ALL' || r.status === abuseFilter)
+                          .map((rep) => {
+                            let reasonBadge = { text: 'تعدي للحدود', bg: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' };
+                            if (rep.reason === 'PROFANITY') {
+                              reasonBadge = { text: 'ألفاظ خارجة 🤬', bg: 'rgba(239, 68, 68, 0.15)', color: '#f87171' };
+                            } else if (rep.reason === 'INAPPROPRIATE_IMAGE') {
+                              reasonBadge = { text: 'صورة غير لائقة 🚫', bg: 'rgba(168, 85, 247, 0.15)', color: '#c084fc' };
+                            } else if (rep.reason === 'HARASSMENT') {
+                              reasonBadge = { text: 'مضايقة وتهديد ⚠️', bg: 'rgba(239, 68, 68, 0.15)', color: '#f87171' };
+                            }
+
+                            return (
+                              <tr key={rep.id}>
+                                <td>
+                                  <div style={{ fontWeight: 800, color: '#fff' }}>{rep.carInfo.brand} {rep.carInfo.model}</div>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--gold-primary)' }}>{rep.carInfo.tagCode}</div>
+                                </td>
+                                <td>
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: rep.reporterType === 'OWNER' ? 'var(--gold-primary)' : '#38bdf8' }}>
+                                    {rep.reporterType === 'OWNER' ? 'صاحب السيارة' : 'مُبلّغ مجهول (ماسح الـ Tag)'}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span style={{
+                                    background: reasonBadge.bg,
+                                    color: reasonBadge.color,
+                                    padding: '4px 8px',
+                                    borderRadius: '8px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 800,
+                                    display: 'inline-flex',
+                                  }}>
+                                    {reasonBadge.text}
+                                  </span>
+                                </td>
+                                <td style={{ maxWidth: '240px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                                  {rep.details || 'بدون تفاصيل إضافية'}
+                                </td>
+                                <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                  {new Date(rep.createdAt).toLocaleDateString('ar-EG')} {new Date(rep.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                                </td>
+                                <td>
+                                  {rep.status === 'PENDING' && (
+                                    <span style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', padding: '3px 8px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: 800 }}>
+                                      قيد المراجعة 🚨
+                                    </span>
+                                  )}
+                                  {rep.status === 'RESOLVED' && (
+                                    <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', padding: '3px 8px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: 800 }}>
+                                      تم اتخاذ إجراء 🔒
+                                    </span>
+                                  )}
+                                  {rep.status === 'DISMISSED' && (
+                                    <span style={{ background: 'rgba(255, 255, 255, 0.08)', color: 'var(--text-muted)', padding: '3px 8px', borderRadius: '8px', fontSize: '0.72rem', fontWeight: 800 }}>
+                                      تم التجاهل ✓
+                                    </span>
+                                  )}
+                                </td>
+                                <td>
+                                  <button
+                                    onClick={() => handleOpenReportDetails(rep.id)}
+                                    style={{
+                                      background: 'linear-gradient(135deg, #f5be18 0%, #e5aa09 100%)',
+                                      color: '#000',
+                                      fontWeight: 800,
+                                      border: 'none',
+                                      padding: '7px 14px',
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.8rem',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '6px',
+                                    }}
+                                  >
+                                    <Eye size={14} />
+                                    <span>فحص المحادثة والصور</span>
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              MODAL: REPORTED CHAT AUDIT & ACTION
+              ═══════════════════════════════════════════════════════════════════ */}
+          {activeReportDetails && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.85)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px',
+            }}>
+              <div className="glass-panel gold-glow-border fade-in" style={{
+                width: '100%',
+                maxWidth: '740px',
+                maxHeight: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                borderRadius: '18px',
+              }}>
+                {/* Modal Header */}
+                <div style={{
+                  padding: '18px 24px',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  borderBottom: '1px solid rgba(239, 68, 68, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <ShieldAlert size={24} color="#ef4444" />
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#fff' }}>
+                        تدقيق وفحص محادثة مبلّغ عنها (Chat Abuse Audit)
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#f87171' }}>
+                        السبب: {activeReportDetails.report.reason} • مقدم البلاغ: {activeReportDetails.report.reporterType === 'OWNER' ? 'صاحب السيارة' : 'ماسح الملصق المجهول'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveReportDetails(null)}
+                    style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}
+                  >
+                    <X size={22} />
+                  </button>
+                </div>
+
+                {/* Complaint Info & Car details */}
+                <div style={{
+                  padding: '14px 24px',
+                  background: 'rgba(255,255,255,0.02)',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '12px',
+                  fontSize: '0.82rem',
+                }}>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>السيارة: </span>
+                    <strong style={{ color: '#fff' }}>{activeReportDetails.car.brand} {activeReportDetails.car.model} ({activeReportDetails.car.plateNumber || 'بدون لوحة'})</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>مالك السيارة: </span>
+                    <strong style={{ color: 'var(--gold-primary)' }}>{activeReportDetails.owner.name} ({activeReportDetails.owner.phone})</strong>
+                  </div>
+                  <div style={{ gridColumn: '1 / -1', color: 'var(--text-secondary)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>نص الشكوى المقدمة: </span>
+                    <em>"{activeReportDetails.report.details || 'لا توجد ملاحظات إضافية'}"</em>
+                  </div>
+                </div>
+
+                {/* Chat Messages Scroll */}
+                <div style={{
+                  flex: 1,
+                  padding: '20px 24px',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  background: '#090d14',
+                }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                    ── سجل المحادثة الكامل المتبادل بين الطرفين ──
+                  </div>
+
+                  {activeReportDetails.messages.map((msg) => {
+                    const isReporter = msg.senderType === 'REPORTER';
+                    return (
+                      <div
+                        key={msg.id}
+                        style={{
+                          alignSelf: isReporter ? 'flex-end' : 'flex-start',
+                          maxWidth: '80%',
+                          background: isReporter ? 'rgba(56, 189, 248, 0.12)' : 'rgba(245, 190, 24, 0.12)',
+                          border: isReporter ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(245, 190, 24, 0.3)',
+                          borderRadius: '12px',
+                          padding: '10px 14px',
+                          color: '#fff',
+                        }}
+                      >
+                        <div style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 800,
+                          color: isReporter ? '#38bdf8' : 'var(--gold-primary)',
+                          marginBottom: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}>
+                          <span>{isReporter ? 'ماسح الـ Tag المجهول' : 'صاحب المركبة'}</span>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                            {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>{msg.content}</div>
+                        {msg.imageUrl && (
+                          <div style={{ marginTop: '8px' }}>
+                            <img
+                              src={msg.imageUrl}
+                              alt="Attached photo"
+                              style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)' }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Action Buttons Footer */}
+                <div style={{
+                  padding: '16px 24px',
+                  background: 'rgba(20, 27, 39, 0.95)',
+                  borderTop: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '10px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      type="button"
+                      disabled={isActingReport}
+                      onClick={() => handleTakeReportAction(activeReportDetails.report.id, 'BLOCK_USER')}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.2)',
+                        color: '#f87171',
+                        border: '1px solid #ef4444',
+                        padding: '9px 16px',
+                        borderRadius: '10px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        fontSize: '0.82rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Ban size={16} />
+                      <span>حظر المستخدم وإنهاء المحادثة</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isActingReport}
+                      onClick={() => handleTakeReportAction(activeReportDetails.report.id, 'TERMINATE_CHAT')}
+                      style={{
+                        background: 'rgba(245, 158, 11, 0.15)',
+                        color: '#fbbf24',
+                        border: '1px solid rgba(245, 158, 11, 0.4)',
+                        padding: '9px 16px',
+                        borderRadius: '10px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        fontSize: '0.82rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Lock size={16} />
+                      <span>إغلاق المحادثة المسيئة</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isActingReport}
+                      onClick={() => handleTakeReportAction(activeReportDetails.report.id, 'DISMISS')}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        color: 'var(--text-secondary)',
+                        border: '1px solid var(--border-subtle)',
+                        padding: '9px 16px',
+                        borderRadius: '10px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontSize: '0.82rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Check size={16} />
+                      <span>تجاهل البلاغ (سليم)</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveReportDetails(null)}
+                    className="btn-ghost"
+                    style={{ fontSize: '0.82rem' }}
+                  >
+                    إغلاق المعاينة
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -194,4 +194,43 @@ export class ChatsController {
       res.status(500).json({ success: false, message: 'تعذر حظر المحادثة' });
     }
   }
+
+  /**
+   * إبلاغ صاحب السيارة عن محادثة مسيئة أو تجاوز للحدود
+   */
+  static async reportChat(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const { reason, details } = req.body;
+
+      const chat = await prisma.chat.findUnique({
+        where: { id },
+        include: { car: true },
+      });
+
+      if (!chat || chat.car.userId !== req.user!.id) {
+        res.status(404).json({ success: false, message: 'المحادثة غير موجودة' });
+        return;
+      }
+
+      const report = await prisma.chatReport.create({
+        data: {
+          chatId: chat.id,
+          reporterType: 'OWNER',
+          reason: reason || 'HARASSMENT',
+          details: details || null,
+          status: 'PENDING',
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'تم استلام بلاغك بنجاح وسيقوم فريق الرقابة بمراجعة المحادثة فوراً 🛡️',
+        report,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تقديم البلاغ' });
+    }
+  }
 }
+
