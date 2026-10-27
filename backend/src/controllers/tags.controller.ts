@@ -68,18 +68,24 @@ export class TagsController {
   }
 
   /**
-   * ربط وتفعيل Tag متاح بسيارة غير مفعلة (تطبيق قاعدة 1 Car = 1 Tag)
+   * ربط وتفعيل Tag متاح بسيارة باستخدام كود التفعيل السري المرفق في الباكدج
    */
   static async activateTagForCar(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { carId, tagCode } = req.body;
+      const { carId, tagCode, activationCode } = req.body;
 
-      if (!carId || !tagCode) {
-        res.status(400).json({ success: false, message: 'معرف السيارة وكود الـ Tag مطلوبان' });
+      if (!carId) {
+        res.status(400).json({ success: false, message: 'معرف السيارة مطلوب' });
         return;
       }
 
-      const cleanTag = tagCode.trim().startsWith('#') ? tagCode.trim() : `#${tagCode.trim()}`;
+      if (!activationCode && !tagCode) {
+        res.status(400).json({ success: false, message: 'كود التفعيل (Activation Code) المرفق في الباكدج مطلوب' });
+        return;
+      }
+
+      const cleanActivation = activationCode?.trim().toUpperCase();
+      const cleanTag = tagCode ? (tagCode.trim().startsWith('#') ? tagCode.trim() : `#${tagCode.trim()}`) : null;
 
       // 1. Verify Car belongs to user
       const car = await prisma.car.findFirst({
@@ -87,26 +93,66 @@ export class TagsController {
       });
 
       if (!car) {
-        res.status(404).json({ success: false, message: 'السيارة غير موجودة في حسابك' });
+        res.status(404).json({ success: false, message: 'السيارة المحددة غير موجودة في حسابك' });
         return;
       }
 
-      // 2. Verify Tag belongs to user and is NOT already linked to another car (1 Car = 1 Tag)
-      const tag = await prisma.tag.findUnique({
-        where: { tagCode: cleanTag },
-      });
+      // 2. Lookup Tag by activationCode or tagCode
+      let tag = null;
+      if (cleanActivation) {
+        tag = await prisma.tag.findUnique({
+          where: { activationCode: cleanActivation },
+        });
+      } else if (cleanTag) {
+        tag = await prisma.tag.findUnique({
+          where: { tagCode: cleanTag },
+        });
+      }
 
       if (!tag) {
-        res.status(404).json({ success: false, message: 'كود الـ Tag غير موجود في النظام' });
+        res.status(404).json({ 
+          success: false, 
+          message: 'كود التفعيل غير صالح أو غير مسجل في النظام. تأكد من إدخال الكود المكتوب في الباكدج بدقة.' 
+        });
         return;
       }
 
+      // If both provided, ensure they match
+      if (cleanTag && tag.tagCode !== cleanTag) {
+        res.status(400).json({ 
+          success: false, 
+          message: 'كود التفعيل لا يتطابق مع ملصق الـ Tag المدخل.' 
+        });
+        return;
+      }
+
+      // If activation code was required but tag has a different code
+      if (cleanActivation && tag.activationCode && tag.activationCode.toUpperCase() !== cleanActivation) {
+        res.status(400).json({ 
+          success: false, 
+          message: 'كود التفعيل غير صحيح لهذا الـ Tag.' 
+        });
+        return;
+      }
+
+      // 3. Ensure tag is not already linked to another car or user
       if (tag.carId && tag.carId !== carId) {
-        res.status(400).json({ success: false, message: 'قاعدة ركنة: هذا الـ Tag مرتبط بالفعل بسيارة أخرى!' });
+        res.status(400).json({ 
+          success: false, 
+          message: 'قاعدة ركنة: هذا الـ Tag مرتبط ومفعل بالفعل بسيارة أخرى!' 
+        });
         return;
       }
 
-      // 3. Link tag and activate car in a transaction
+      if (tag.userId && tag.userId !== req.user!.id && tag.status === 'ACTIVE') {
+        res.status(400).json({ 
+          success: false, 
+          message: 'هذا الكود مستخدم بالفعل ومربوط بحساب آخر.' 
+        });
+        return;
+      }
+
+      // 4. Link tag and activate car in a transaction
       await prisma.$transaction([
         prisma.tag.update({
           where: { id: tag.id },
@@ -128,10 +174,17 @@ export class TagsController {
 
       res.json({
         success: true,
-        message: `تم ربط وتفعيل الـ Tag (${cleanTag}) للسيارة بنجاح 🚗✨`,
+        tag: {
+          id: tag.id,
+          tagCode: tag.tagCode,
+          tagType: tag.tagType,
+          status: 'ACTIVE',
+        },
+        message: `تم تفعيل الـ Tag (${tag.tagCode}) وربطه بسيارتك (${car.brand} ${car.model}) بنجاح! 🚗✨`,
       });
     } catch (error) {
-      res.status(500).json({ success: false, message: 'تعذر ربط الـ Tag بالسيارة' });
+      console.error('Error activating tag:', error);
+      res.status(500).json({ success: false, message: 'تعذر ربط وتفعيل الـ Tag بالسيارة' });
     }
   }
 

@@ -18,6 +18,13 @@ model User {
   isBlocked             Boolean        @default(false)
   notificationsEnabled  Boolean        @default(true)
   themePreference       String         @default("system") // system, light, dark
+  
+  // Privacy & Security Settings
+  allowReporterPhotos   Boolean        @default(true)
+  blurPhotosUntilTap    Boolean        @default(true)
+  autoDeleteAfter30Days Boolean        @default(false)
+  allowFreeChat         Boolean        @default(false) // Default is false: quick canned messages only
+  
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 
@@ -55,9 +62,12 @@ model Car {
   plateNumber           String         @default("")
   colorName             String         @default("أبيض لؤلؤي")
   nickname              String?
+  maintenanceData       String?        // JSON string for private car maintenance reminders
   
   isActivated           Boolean        @default(false)
   isTagActive           Boolean        @default(false)
+  allowFreeChat         Boolean        @default(false) // If false, reporter can only pick quick messages
+  allowReporterPhotos   Boolean        @default(true)
   
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
@@ -74,6 +84,7 @@ model Tag {
   id                    String         @id @default(uuid())
   tagCode               String         @unique // e.g. "#A247" or "TAG-8821"
   secretToken           String         @unique // Encrypted token embedded in NFC chip
+  activationCode        String?        @unique // Secret activation code/PIN sent in package
   tagType               String         @default("TRUNK_BADGE") // TRUNK_BADGE, NANO_GLASS
   status                String         @default("IN_STOCK") // IN_STOCK, UNASSIGNED, ACTIVE, PAUSED, REVOKED
   
@@ -140,11 +151,16 @@ model Product {
   slug                  String         @unique
   subtitle              String
   price                 Float
+  originalPrice         Float?
+  discountPercent       Int?
   imageAsset            String
   badgeText             String?
   description           String?
+  features              String?        // JSON array of feature bullets
   inStock               Boolean        @default(true)
+  sortOrder             Int            @default(0)
   createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @default(now()) @updatedAt
 
   orderItems            OrderItem[]
 
@@ -266,5 +282,34 @@ model SupportMessage {
   createdAt             DateTime          @default(now())
 
   @@map("support_messages")
+}
+
+model QuickMessage {
+  id                    String            @id @default(uuid())
+  title                 String            // e.g. "السيارة تعيق الحركة"
+  text                  String            // e.g. "مرحباً، سيارتك تعيق حركتي في الوقت الحالي، أرجو تحريكها لطفاً."
+  icon                  String            @default("car") // car, light, warning, road, info, parking
+  category              String            @default("GENERAL") // URGENT, NOTICE, PARKING, GENERAL
+  isActive              Boolean           @default(true)
+  displayOrder          Int               @default(0)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@map("quick_messages")
+}
+
+model StoreBanner {
+  id                    String            @id @default(uuid())
+  image                 String
+  title                 String?
+  location              String?
+  subtitle              String?
+  badge                 String?
+  sortOrder             Int               @default(0)
+  isActive              Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@map("store_banners")
 }
 

@@ -135,15 +135,32 @@ export class AdminController {
           continue;
         }
 
+        // Generate unique activationCode for package e.g. ACT-49821
+        const numPart = Math.floor(10000 + Math.random() * 90000);
+        const activationCode = `ACT-${numPart}`;
+        const actExists = await prisma.tag.findUnique({ where: { activationCode } });
+        if (actExists) {
+          i--;
+          continue;
+        }
+
         const secretToken = `sec_${uuidv4().replace(/-/g, '')}`;
-        // Generate printable QR Code SVG
-        const scanUrl = `https://rakna.app/tag/${encodeURIComponent(tagCode)}`;
-        const qrSvg = await QRCode.toString(scanUrl, { type: 'svg', margin: 1, color: { dark: '#111111', light: '#FFFFFF' } });
+        // Generate printable QR Code SVG pointing to the Web Chat Page
+        const cleanCodeWithoutHash = tagCode.replace(/^#/, '');
+        const serverBaseUrl = process.env.PUBLIC_WEB_URL || process.env.API_BASE_URL || 'http://localhost:5000';
+        const scanUrl = `${serverBaseUrl}/t/${encodeURIComponent(cleanCodeWithoutHash)}`;
+        const qrSvg = await QRCode.toString(scanUrl, {
+          type: 'svg',
+          width: 140,
+          margin: 1,
+          color: { dark: '#000000', light: '#FFFFFF' },
+        });
 
         const tag = await prisma.tag.create({
           data: {
             tagCode,
             secretToken,
+            activationCode,
             tagType: type,
             status: 'IN_STOCK',
             batchNumber,
@@ -154,10 +171,12 @@ export class AdminController {
         createdTags.push({
           id: tag.id,
           tagCode: tag.tagCode,
+          activationCode: tag.activationCode,
           tagType: tag.tagType,
           status: tag.status,
           batchNumber: tag.batchNumber,
           scanUrl,
+          qrCodeSvg: tag.qrCodeSvg,
         });
       }
 
@@ -980,6 +999,452 @@ export class AdminController {
       }
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر اتخاذ الإجراء' });
+    }
+  }
+
+  // ──────────────── إدارة الرسائل السريعة (Quick Canned Messages) ────────────────
+
+  /**
+   * جلب كافة الرسائل السريعة للوحة التحكم
+   */
+  static async listQuickMessages(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const messages = await prisma.quickMessage.findMany({
+        orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
+      });
+      res.json({ success: true, messages, data: messages });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر جلب الرسائل السريعة' });
+    }
+  }
+
+  /**
+   * إنشاء رسالة سريعة جديدة من لوحة التحكم
+   */
+  static async createQuickMessage(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { title, text, icon, category, isActive, displayOrder } = req.body;
+      if (!title || !text) {
+        res.status(400).json({ success: false, message: 'عنوان ونص الرسالة مطلوبان' });
+        return;
+      }
+
+      const message = await prisma.quickMessage.create({
+        data: {
+          title: title.trim(),
+          text: text.trim(),
+          icon: icon || 'car',
+          category: category || 'GENERAL',
+          isActive: isActive !== false,
+          displayOrder: typeof displayOrder === 'number' ? displayOrder : 0,
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'تم إضافة الرسالة السريعة بنجاح ✨',
+        quickMessage: message,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر إنشاء الرسالة السريعة' });
+    }
+  }
+
+  /**
+   * تعديل رسالة سريعة
+   */
+  static async updateQuickMessage(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const { title, text, icon, category, isActive, displayOrder } = req.body;
+
+      const message = await prisma.quickMessage.update({
+        where: { id },
+        data: {
+          ...(title !== undefined && { title: title.trim() }),
+          ...(text !== undefined && { text: text.trim() }),
+          ...(icon !== undefined && { icon }),
+          ...(category !== undefined && { category }),
+          ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+          ...(displayOrder !== undefined && { displayOrder: Number(displayOrder) }),
+        },
+      });
+
+      res.json({
+        success: true,
+        message: 'تم تحديث الرسالة السريعة بنجاح 👍',
+        quickMessage: message,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تعديل الرسالة السريعة' });
+    }
+  }
+
+  /**
+   * حذف رسالة سريعة
+   */
+  static async deleteQuickMessage(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      await prisma.quickMessage.delete({ where: { id } });
+      res.json({ success: true, message: 'تم حذف الرسالة السريعة بنجاح 🗑️' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر حذف الرسالة السريعة' });
+    }
+  }
+
+  /**
+   * تفعيل/تعطيل رسالة سريعة بضغطة زر
+   */
+  static async toggleQuickMessage(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const current = await prisma.quickMessage.findUnique({ where: { id } });
+      if (!current) {
+        res.status(404).json({ success: false, message: 'الرسالة غير موجودة' });
+        return;
+      }
+
+      const updated = await prisma.quickMessage.update({
+        where: { id },
+        data: { isActive: !current.isActive },
+      });
+
+      res.json({
+        success: true,
+        message: updated.isActive ? 'تم تفعيل الرسالة السريعة بنجاح' : 'تم تعطيل الرسالة السريعة بنجاح',
+        isActive: updated.isActive,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تغيير حالة الرسالة السريعة' });
+    }
+  }
+  /**
+   * جلب جميع المنتجات في المتجر للوحة التحكم
+   */
+  static async listProducts(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const products = await prisma.product.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      });
+      res.json({ success: true, products });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر جلب قائمة المنتجات' });
+    }
+  }
+
+  /**
+   * إضافة منتج جديد في المتجر
+   */
+  static async createProduct(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const {
+        name,
+        subtitle,
+        price,
+        originalPrice,
+        discountPercent,
+        imageAsset,
+        badgeText,
+        description,
+        features,
+        inStock,
+        sortOrder,
+      } = req.body;
+
+      if (!name || !price) {
+        res.status(400).json({ success: false, message: 'اسم المنتج والسعر مطلوبان' });
+        return;
+      }
+
+      const baseSlug = (name as string)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9\u0600-\u06FF]+/g, '-')
+        .replace(/^-|-$/g, '') || 'product';
+      const uniqueSlug = `${baseSlug}-${Date.now().toString(36)}`;
+
+      let featuresJson = null;
+      if (typeof features === 'string') {
+        featuresJson = features;
+      } else if (Array.isArray(features)) {
+        featuresJson = JSON.stringify(features);
+      }
+
+      const product = await prisma.product.create({
+        data: {
+          name: (name as string).trim(),
+          slug: uniqueSlug,
+          subtitle: (subtitle as string || '').trim(),
+          price: parseFloat(price) || 0,
+          originalPrice: originalPrice ? parseFloat(originalPrice) : null,
+          discountPercent: discountPercent ? parseInt(discountPercent, 10) : null,
+          imageAsset: (imageAsset as string || 'assets/images/store/tag_trunk.jpg').trim(),
+          badgeText: badgeText ? (badgeText as string).trim() : null,
+          description: description ? (description as string).trim() : null,
+          features: featuresJson,
+          inStock: inStock !== undefined ? Boolean(inStock) : true,
+          sortOrder: sortOrder ? parseInt(sortOrder, 10) : 0,
+        },
+      });
+
+      res.status(201).json({ success: true, message: 'تمت إضافة المنتج بنجاح 🛍️', product });
+    } catch (error) {
+      console.error('Error creating product:', error);
+      res.status(500).json({ success: false, message: 'تعذر إضافة المنتج' });
+    }
+  }
+
+  /**
+   * تعديل بيانات المنتج والأسعار والخصومات والصورة
+   */
+  static async updateProduct(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const {
+        name,
+        subtitle,
+        price,
+        originalPrice,
+        discountPercent,
+        imageAsset,
+        badgeText,
+        description,
+        features,
+        inStock,
+        sortOrder,
+      } = req.body;
+
+      const existing = await prisma.product.findUnique({ where: { id } });
+      if (!existing) {
+        res.status(404).json({ success: false, message: 'المنتج غير موجود' });
+        return;
+      }
+
+      let featuresJson = existing.features;
+      if (typeof features === 'string') {
+        featuresJson = features;
+      } else if (Array.isArray(features)) {
+        featuresJson = JSON.stringify(features);
+      }
+
+      const updated = await prisma.product.update({
+        where: { id },
+        data: {
+          name: name !== undefined ? (name as string).trim() : existing.name,
+          subtitle: subtitle !== undefined ? (subtitle as string).trim() : existing.subtitle,
+          price: price !== undefined ? parseFloat(price) : existing.price,
+          originalPrice: originalPrice !== undefined ? (originalPrice ? parseFloat(originalPrice) : null) : existing.originalPrice,
+          discountPercent: discountPercent !== undefined ? (discountPercent ? parseInt(discountPercent, 10) : null) : existing.discountPercent,
+          imageAsset: imageAsset !== undefined ? (imageAsset as string).trim() : existing.imageAsset,
+          badgeText: badgeText !== undefined ? (badgeText ? (badgeText as string).trim() : null) : existing.badgeText,
+          description: description !== undefined ? (description ? (description as string).trim() : null) : existing.description,
+          features: featuresJson,
+          inStock: inStock !== undefined ? Boolean(inStock) : existing.inStock,
+          sortOrder: sortOrder !== undefined ? parseInt(sortOrder, 10) : existing.sortOrder,
+        },
+      });
+
+      res.json({ success: true, message: 'تم تحديث بيانات المنتج بنجاح ✨', product: updated });
+    } catch (error) {
+      console.error('Error updating product:', error);
+      res.status(500).json({ success: false, message: 'تعذر تعديل المنتج' });
+    }
+  }
+
+  /**
+   * تغيير حالة توفر المنتج (متوفر / غير متوفر)
+   */
+  static async toggleProductStock(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const current = await prisma.product.findUnique({ where: { id } });
+      if (!current) {
+        res.status(404).json({ success: false, message: 'المنتج غير موجود' });
+        return;
+      }
+
+      const updated = await prisma.product.update({
+        where: { id },
+        data: { inStock: !current.inStock },
+      });
+
+      res.json({
+        success: true,
+        message: updated.inStock ? 'تم تعيين المنتج كـ (متوفر حالياً) في المتجر ✅' : 'تم تعيين المنتج كـ (غير متوفر) في المتجر ⛔',
+        inStock: updated.inStock,
+        product: updated,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تغيير حالة توفر المنتج' });
+    }
+  }
+
+  /**
+   * إزالة/حذف منتج من المتجر
+   */
+  static async deleteProduct(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const current = await prisma.product.findUnique({ where: { id } });
+      if (!current) {
+        res.status(404).json({ success: false, message: 'المنتج غير موجود' });
+        return;
+      }
+
+      await prisma.orderItem.updateMany({
+        where: { productId: id },
+        data: { productId: null },
+      });
+
+      await prisma.product.delete({ where: { id } });
+
+      res.json({ success: true, message: 'تم حذف المنتج من المتجر بنجاح 🗑️' });
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      res.status(500).json({ success: false, message: 'تعذر حذف المنتج' });
+    }
+  }
+
+  /**
+   * رفع صورة منتج للمتجر
+   */
+  static async uploadProductImage(req: Request, res: Response): Promise<void> {
+    try {
+      const file = (req as any).file;
+      if (!file) {
+        res.status(400).json({ success: false, message: 'لم يتم إرسال أي ملف صورة' });
+        return;
+      }
+      const fileUrl = `/uploads/${file.filename}`;
+      res.json({
+        success: true,
+        message: 'تم رفع صورة المنتج بنجاح 🖼️',
+        url: fileUrl,
+        filename: file.filename,
+      });
+    } catch (error) {
+      console.error('Error uploading product image:', error);
+      res.status(500).json({ success: false, message: 'فشل رفع الصورة' });
+    }
+  }
+
+  /**
+   * جلب جميع شرائح السلايدر للمشرف
+   */
+  static async listBanners(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const banners = await prisma.storeBanner.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      });
+      res.json({ success: true, banners });
+    } catch (error) {
+      console.error('Error listing store banners:', error);
+      res.status(500).json({ success: false, message: 'تعذر جلب شرائح السلايدر' });
+    }
+  }
+
+  /**
+   * إضافة شريحة جديدة للسلايدر
+   */
+  static async createBanner(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { image, title, location, subtitle, badge, sortOrder, isActive } = req.body;
+      if (!image) {
+        res.status(400).json({ success: false, message: 'الصورة مطلوبة لإضافة الشريحة' });
+        return;
+      }
+      const banner = await prisma.storeBanner.create({
+        data: {
+          image: (image as string).trim(),
+          title: title ? (title as string).trim() : null,
+          location: location ? (location as string).trim() : null,
+          subtitle: subtitle ? (subtitle as string).trim() : null,
+          badge: badge ? (badge as string).trim() : null,
+          sortOrder: sortOrder ? parseInt(sortOrder, 10) : 0,
+          isActive: isActive !== undefined ? Boolean(isActive) : true,
+        },
+      });
+      res.status(201).json({ success: true, message: 'تمت إضافة شريحة السلايدر بنجاح 🖼️✨', banner });
+    } catch (error) {
+      console.error('Error creating banner:', error);
+      res.status(500).json({ success: false, message: 'تعذر إضافة شريحة السلايدر' });
+    }
+  }
+
+  /**
+   * تعديل شريحة سلايدر
+   */
+  static async updateBanner(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const { image, title, location, subtitle, badge, sortOrder, isActive } = req.body;
+      const existing = await prisma.storeBanner.findUnique({ where: { id } });
+      if (!existing) {
+        res.status(404).json({ success: false, message: 'شريحة السلايدر غير موجودة' });
+        return;
+      }
+      const updated = await prisma.storeBanner.update({
+        where: { id },
+        data: {
+          image: image !== undefined ? (image as string).trim() : existing.image,
+          title: title !== undefined ? (title ? (title as string).trim() : null) : existing.title,
+          location: location !== undefined ? (location ? (location as string).trim() : null) : existing.location,
+          subtitle: subtitle !== undefined ? (subtitle ? (subtitle as string).trim() : null) : existing.subtitle,
+          badge: badge !== undefined ? (badge ? (badge as string).trim() : null) : existing.badge,
+          sortOrder: sortOrder !== undefined ? parseInt(sortOrder, 10) : existing.sortOrder,
+          isActive: isActive !== undefined ? Boolean(isActive) : existing.isActive,
+        },
+      });
+      res.json({ success: true, message: 'تم تحديث شريحة السلايدر بنجاح ✨', banner: updated });
+    } catch (error) {
+      console.error('Error updating banner:', error);
+      res.status(500).json({ success: false, message: 'تعذر تعديل شريحة السلايدر' });
+    }
+  }
+
+  /**
+   * تفعيل / تعطيل شريحة سلايدر
+   */
+  static async toggleBanner(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const existing = await prisma.storeBanner.findUnique({ where: { id } });
+      if (!existing) {
+        res.status(404).json({ success: false, message: 'شريحة السلايدر غير موجودة' });
+        return;
+      }
+      const updated = await prisma.storeBanner.update({
+        where: { id },
+        data: { isActive: !existing.isActive },
+      });
+      res.json({
+        success: true,
+        message: updated.isActive ? 'تم تفعيل ظهور الشريحة في السلايدر ✅' : 'تم إخفاء الشريحة من السلايدر ⏸️',
+        isActive: updated.isActive,
+        banner: updated,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تغيير حالة الشريحة' });
+    }
+  }
+
+  /**
+   * حذف / إزالة شريحة من السلايدر
+   */
+  static async deleteBanner(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const existing = await prisma.storeBanner.findUnique({ where: { id } });
+      if (!existing) {
+        res.status(404).json({ success: false, message: 'شريحة السلايدر غير موجودة' });
+        return;
+      }
+      await prisma.storeBanner.delete({ where: { id } });
+      res.json({ success: true, message: 'تم إزالة الشريحة من السلايدر بنجاح 🗑️' });
+    } catch (error) {
+      console.error('Error deleting banner:', error);
+      res.status(500).json({ success: false, message: 'تعذر حذف شريحة السلايدر' });
     }
   }
 }

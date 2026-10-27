@@ -218,4 +218,54 @@ body {
     background: #fff !important;
     color: #000 !important;
   }
+  .print-tag-card .qr-box {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+  }
+}
+
+.qr-box svg {
+  width: 128px !important;
+  height: 128px !important;
+  display: block !important;
+}
+
+/* In-Stock-only print mode: triggered by body.printing-instock */
+@media print {
+  body.printing-instock * {
+    display: none !important;
+  }
+  body.printing-instock .instock-print-sheet,
+  body.printing-instock .instock-print-sheet * {
+    display: revert !important;
+  }
+  body.printing-instock .instock-print-sheet {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 16px !important;
+    padding: 20px !important;
+    background: #fff !important;
+  }
+  body.printing-instock .print-tag-card {
+    border: 2px dashed #333 !important;
+    padding: 15px !important;
+    page-break-inside: avoid !important;
+    text-align: center !important;
+    background: #fff !important;
+    color: #000 !important;
+    position: relative !important;
+  }
+  body.printing-instock .qr-box {
+    background: #fff !important;
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  body.printing-instock .qr-box svg {
+    display: block !important;
+    width: 128px !important;
+    height: 128px !important;
+  }
 }

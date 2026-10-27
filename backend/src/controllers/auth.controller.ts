@@ -30,9 +30,10 @@ export class AuthController {
         }
       }
 
-      // Generate 6-digit OTP code (e.g. 123456 in dev or random in prod)
+      // Generate 4-digit random OTP code (1000 - 9999)
       const isDev = process.env.NODE_ENV !== 'production';
-      const code = isDev ? '123456' : Math.floor(100000 + Math.random() * 900000).toString();
+      const code = Math.floor(1000 + Math.random() * 9000).toString();
+      console.log(`[OTP] Generated 4-digit random OTP for ${phone}: ${code}`);
 
       // Store OTP for 10 minutes
       otpStore.set(phone, {
@@ -54,7 +55,7 @@ export class AuthController {
         maskedPhone: masked,
         whatsappUrl: waMsg.whatsappUrl,
         whatsappWebUrl: waMsg.whatsappWebUrl,
-        // Send mock code in dev mode for easy testing
+        // Send generated code in dev mode for easy testing / debugging
         devOtp: isDev ? code : undefined,
       });
     } catch (error) {
@@ -81,11 +82,10 @@ export class AuthController {
       }
 
       const stored = otpStore.get(phone);
-      // Allow default '123456' in dev or matching stored OTP
+      // Validate against the randomly generated 4-digit OTP stored in memory
       const isMatch = stored && stored.code === otp && stored.expiresAt > Date.now();
-      const isDevBypass = process.env.NODE_ENV !== 'production' && otp === '123456';
 
-      if (!isMatch && !isDevBypass) {
+      if (!isMatch) {
         res.status(400).json({ success: false, message: 'كود التحقق غير صحيح أو منتهي الصلاحية' });
         return;
       }
@@ -207,6 +207,75 @@ export class AuthController {
       });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر تحديث البيانات' });
+    }
+  }
+
+  /**
+   * جلب إعدادات الخصوصية والأمان لحساب المستخدم
+   */
+  static async getPrivacySettings(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user!.id },
+      });
+      if (!user) {
+        res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+        return;
+      }
+      res.json({
+        success: true,
+        settings: {
+          allowReporterPhotos: user.allowReporterPhotos ?? true,
+          blurPhotosUntilTap: user.blurPhotosUntilTap ?? true,
+          autoDeleteAfter30Days: user.autoDeleteAfter30Days ?? false,
+          allowFreeChat: user.allowFreeChat ?? false, // Default is false: only predefined quick messages
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر جلب إعدادات الخصوصية' });
+    }
+  }
+
+  /**
+   * تحديث إعدادات الخصوصية والأمان (وقفل/فتح الشات الحر)
+   */
+  static async updatePrivacySettings(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { allowReporterPhotos, blurPhotosUntilTap, autoDeleteAfter30Days, allowFreeChat } = req.body;
+      const data: any = {};
+      if (allowReporterPhotos !== undefined) data.allowReporterPhotos = Boolean(allowReporterPhotos);
+      if (blurPhotosUntilTap !== undefined) data.blurPhotosUntilTap = Boolean(blurPhotosUntilTap);
+      if (autoDeleteAfter30Days !== undefined) data.autoDeleteAfter30Days = Boolean(autoDeleteAfter30Days);
+      if (allowFreeChat !== undefined) data.allowFreeChat = Boolean(allowFreeChat);
+
+      const user = await prisma.user.update({
+        where: { id: req.user!.id },
+        data,
+      });
+
+      // تطبيق التحديث على جميع مركبات المستخدم التابعة له
+      if (allowFreeChat !== undefined || allowReporterPhotos !== undefined) {
+        await prisma.car.updateMany({
+          where: { userId: user.id },
+          data: {
+            ...(allowFreeChat !== undefined && { allowFreeChat: Boolean(allowFreeChat) }),
+            ...(allowReporterPhotos !== undefined && { allowReporterPhotos: Boolean(allowReporterPhotos) }),
+          },
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'تم حفظ إعدادات الخصوصية بنجاح',
+        settings: {
+          allowReporterPhotos: user.allowReporterPhotos,
+          blurPhotosUntilTap: user.blurPhotosUntilTap,
+          autoDeleteAfter30Days: user.autoDeleteAfter30Days,
+          allowFreeChat: user.allowFreeChat,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر حفظ إعدادات الخصوصية' });
     }
   }
 }

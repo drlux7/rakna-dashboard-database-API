@@ -9,12 +9,27 @@ export class StoreController {
   static async getProducts(req: Request, res: Response): Promise<void> {
     try {
       const products = await prisma.product.findMany({
-        where: { inStock: true },
-        orderBy: { price: 'desc' },
+        orderBy: [{ sortOrder: 'asc' }, { inStock: 'desc' }, { price: 'desc' }],
       });
       res.json({ success: true, products });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر جلب المنتجات' });
+    }
+  }
+
+  /**
+   * جلب شرائح وبانرات سلايدر المتجر
+   */
+  static async getBanners(req: Request, res: Response): Promise<void> {
+    try {
+      const banners = await prisma.storeBanner.findMany({
+        where: { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      });
+      res.json({ success: true, banners });
+    } catch (error) {
+      console.error('Error fetching store banners:', error);
+      res.status(500).json({ success: false, message: 'تعذر جلب بانرات المتجر' });
     }
   }
 

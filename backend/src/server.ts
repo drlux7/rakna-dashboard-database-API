@@ -2,10 +2,35 @@ import express, { Request, Response } from 'express';
 import http from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
 
 dotenv.config();
+
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.jpg';
+    const cleanBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const uniqueName = `product_${cleanBase}_${Date.now()}${ext}`;
+    cb(null, uniqueName);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 import { errorHandler } from './middlewares/error.middleware';
 import { authenticateOwner, authenticateAdmin } from './middlewares/auth.middleware';
@@ -18,6 +43,7 @@ import { StoreController } from './controllers/store.controller';
 import { NotificationsController } from './controllers/notifications.controller';
 import { AdminController } from './controllers/admin.controller';
 import { SupportController } from './controllers/support.controller';
+import { WebChatController } from './controllers/webChat.controller';
 import { setupChatGateway } from './sockets/chat.gateway';
 
 const app = express();
@@ -27,7 +53,22 @@ const PORT = parseInt(process.env.PORT || '5000', 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 // 1. Security & Core Middlewares
-app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrcAttr: ["'unsafe-inline'"],
+        styleSrc: ["'self'", "https:", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:", "blob:"],
+        fontSrc: ["'self'", "https:", "data:"],
+        connectSrc: ["'self'", "http:", "https:", "ws:", "wss:"],
+      },
+    },
+  })
+);
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, etc.)
@@ -53,6 +94,9 @@ app.use(express.urlencoded({ extended: true }));
 // Static uploads directory
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+// Public Stranger Web Chat & Deep-link Page for QR/NFC Scans
+app.get('/t/:tagCode', WebChatController.renderTagPage);
+
 // 2. Setup Socket.io Gateway
 setupChatGateway(server, CORS_ORIGIN);
 
@@ -77,6 +121,8 @@ authRouter.post('/verify-otp', AuthController.verifyOtp);
 authRouter.post('/phone/verify-otp', AuthController.verifyOtp);
 authRouter.get('/me', authenticateOwner, AuthController.getMe);
 authRouter.patch('/me', authenticateOwner, AuthController.updateMe);
+authRouter.get('/privacy-settings', authenticateOwner, AuthController.getPrivacySettings);
+authRouter.patch('/privacy-settings', authenticateOwner, AuthController.updatePrivacySettings);
 apiRouter.use('/auth', authRouter);
 
 // ──────────────── Cars Routes ────────────────
@@ -98,11 +144,25 @@ apiRouter.use('/tags', tagsRouter);
 
 // ──────────────── Reporter Flow Routes (Public & Anonymous) ────────────────
 const reporterRouter = express.Router();
+
+const reporterSpamLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 10, // max 10 requests per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'لقد قمت بإرسال عدد كبير من الطلبات، يرجى الانتظار دقيقة قبل المحاولة ثانية.',
+  },
+});
+
 reporterRouter.get('/resolve-tag/:tagCode', ReporterController.resolveTag);
 reporterRouter.post('/session/init', ReporterController.initSession);
-reporterRouter.post('/chats', ReporterController.createChat);
-reporterRouter.post('/chats/:chatId/messages', ReporterController.sendReporterMessage);
+reporterRouter.post('/chats', reporterSpamLimiter, ReporterController.createChat);
+reporterRouter.get('/chats/:chatId/messages', ReporterController.getReporterChatMessages);
+reporterRouter.post('/chats/:chatId/messages', reporterSpamLimiter, ReporterController.sendReporterMessage);
 reporterRouter.post('/chats/:chatId/report', ReporterController.reportChat);
+reporterRouter.get('/quick-messages', ReporterController.getQuickMessages);
 apiRouter.use('/reporter', reporterRouter);
 
 // ──────────────── Owner Chats Routes ────────────────
@@ -123,6 +183,7 @@ apiRouter.use('/support', supportRouter);
 // ──────────────── Store & Orders Routes ────────────────
 const storeRouter = express.Router();
 storeRouter.get('/products', StoreController.getProducts);
+storeRouter.get('/banners', StoreController.getBanners);
 storeRouter.post('/orders', StoreController.createOrder);
 storeRouter.get('/orders/my-orders', authenticateOwner, StoreController.getMyOrders);
 apiRouter.use('/store', storeRouter);
@@ -167,6 +228,28 @@ adminRouter.post('/support/threads/:threadId/close', authenticateAdmin, AdminCon
 adminRouter.get('/abuse-reports', authenticateAdmin, AdminController.getAbuseReports);
 adminRouter.get('/abuse-reports/:reportId/messages', authenticateAdmin, AdminController.getReportMessages);
 adminRouter.patch('/abuse-reports/:reportId/action', authenticateAdmin, AdminController.takeReportAction);
+
+// Quick Predefined Messages Management
+adminRouter.get('/quick-messages', authenticateAdmin, AdminController.listQuickMessages);
+adminRouter.post('/quick-messages', authenticateAdmin, AdminController.createQuickMessage);
+adminRouter.put('/quick-messages/:id', authenticateAdmin, AdminController.updateQuickMessage);
+adminRouter.delete('/quick-messages/:id', authenticateAdmin, AdminController.deleteQuickMessage);
+adminRouter.patch('/quick-messages/:id/toggle', authenticateAdmin, AdminController.toggleQuickMessage);
+
+// Store Products Management
+adminRouter.get('/products', authenticateAdmin, AdminController.listProducts);
+adminRouter.post('/products', authenticateAdmin, AdminController.createProduct);
+adminRouter.put('/products/:id', authenticateAdmin, AdminController.updateProduct);
+adminRouter.patch('/products/:id/toggle-stock', authenticateAdmin, AdminController.toggleProductStock);
+adminRouter.delete('/products/:id', authenticateAdmin, AdminController.deleteProduct);
+adminRouter.post('/upload-image', authenticateAdmin, upload.single('image'), AdminController.uploadProductImage);
+
+// Store Slider Banners Management
+adminRouter.get('/banners', authenticateAdmin, AdminController.listBanners);
+adminRouter.post('/banners', authenticateAdmin, AdminController.createBanner);
+adminRouter.put('/banners/:id', authenticateAdmin, AdminController.updateBanner);
+adminRouter.patch('/banners/:id/toggle', authenticateAdmin, AdminController.toggleBanner);
+adminRouter.delete('/banners/:id', authenticateAdmin, AdminController.deleteBanner);
 
 apiRouter.use('/admin', adminRouter);
 

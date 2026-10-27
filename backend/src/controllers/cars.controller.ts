@@ -31,6 +31,7 @@ export class CarsController {
         plateNumber: c.plateNumber,
         colorName: c.colorName,
         nickname: c.nickname,
+        maintenanceData: c.maintenanceData,
         isActivated: c.isActivated && c.tag !== null,
         isTagActive: c.isTagActive && c.tag !== null && c.tag.status === 'ACTIVE',
         tagCode: c.tag?.tagCode || null,
@@ -126,7 +127,7 @@ export class CarsController {
   static async updateCar(req: AuthRequest, res: Response): Promise<void> {
     try {
       const id = req.params.id as string;
-      const { brand, model, year, plateNumber, colorName, nickname } = req.body;
+      const { brand, model, year, plateNumber, colorName, nickname, maintenanceData } = req.body;
 
       const car = await prisma.car.findFirst({
         where: { id, userId: req.user!.id },
@@ -137,6 +138,10 @@ export class CarsController {
         return;
       }
 
+      const formattedMaintenance = maintenanceData !== undefined
+        ? (typeof maintenanceData === 'object' ? JSON.stringify(maintenanceData) : String(maintenanceData))
+        : undefined;
+
       const updated = await prisma.car.update({
         where: { id },
         data: {
@@ -146,6 +151,7 @@ export class CarsController {
           ...(plateNumber !== undefined && { plateNumber }),
           ...(colorName !== undefined && { colorName }),
           ...(nickname !== undefined && { nickname }),
+          ...(formattedMaintenance !== undefined && { maintenanceData: formattedMaintenance }),
         },
       });
 

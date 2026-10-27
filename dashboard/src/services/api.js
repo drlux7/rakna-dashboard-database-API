@@ -23,8 +23,9 @@ class AdminApiService {
   }
 
   async request(endpoint, options = {}) {
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const headers = {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
       ...(options.headers || {}),
     };
@@ -196,6 +197,108 @@ class AdminApiService {
     return this.request(`/admin/abuse-reports/${reportId}/action`, {
       method: 'PATCH',
       body: JSON.stringify({ action, notes }),
+    });
+  }
+
+  // Quick Predefined Messages
+  async getQuickMessages() {
+    return this.request('/admin/quick-messages');
+  }
+
+  async createQuickMessage(data) {
+    return this.request('/admin/quick-messages', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateQuickMessage(id, data) {
+    return this.request(`/admin/quick-messages/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteQuickMessage(id) {
+    return this.request(`/admin/quick-messages/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async toggleQuickMessage(id) {
+    return this.request(`/admin/quick-messages/${id}/toggle`, {
+      method: 'PATCH',
+    });
+  }
+
+  // Store Products Management
+  async getProducts() {
+    return this.request('/admin/products');
+  }
+
+  async createProduct(data) {
+    return this.request('/admin/products', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateProduct(id, data) {
+    return this.request(`/admin/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async toggleProductStock(id) {
+    return this.request(`/admin/products/${id}/toggle-stock`, {
+      method: 'PATCH',
+    });
+  }
+
+  async deleteProduct(id) {
+    return this.request(`/admin/products/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async uploadProductImage(file) {
+    const formData = new FormData();
+    formData.append('image', file);
+    return this.request('/admin/upload-image', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  // Store Slider Banners Management
+  async getBanners() {
+    return this.request('/admin/banners');
+  }
+
+  async createBanner(data) {
+    return this.request('/admin/banners', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateBanner(id, data) {
+    return this.request(`/admin/banners/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async toggleBanner(id) {
+    return this.request(`/admin/banners/${id}/toggle`, {
+      method: 'PATCH',
+    });
+  }
+
+  async deleteBanner(id) {
+    return this.request(`/admin/banners/${id}`, {
+      method: 'DELETE',
     });
   }
 }

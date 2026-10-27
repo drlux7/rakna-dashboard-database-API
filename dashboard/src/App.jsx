@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   QrCode,
@@ -20,8 +20,10 @@ import {
   TrendingUp,
   AlertCircle,
   Eye,
+  EyeOff,
   Radio,
   Download,
+  UploadCloud,
   Lock,
   Layers,
   MessageSquare,
@@ -46,6 +48,13 @@ import {
   Ban,
   MessageCircle,
   CheckCheck,
+  Trash2,
+  ShoppingBag,
+  Tag,
+  Percent,
+  Flame,
+  Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { api } from './services/api';
 
@@ -136,6 +145,91 @@ export default function App() {
   const [isLoadingReportDetails, setIsLoadingReportDetails] = useState(false);
   const [isActingReport, setIsActingReport] = useState(false);
 
+  // Predefined Quick Messages State
+  const [quickMessagesList, setQuickMessagesList] = useState([]);
+  const [isLoadingQuickMessages, setIsLoadingQuickMessages] = useState(false);
+  const [quickModalOpen, setQuickModalOpen] = useState(false);
+  const [editingQuickMsg, setEditingQuickMsg] = useState(null);
+  const [quickForm, setQuickForm] = useState({
+    title: '',
+    text: '',
+    category: 'BLOCKING',
+    icon: 'car',
+    isActive: true,
+    displayOrder: 0,
+  });
+  const [isSavingQuickMsg, setIsSavingQuickMsg] = useState(false);
+
+  // Store Products State
+  const [productsList, setProductsList] = useState([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [productForm, setProductForm] = useState({
+    name: '',
+    subtitle: '',
+    price: 149,
+    originalPrice: 189,
+    discountPercent: 21,
+    badgeText: 'هيكل مدرع مقاوم للعوامل الجوية',
+    imageAsset: 'assets/images/store/tag_trunk.jpg',
+    description: '',
+    featuresText: 'شريحة NFC مدمجة معززة لسرعة القراءة في ثانية واحدة\nرمز QR محمي بطبقة كربونية مضادة للخدش والأتربة\nمقاوم للماء وغسيل السيارات وموجات الحرارة العالية\nلاصق 3M قوي جداً لا يترك أي أثر عند الإزالة',
+    inStock: true,
+    sortOrder: 1,
+  });
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const imageFileInputRef = useRef(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // Store Slider Banners State
+  const [storeSubTab, setStoreSubTab] = useState('products'); // 'products' | 'slider'
+  const [bannersList, setBannersList] = useState([]);
+  const [isLoadingBanners, setIsLoadingBanners] = useState(false);
+  const [bannerModalOpen, setBannerModalOpen] = useState(false);
+  const [editingBanner, setEditingBanner] = useState(null);
+  const [bannerForm, setBannerForm] = useState({
+    image: 'assets/images/store/tag_trunk.jpg',
+    title: '',
+    location: '',
+    subtitle: '',
+    badge: '',
+    sortOrder: 1,
+    isActive: true,
+  });
+  const [isSavingBanner, setIsSavingBanner] = useState(false);
+  const bannerFileInputRef = useRef(null);
+  const [isUploadingBannerImage, setIsUploadingBannerImage] = useState(false);
+
+  const resolveProductImageUrl = (asset) => {
+    if (!asset || typeof asset !== 'string' || !asset.trim()) return null;
+    const clean = asset.trim();
+    if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
+    if (clean.startsWith('/uploads/')) return `http://localhost:5000${clean}`;
+    if (clean.includes('tag_trunk')) return '/uploads/tag_trunk.jpg';
+    if (clean.includes('tag_glass')) return '/uploads/tag_glass.jpg';
+    if (clean.includes('tag_scan')) return '/uploads/tag_scan.jpg';
+    return clean;
+  };
+
+  const handleImageFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingImage(true);
+      const res = await api.uploadProductImage(file);
+      if (res && res.success && res.url) {
+        setProductForm((prev) => ({ ...prev, imageAsset: res.url }));
+        showToast('تم رفع صورة المنتج بنجاح 🖼️✨');
+      }
+    } catch (err) {
+      showToast('فشل رفع الصورة: ' + (err.message || 'خطأ غير معروف'));
+    } finally {
+      setIsUploadingImage(false);
+      e.target.value = '';
+    }
+  };
+
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -145,7 +239,7 @@ export default function App() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const [statsRes, tagsRes, ordersRes, usersRes, waRes, waConfRes, supportRes, abuseRes] = await Promise.all([
+      const [statsRes, tagsRes, ordersRes, usersRes, waRes, waConfRes, supportRes, abuseRes, quickRes, prodRes, banRes] = await Promise.all([
         api.getStats().catch(() => null),
         api.listTags().catch(() => null),
         api.listOrders().catch(() => null),
@@ -154,6 +248,9 @@ export default function App() {
         api.getWhatsAppConfig().catch(() => null),
         api.getSupportThreads().catch(() => null),
         api.getAbuseReports('ALL').catch(() => null),
+        api.getQuickMessages().catch(() => null),
+        api.getProducts().catch(() => null),
+        api.getBanners().catch(() => null),
       ]);
 
       if (statsRes && statsRes.stats) setStats(statsRes.stats);
@@ -179,6 +276,15 @@ export default function App() {
       }
       if (abuseRes && abuseRes.reports) {
         setAbuseReports(abuseRes.reports);
+      }
+      if (quickRes) {
+        setQuickMessagesList(quickRes.data || quickRes.messages || []);
+      }
+      if (prodRes && prodRes.products) {
+        setProductsList(prodRes.products);
+      }
+      if (banRes && banRes.banners) {
+        setBannersList(banRes.banners);
       }
     } catch (err) {
       console.error('Data load error:', err);
@@ -261,6 +367,18 @@ export default function App() {
       loadAbuseReports();
     }
   }, [token, currentTab, abuseFilter]);
+
+  useEffect(() => {
+    if (token && currentTab === 'quick_messages') {
+      loadQuickMessages();
+    }
+  }, [token, currentTab]);
+
+  useEffect(() => {
+    if (token && currentTab === 'store') {
+      loadProducts();
+    }
+  }, [token, currentTab]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -452,6 +570,7 @@ export default function App() {
     const matchesSearch =
       !tagSearch ||
       t.tagCode.toLowerCase().includes(tagSearch.toLowerCase()) ||
+      (t.activationCode && t.activationCode.toLowerCase().includes(tagSearch.toLowerCase())) ||
       (t.car && `${t.car.brand} ${t.car.model}`.toLowerCase().includes(tagSearch.toLowerCase()));
     return matchesFilter && matchesSearch;
   });
@@ -792,6 +911,381 @@ export default function App() {
     }
   };
 
+  // Quick Messages Handlers
+  const loadQuickMessages = async () => {
+    if (!token) return;
+    setIsLoadingQuickMessages(true);
+    try {
+      const res = await api.getQuickMessages();
+      if (res) {
+        setQuickMessagesList(res.data || res.messages || []);
+      }
+    } catch (e) {
+      console.error('Error loading quick messages:', e);
+    } finally {
+      setIsLoadingQuickMessages(false);
+    }
+  };
+
+  const handleOpenAddQuickMsg = () => {
+    setEditingQuickMsg(null);
+    setQuickForm({
+      title: '',
+      text: '',
+      category: 'BLOCKING',
+      icon: 'car',
+      isActive: true,
+      displayOrder: quickMessagesList.length,
+    });
+    setQuickModalOpen(true);
+  };
+
+  const handleOpenEditQuickMsg = (msg) => {
+    setEditingQuickMsg(msg);
+    setQuickForm({
+      title: msg.title || '',
+      text: msg.text || '',
+      category: msg.category || 'GENERAL',
+      icon: msg.icon || 'message',
+      isActive: msg.isActive !== false,
+      displayOrder: msg.displayOrder || 0,
+    });
+    setQuickModalOpen(true);
+  };
+
+  const handleSaveQuickMsg = async (e) => {
+    e.preventDefault();
+    if (!quickForm.title.trim() || !quickForm.text.trim()) {
+      showToast('يرجى ملء عنوان ونص الرسالة بالكامل');
+      return;
+    }
+    setIsSavingQuickMsg(true);
+    try {
+      if (editingQuickMsg) {
+        const res = await api.updateQuickMessage(editingQuickMsg.id, quickForm);
+        if (res && res.success) {
+          showToast('تم تعديل الرسالة السريعة بنجاح ✨');
+          setQuickModalOpen(false);
+          loadQuickMessages();
+        }
+      } else {
+        const res = await api.createQuickMessage(quickForm);
+        if (res && res.success) {
+          showToast('تمت إضافة الرسالة السريعة بنجاح ✨');
+          setQuickModalOpen(false);
+          loadQuickMessages();
+        }
+      }
+    } catch (err) {
+      showToast(err.message || 'فشل حفظ الرسالة السريعة');
+    } finally {
+      setIsSavingQuickMsg(false);
+    }
+  };
+
+  const handleToggleQuickMsg = async (id, currentStatus) => {
+    try {
+      const res = await api.toggleQuickMessage(id, !currentStatus);
+      if (res && res.success) {
+        showToast(`تم ${!currentStatus ? 'تفعيل' : 'تعطيل'} الرسالة السريعة`);
+        setQuickMessagesList((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, isActive: !currentStatus } : m))
+        );
+      }
+    } catch (err) {
+      showToast(err.message || 'فشل تغيير حالة الرسالة');
+    }
+  };
+
+  const handleDeleteQuickMsg = async (id, title) => {
+    if (!window.confirm(`هل أنت متأكد من حذف الرسالة "${title}"؟ لن يتمكن المستخدمون من اختيارها مجدداً.`)) return;
+    try {
+      const res = await api.deleteQuickMessage(id);
+      if (res && res.success) {
+        showToast('تم حذف الرسالة بنجاح 🗑️');
+        setQuickMessagesList((prev) => prev.filter((m) => m.id !== id));
+      }
+    } catch (err) {
+      showToast(err.message || 'فشل حذف الرسالة');
+    }
+  };
+
+  // ──────────────── Store Products Handlers ────────────────
+  const loadProducts = async () => {
+    if (!token) return;
+    setIsLoadingProducts(true);
+    try {
+      const res = await api.getProducts();
+      if (res && res.products) {
+        setProductsList(res.products);
+      }
+    } catch (e) {
+      console.error('Error loading products:', e);
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
+  const handleOpenAddProduct = () => {
+    setEditingProduct(null);
+    setProductForm({
+      name: '',
+      subtitle: '',
+      price: 149,
+      originalPrice: '',
+      discountPercent: '',
+      badgeText: '',
+      imageAsset: 'assets/images/store/tag_trunk.jpg',
+      description: '',
+      featuresText: 'شريحة NFC مدمجة فائقة السرعة\nرمز QR محمي بطبقة مضادة للخدش\nمقاوم للماء وحرارة الشمس\nلاصق 3M قوي لا يترك أثر',
+      inStock: true,
+      sortOrder: productsList.length + 1,
+    });
+    setProductModalOpen(true);
+  };
+
+  const handleOpenEditProduct = (prod) => {
+    setEditingProduct(prod);
+    let featText = '';
+    try {
+      if (typeof prod.features === 'string') {
+        const parsed = JSON.parse(prod.features);
+        if (Array.isArray(parsed)) featText = parsed.join('\n');
+        else featText = prod.features;
+      } else if (Array.isArray(prod.features)) {
+        featText = prod.features.join('\n');
+      }
+    } catch (_) {
+      featText = prod.features || '';
+    }
+
+    setProductForm({
+      name: prod.name || '',
+      subtitle: prod.subtitle || '',
+      price: prod.price || 0,
+      originalPrice: prod.originalPrice || '',
+      discountPercent: prod.discountPercent || '',
+      badgeText: prod.badgeText || '',
+      imageAsset: prod.imageAsset || 'assets/images/store/tag_trunk.jpg',
+      description: prod.description || '',
+      featuresText: featText,
+      inStock: prod.inStock !== false,
+      sortOrder: prod.sortOrder || 1,
+    });
+    setProductModalOpen(true);
+  };
+
+  const handleSaveProduct = async (e) => {
+    e.preventDefault();
+    if (!productForm.name || !productForm.price) {
+      showToast('يرجى كتابة اسم المنتج وسعر البيع');
+      return;
+    }
+
+    setIsSavingProduct(true);
+    try {
+      const featuresArray = productForm.featuresText
+        .split('\n')
+        .map((f) => f.trim())
+        .filter(Boolean);
+
+      const payload = {
+        name: productForm.name.trim(),
+        subtitle: productForm.subtitle.trim(),
+        price: parseFloat(productForm.price) || 0,
+        originalPrice: productForm.originalPrice ? parseFloat(productForm.originalPrice) : null,
+        discountPercent: productForm.discountPercent ? parseInt(productForm.discountPercent, 10) : null,
+        badgeText: productForm.badgeText ? productForm.badgeText.trim() : null,
+        imageAsset: productForm.imageAsset.trim(),
+        description: productForm.description ? productForm.description.trim() : null,
+        features: featuresArray,
+        inStock: Boolean(productForm.inStock),
+        sortOrder: parseInt(productForm.sortOrder, 10) || 1,
+      };
+
+      if (editingProduct) {
+        const res = await api.updateProduct(editingProduct.id, payload);
+        if (res.success) {
+          showToast('تم تحديث بيانات المنتج والعروض بنجاح ✨');
+          setProductModalOpen(false);
+          loadProducts();
+        }
+      } else {
+        const res = await api.createProduct(payload);
+        if (res.success) {
+          showToast('تمت إضافة المنتج الجديد للمتجر بنجاح 🛍️');
+          setProductModalOpen(false);
+          loadProducts();
+        }
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر حفظ بيانات المنتج');
+    } finally {
+      setIsSavingProduct(false);
+    }
+  };
+
+  const handleToggleProductStock = async (prodId) => {
+    try {
+      const res = await api.toggleProductStock(prodId);
+      if (res.success) {
+        showToast(res.message);
+        setProductsList((prev) =>
+          prev.map((p) => (p.id === prodId ? { ...p, inStock: res.inStock } : p))
+        );
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر تغيير حالة توفر المنتج');
+    }
+  };
+
+  const handleDeleteProduct = async (prod) => {
+    if (!window.confirm(`هل أنت متأكد من رغبتك في حذف المنتج "${prod.name}" نهائياً من المتجر؟`)) {
+      return;
+    }
+
+    try {
+      const res = await api.deleteProduct(prod.id);
+      if (res.success) {
+        showToast('تم حذف المنتج من المتجر بنجاح 🗑️');
+        setProductsList((prev) => prev.filter((p) => p.id !== prod.id));
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر حذف المنتج');
+    }
+  };
+
+  // ──────────────── Store Slider Banners Handlers ────────────────
+  const loadBanners = async () => {
+    if (!token) return;
+    setIsLoadingBanners(true);
+    try {
+      const res = await api.getBanners();
+      if (res && res.banners) {
+        setBannersList(res.banners);
+      }
+    } catch (e) {
+      console.error('Error loading banners:', e);
+    } finally {
+      setIsLoadingBanners(false);
+    }
+  };
+
+  const handleOpenAddBanner = () => {
+    setEditingBanner(null);
+    setBannerForm({
+      image: 'assets/images/store/tag_trunk.jpg',
+      title: '',
+      location: '',
+      subtitle: '',
+      badge: '',
+      sortOrder: bannersList.length + 1,
+      isActive: true,
+    });
+    setBannerModalOpen(true);
+  };
+
+  const handleOpenEditBanner = (b) => {
+    setEditingBanner(b);
+    setBannerForm({
+      image: b.image || 'assets/images/store/tag_trunk.jpg',
+      title: b.title || '',
+      location: b.location || '',
+      subtitle: b.subtitle || '',
+      badge: b.badge || '',
+      sortOrder: b.sortOrder || 1,
+      isActive: b.isActive !== false,
+    });
+    setBannerModalOpen(true);
+  };
+
+  const handleBannerImageFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingBannerImage(true);
+      const res = await api.uploadProductImage(file);
+      if (res && res.success && res.url) {
+        setBannerForm((prev) => ({ ...prev, image: res.url }));
+        showToast('تم رفع صورة السلايدر بنجاح 🖼️✨');
+      }
+    } catch (err) {
+      showToast('فشل رفع الصورة: ' + (err.message || 'خطأ غير معروف'));
+    } finally {
+      setIsUploadingBannerImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveBanner = async (e) => {
+    e.preventDefault();
+    if (!bannerForm.image || !bannerForm.image.trim()) {
+      showToast('يرجى تحديد أو رفع صورة للشريحة');
+      return;
+    }
+    setIsSavingBanner(true);
+    try {
+      const payload = {
+        image: bannerForm.image.trim(),
+        title: bannerForm.title.trim() || null,
+        location: bannerForm.location.trim() || null,
+        subtitle: bannerForm.subtitle.trim() || null,
+        badge: bannerForm.badge.trim() || null,
+        sortOrder: parseInt(bannerForm.sortOrder, 10) || 1,
+        isActive: Boolean(bannerForm.isActive),
+      };
+
+      if (editingBanner) {
+        const res = await api.updateBanner(editingBanner.id, payload);
+        if (res.success) {
+          showToast('تم تحديث شريحة السلايدر بنجاح ✨');
+          setBannerModalOpen(false);
+          loadBanners();
+        }
+      } else {
+        const res = await api.createBanner(payload);
+        if (res.success) {
+          showToast('تمت إضافة شريحة السلايدر الجديدة بنجاح 🖼️');
+          setBannerModalOpen(false);
+          loadBanners();
+        }
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر حفظ شريحة السلايدر');
+    } finally {
+      setIsSavingBanner(false);
+    }
+  };
+
+  const handleToggleBanner = async (bannerId) => {
+    try {
+      const res = await api.toggleBanner(bannerId);
+      if (res.success) {
+        showToast(res.message);
+        setBannersList((prev) =>
+          prev.map((b) => (b.id === bannerId ? { ...b, isActive: res.isActive } : b))
+        );
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر تغيير حالة الشريحة');
+    }
+  };
+
+  const handleDeleteBanner = async (b) => {
+    if (!window.confirm(`هل أنت متأكد من حذف هذه الشريحة نهائياً من سلايدر المتجر؟`)) {
+      return;
+    }
+    try {
+      const res = await api.deleteBanner(b.id);
+      if (res.success) {
+        showToast('تم حذف شريحة السلايدر بنجاح 🗑️');
+        setBannersList((prev) => prev.filter((item) => item.id !== b.id));
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر حذف شريحة السلايدر');
+    }
+  };
+
   const totalUnreadSupport = supportThreads.reduce((acc, t) => acc + (t.unreadCount || 0), 0);
   const pendingAbuseCount = abuseReports.filter((r) => r.status === 'PENDING').length;
 
@@ -1075,6 +1569,82 @@ export default function App() {
               </span>
             )}
           </button>
+
+          <button
+            onClick={() => {
+              setCurrentTab('quick_messages');
+              loadQuickMessages();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '11px 14px',
+              borderRadius: '10px',
+              border: 'none',
+              background: currentTab === 'quick_messages' ? 'rgba(245, 190, 24, 0.15)' : 'transparent',
+              color: currentTab === 'quick_messages' ? 'var(--gold-primary)' : 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              textAlign: 'right',
+              transition: 'all 0.18s ease',
+            }}
+          >
+            <MessageCircle size={20} color={currentTab === 'quick_messages' ? 'var(--gold-primary)' : 'currentColor'} />
+            <span>الرسائل السريعة المعتمدة</span>
+            {quickMessagesList.length > 0 && (
+              <span style={{
+                marginRight: 'auto',
+                background: 'rgba(245, 190, 24, 0.2)',
+                color: 'var(--gold-primary)',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                padding: '2px 8px',
+                borderRadius: '12px',
+              }}>
+                {quickMessagesList.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              setCurrentTab('store');
+              loadProducts();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '11px 14px',
+              borderRadius: '10px',
+              border: 'none',
+              background: currentTab === 'store' ? 'rgba(245, 190, 24, 0.15)' : 'transparent',
+              color: currentTab === 'store' ? 'var(--gold-primary)' : 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              textAlign: 'right',
+              transition: 'all 0.18s ease',
+            }}
+          >
+            <ShoppingBag size={20} color={currentTab === 'store' ? 'var(--gold-primary)' : 'currentColor'} />
+            <span>متجر ركنة والمنتجات</span>
+            {productsList.length > 0 && (
+              <span style={{
+                marginRight: 'auto',
+                background: 'rgba(245, 190, 24, 0.2)',
+                color: 'var(--gold-primary)',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                padding: '2px 8px',
+                borderRadius: '12px',
+              }}>
+                {productsList.length}
+              </span>
+            )}
+          </button>
         </nav>
 
         {/* Admin info & Logout */}
@@ -1134,6 +1704,9 @@ export default function App() {
               {currentTab === 'tags' && 'سجل وفهرس ملصقات الـ Tags'}
               {currentTab === 'users' && 'سجل المستخدمين ومالكي المركبات'}
               {currentTab === 'whatsapp' && 'بوابة الواتساب وصندوق صادر رسائل الـ OTP اللحظية'}
+              {currentTab === 'support' && 'مركز خدمة العملاء والدعم الفني المباشر'}
+              {currentTab === 'abuse' && 'إشراف ومراقبة البلاغات والمحادثات المسيئة'}
+              {currentTab === 'quick_messages' && 'إدارة الرسائل السريعة المعتمدة للمُبلّغين (Quick Messages)'}
             </h2>
             <span className="badge badge-active">
               <span className="pulse-dot" style={{ background: '#10b981' }}></span>
@@ -1480,14 +2053,23 @@ export default function App() {
 
                         {/* Render SVG QR */}
                         <div
+                          className="qr-box"
                           style={{
-                            background: '#fff',
-                            padding: '12px',
-                            borderRadius: '10px',
-                            display: 'inline-block',
-                            marginBottom: '12px',
+                            background: '#ffffff',
+                            padding: '8px',
+                            borderRadius: '12px',
+                            width: '144px',
+                            height: '144px',
+                            margin: '0 auto 12px auto',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
                           }}
-                          dangerouslySetInnerHTML={{ __html: t.qrCodeSvg }}
+                          dangerouslySetInnerHTML={{
+                            __html: (t.qrCodeSvg || '')
+                              .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;" ')
+                          }}
                         />
 
                         <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#fff' }} className="tag-code">
@@ -1498,11 +2080,28 @@ export default function App() {
                           {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
                         </div>
 
+                        {t.activationCode && (
+                          <div style={{
+                            margin: '10px 0 6px',
+                            padding: '6px 10px',
+                            background: 'rgba(212, 175, 55, 0.12)',
+                            border: '1px dashed var(--gold-primary)',
+                            borderRadius: '8px',
+                          }}>
+                            <div style={{ fontSize: '0.65rem', color: 'var(--gold-primary)', fontWeight: 700 }}>
+                              كود التفعيل (Activation Code) للباكدج:
+                            </div>
+                            <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#fff', letterSpacing: '1px', fontFamily: 'var(--font-mono)' }}>
+                              {t.activationCode}
+                            </div>
+                          </div>
+                        )}
+
                         <div style={{
                           fontSize: '0.65rem',
                           color: '#6b7280',
                           fontFamily: 'var(--font-mono)',
-                          marginTop: '8px',
+                          marginTop: '6px',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
@@ -1514,6 +2113,158 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              {/* ════════ IN-STOCK QR PRINT SECTION ════════ */}
+              {(() => {
+                const inStockTags = tags.filter((t) => t.status === 'IN_STOCK');
+                return (
+                  <div className="glass-panel" style={{ padding: '28px', marginTop: '32px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
+                      <div>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <Package size={22} color="var(--gold-primary)" />
+                          المخزون الجاهز للطباعة — IN STOCK
+                        </h3>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.87rem', marginTop: '6px' }}>
+                          الملصقات التالية ({inStockTags.length} ملصق) موجودة في المخزن ولم تُسلَّم بعد — جاهزة للطباعة والتعبئة.
+                        </p>
+                      </div>
+                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        {inStockTags.length > 0 && (
+                          <button
+                            id="btn-print-instock"
+                            onClick={() => {
+                              document.body.classList.add('printing-instock');
+                              window.print();
+                              setTimeout(() => document.body.classList.remove('printing-instock'), 1200);
+                            }}
+                            className="btn-gold"
+                            style={{ fontSize: '0.88rem' }}
+                          >
+                            <Printer size={16} />
+                            <span>طباعة المخزون فقط ({inStockTags.length})</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { setTagFilter('IN_STOCK'); setCurrentTab('tags'); }}
+                          className="btn-ghost"
+                          style={{ fontSize: '0.85rem' }}
+                        >
+                          <Eye size={15} />
+                          <span>عرض في جدول دليل الملصقات</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {inStockTags.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
+                        <Package size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
+                        <p style={{ fontSize: '1rem' }}>لا توجد ملصقات في المخزن حالياً.</p>
+                        <p style={{ fontSize: '0.85rem', marginTop: '8px' }}>قم بتوليد دفعة جديدة من القسم أعلاه.</p>
+                      </div>
+                    ) : (
+                      <div
+                        id="instock-print-sheet"
+                        className="instock-print-sheet"
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
+                          gap: '20px',
+                        }}
+                      >
+                        {inStockTags.map((t) => (
+                          <div
+                            key={t.id}
+                            className="print-tag-card"
+                            style={{
+                              background: 'var(--bg-card)',
+                              border: '1px solid rgba(245, 190, 24, 0.3)',
+                              borderRadius: '14px',
+                              padding: '20px',
+                              textAlign: 'center',
+                              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                              position: 'relative',
+                            }}
+                          >
+                            <div style={{
+                              position: 'absolute',
+                              top: '10px',
+                              left: '10px',
+                              background: 'rgba(34,197,94,0.15)',
+                              border: '1px solid rgba(34,197,94,0.4)',
+                              color: '#4ade80',
+                              fontSize: '0.6rem',
+                              fontWeight: 800,
+                              padding: '2px 7px',
+                              borderRadius: '6px',
+                              letterSpacing: '0.5px',
+                            }}>
+                              IN STOCK
+                            </div>
+
+                            <div style={{ fontSize: '0.72rem', color: 'var(--gold-primary)', fontWeight: 800, letterSpacing: '1px', marginBottom: '8px', marginTop: '4px' }}>
+                              RAKNA VERITAG™
+                            </div>
+
+                            <div
+                              className="qr-box"
+                              style={{
+                                background: '#ffffff',
+                                padding: '8px',
+                                borderRadius: '12px',
+                                width: '144px',
+                                height: '144px',
+                                margin: '0 auto 12px auto',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
+                              }}
+                              dangerouslySetInnerHTML={{
+                                __html: (t.qrCodeSvg || '')
+                                  .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;" ')
+                              }}
+                            />
+
+                            <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#fff' }} className="tag-code">
+                              {t.tagCode}
+                            </div>
+
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                              {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
+                            </div>
+
+                            {t.activationCode && (
+                              <div style={{
+                                margin: '10px 0 6px',
+                                padding: '6px 10px',
+                                background: 'rgba(212, 175, 55, 0.12)',
+                                border: '1px dashed var(--gold-primary)',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => handleCopyCode(t.activationCode)}
+                              title="انقر لنسخ كود التفعيل"
+                              >
+                                <div style={{ fontSize: '0.62rem', color: 'var(--gold-primary)', fontWeight: 700 }}>
+                                  كود التفعيل:
+                                </div>
+                                <div style={{ fontSize: '0.88rem', fontWeight: 900, color: '#fff', letterSpacing: '1px', fontFamily: 'var(--font-mono)' }}>
+                                  {t.activationCode}
+                                </div>
+                              </div>
+                            )}
+
+                            <div style={{ fontSize: '0.62rem', color: '#6b7280', fontFamily: 'var(--font-mono)', marginTop: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              NFC: {t.secretToken?.substring(0, 16)}...
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -1709,6 +2460,7 @@ export default function App() {
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
                         <th style={{ padding: '12px' }}>كود الـ Tag</th>
+                        <th style={{ padding: '12px' }}>كود التفعيل (باكدج)</th>
                         <th style={{ padding: '12px' }}>النوع والخامة</th>
                         <th style={{ padding: '12px' }}>حالة الملصق</th>
                         <th style={{ padding: '12px' }}>السيارة المربوطة</th>
@@ -1721,6 +2473,33 @@ export default function App() {
                       {filteredTags.map((t) => (
                         <tr key={t.id} style={{ borderBottom: '1px solid var(--border-subtle)', fontSize: '0.88rem' }}>
                           <td style={{ padding: '14px 12px' }} className="tag-code">{t.tagCode}</td>
+                          <td style={{ padding: '14px 12px' }}>
+                            {t.activationCode ? (
+                              <button
+                                onClick={() => handleCopyCode(t.activationCode)}
+                                title="اضغط لنسخ كود التفعيل"
+                                style={{
+                                  background: 'rgba(212, 175, 55, 0.1)',
+                                  border: '1px solid rgba(212, 175, 55, 0.25)',
+                                  color: 'var(--gold-primary)',
+                                  fontFamily: 'var(--font-mono)',
+                                  fontSize: '0.82rem',
+                                  fontWeight: 800,
+                                  padding: '4px 8px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                              >
+                                <span>{t.activationCode}</span>
+                                <span style={{ fontSize: '0.7rem' }}>📋</span>
+                              </button>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>-</span>
+                            )}
+                          </td>
                           <td style={{ padding: '14px 12px' }}>
                             {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
                           </td>
@@ -3734,6 +4513,2018 @@ export default function App() {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ──────────────── QUICK CANNED MESSAGES MANAGEMENT TAB ──────────────── */}
+          {currentTab === 'quick_messages' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Header Hero Card */}
+              <div className="kpi-card gold-glow-border fade-in" style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '14px',
+                      background: 'rgba(245, 190, 24, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid rgba(245, 190, 24, 0.3)',
+                    }}>
+                      <MessageCircle color="var(--gold-primary)" size={26} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                        الرسائل السريعة المعتمدة للمُبلّغين
+                      </h3>
+                      <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+                        الرسائل التي يُلزم المُبلّغ بالاختيار منها عندما يفعّل صاحب السيارة وضع الخصوصية (قفل الدردشة الحرة)، وهو الوضع الافتراضي لجميع المستخدمين.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={handleOpenAddQuickMsg}
+                      className="btn-primary"
+                      style={{
+                        padding: '10px 18px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontWeight: 700,
+                        fontSize: '0.9rem',
+                        boxShadow: '0 4px 14px rgba(245, 190, 24, 0.25)',
+                      }}
+                    >
+                      <PlusCircle size={18} />
+                      <span>إضافة رسالة سريعة جديدة</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={loadQuickMessages}
+                      disabled={isLoadingQuickMessages}
+                      className="btn-ghost"
+                      style={{ padding: '10px 14px' }}
+                    >
+                      <RefreshCw size={16} className={isLoadingQuickMessages ? 'spin-icon' : ''} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick Stats Strip */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: '14px',
+                  marginTop: '22px',
+                  paddingTop: '18px',
+                  borderTop: '1px solid var(--border-subtle)',
+                }}>
+                  <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px 16px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>إجمالي الرسائل</div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', marginTop: '4px' }}>
+                      {quickMessagesList.length}
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                    <div style={{ fontSize: '0.78rem', color: '#10b981' }}>المفعلة للمستخدمين</div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#10b981', marginTop: '4px' }}>
+                      {quickMessagesList.filter(m => m.isActive !== false).length}
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(239, 68, 68, 0.05)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                    <div style={{ fontSize: '0.78rem', color: '#ef4444' }}>المعطلة مؤقتاً</div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ef4444', marginTop: '4px' }}>
+                      {quickMessagesList.filter(m => m.isActive === false).length}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cards Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+                gap: '18px',
+              }}>
+                {quickMessagesList.map((msg, index) => {
+                  const getCategoryLabel = (cat) => {
+                    switch (cat) {
+                      case 'BLOCKING': return { label: '🚗 سيارة قافلة', bg: 'rgba(239, 68, 68, 0.15)', text: '#f87171', border: 'rgba(239, 68, 68, 0.3)' };
+                      case 'LIGHTS': return { label: '💡 إضاءة / أنوار', bg: 'rgba(245, 190, 24, 0.15)', text: 'var(--gold-primary)', border: 'rgba(245, 190, 24, 0.3)' };
+                      case 'ALARM': return { label: '🔊 إنذار مستمر', bg: 'rgba(249, 115, 22, 0.15)', text: '#fb923c', border: 'rgba(249, 115, 22, 0.3)' };
+                      case 'EMERGENCY': return { label: '🚨 طوارئ قصوى', bg: 'rgba(220, 38, 38, 0.2)', text: '#ef4444', border: 'rgba(220, 38, 38, 0.4)' };
+                      default: return { label: '💬 تنبيه عام', bg: 'rgba(56, 189, 248, 0.15)', text: '#38bdf8', border: 'rgba(56, 189, 248, 0.3)' };
+                    }
+                  };
+                  const catInfo = getCategoryLabel(msg.category);
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className="kpi-card fade-in"
+                      style={{
+                        padding: '20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        border: msg.isActive !== false ? '1px solid var(--border-subtle)' : '1px dashed rgba(255, 255, 255, 0.1)',
+                        opacity: msg.isActive !== false ? 1 : 0.65,
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <div>
+                        {/* Card Header */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{
+                              background: 'rgba(255, 255, 255, 0.06)',
+                              color: 'var(--text-secondary)',
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                            }}>
+                              #{msg.displayOrder !== undefined ? msg.displayOrder + 1 : index + 1}
+                            </span>
+                            <span style={{
+                              background: catInfo.bg,
+                              color: catInfo.text,
+                              border: `1px solid ${catInfo.border}`,
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              padding: '2px 10px',
+                              borderRadius: '20px',
+                            }}>
+                              {catInfo.label}
+                            </span>
+                          </div>
+
+                          {/* Active / Inactive badge button */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleQuickMsg(msg.id, msg.isActive !== false)}
+                            style={{
+                              background: msg.isActive !== false ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.12)',
+                              color: msg.isActive !== false ? '#10b981' : '#f87171',
+                              border: `1px solid ${msg.isActive !== false ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                              borderRadius: '20px',
+                              padding: '3px 10px',
+                              fontSize: '0.72rem',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <span style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              background: msg.isActive !== false ? '#10b981' : '#f87171',
+                            }}></span>
+                            <span>{msg.isActive !== false ? 'مفعلة' : 'معطلة'}</span>
+                          </button>
+                        </div>
+
+                        {/* Title */}
+                        <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--gold-primary)', margin: '0 0 10px 0' }}>
+                          {msg.title}
+                        </h4>
+
+                        {/* Text Content */}
+                        <div style={{
+                          background: 'rgba(0, 0, 0, 0.25)',
+                          padding: '12px 14px',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(255, 255, 255, 0.05)',
+                          fontSize: '0.88rem',
+                          color: '#e2e8f0',
+                          lineHeight: '1.6',
+                          minHeight: '64px',
+                        }}>
+                          "{msg.text}"
+                        </div>
+                      </div>
+
+                      {/* Card Actions Footer */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginTop: '16px',
+                        paddingTop: '14px',
+                        borderTop: '1px solid var(--border-subtle)',
+                      }}>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          الأيقونة: {msg.icon || 'message'}
+                        </span>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditQuickMsg(msg)}
+                            style={{
+                              background: 'rgba(245, 190, 24, 0.1)',
+                              color: 'var(--gold-primary)',
+                              border: '1px solid rgba(245, 190, 24, 0.25)',
+                              padding: '6px 12px',
+                              borderRadius: '8px',
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                            }}
+                          >
+                            <Edit3 size={14} />
+                            <span>تعديل</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteQuickMsg(msg.id, msg.title)}
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.1)',
+                              color: '#f87171',
+                              border: '1px solid rgba(239, 68, 68, 0.25)',
+                              padding: '6px 10px',
+                              borderRadius: '8px',
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <Trash2 size={14} />
+                            <span>حذف</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Empty state */}
+              {quickMessagesList.length === 0 && !isLoadingQuickMessages && (
+                <div style={{
+                  padding: '60px 20px',
+                  textAlign: 'center',
+                  background: 'var(--bg-card)',
+                  borderRadius: '16px',
+                  border: '1px dashed var(--border-subtle)',
+                }}>
+                  <MessageCircle size={48} color="var(--text-muted)" style={{ margin: '0 auto 12px auto' }} />
+                  <h4 style={{ color: '#fff', fontSize: '1.1rem', margin: '0 0 8px 0' }}>لا توجد رسائل سريعة حالياً</h4>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', margin: '0 0 18px 0' }}>
+                    أضف رسائل سريعة ليتمكن المُبلّغون من إرسالها لأصحاب السيارات.
+                  </p>
+                  <button type="button" onClick={handleOpenAddQuickMsg} className="btn-primary" style={{ padding: '9px 18px' }}>
+                    + إضافة أول رسالة سريعة
+                  </button>
+                </div>
+              )}
+
+              {/* Add / Edit Modal */}
+              {quickModalOpen && (
+                <div style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'rgba(5, 7, 10, 0.85)',
+                  backdropFilter: 'blur(8px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 9999,
+                  padding: '16px',
+                }}>
+                  <div className="kpi-card gold-glow-border fade-in" style={{
+                    width: '100%',
+                    maxWidth: '560px',
+                    padding: '28px',
+                    background: '#0d131f',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          background: 'rgba(245, 190, 24, 0.15)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                          <MessageCircle color="var(--gold-primary)" size={20} />
+                        </div>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                          {editingQuickMsg ? 'تعديل الرسالة السريعة' : 'إضافة رسالة سريعة جديدة'}
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setQuickModalOpen(false)}
+                        className="btn-ghost"
+                        style={{ padding: '6px' }}
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSaveQuickMsg} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                          عنوان الرسالة (مختصر ويظهر كزر أو وسام):
+                        </label>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="مثال: سيارتك قافلة عليا"
+                          value={quickForm.title}
+                          onChange={(e) => setQuickForm({ ...quickForm, title: e.target.value })}
+                          required
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                          نص الرسالة الكامل (الذي سيتم إرساله في الشات):
+                        </label>
+                        <textarea
+                          className="input-field"
+                          rows={4}
+                          placeholder="مثال: السلام عليكم، سيارتك متوقفة خلفي وتمنعني من الخروج. برجاء الحضور لتحريكها."
+                          value={quickForm.text}
+                          onChange={(e) => setQuickForm({ ...quickForm, text: e.target.value })}
+                          required
+                          style={{ width: '100%', resize: 'vertical' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            التصنيف:
+                          </label>
+                          <select
+                            className="input-field"
+                            value={quickForm.category}
+                            onChange={(e) => setQuickForm({ ...quickForm, category: e.target.value })}
+                            style={{ width: '100%' }}
+                          >
+                            <option value="BLOCKING">🚗 سيارة قافلة (Blocking)</option>
+                            <option value="LIGHTS">💡 إضاءة / فوانيس (Lights)</option>
+                            <option value="ALARM">🔊 إنذار صوتي (Alarm)</option>
+                            <option value="EMERGENCY">🚨 طوارئ (Emergency)</option>
+                            <option value="GENERAL">💬 عام (General)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            ترتيب الظهور:
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            className="input-field"
+                            value={quickForm.displayOrder}
+                            onChange={(e) => setQuickForm({ ...quickForm, displayOrder: parseInt(e.target.value) || 0 })}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
+                        <input
+                          type="checkbox"
+                          id="quickActiveCheck"
+                          checked={quickForm.isActive}
+                          onChange={(e) => setQuickForm({ ...quickForm, isActive: e.target.checked })}
+                          style={{ width: '18px', height: '18px', accentColor: 'var(--gold-primary)', cursor: 'pointer' }}
+                        />
+                        <label htmlFor="quickActiveCheck" style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
+                          تفعيل الرسالة وجعلها متاحة للمُبلّغين فوراً
+                        </label>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setQuickModalOpen(false)}
+                          className="btn-ghost"
+                          style={{ padding: '10px 18px' }}
+                        >
+                          إلغاء
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSavingQuickMsg}
+                          className="btn-primary"
+                          style={{ padding: '10px 22px', fontWeight: 700 }}
+                        >
+                          {isSavingQuickMsg ? 'جاري الحفظ...' : (editingQuickMsg ? 'حفظ التعديلات' : 'إضافة الرسالة')}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ──────────────── TAB: STORE PRODUCTS MANAGEMENT ──────────────── */}
+          {currentTab === 'store' && (
+            <div className="fade-in">
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '10px',
+                      background: 'rgba(245, 190, 24, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid rgba(245, 190, 24, 0.3)',
+                    }}>
+                      <ShoppingBag size={22} color="var(--gold-primary)" />
+                    </div>
+                    <div>
+                      <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                        إدارة متجر ركنة والمنتجات والعروض
+                      </h2>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', margin: '3px 0 0 0' }}>
+                        التحكم الكامل في أسعار الملصقات، الخصومات، الصور، وإضافة أو إزالة المنتجات وتحديد توفرها لحظياً في التطبيق.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    onClick={storeSubTab === 'products' ? loadProducts : loadBanners}
+                    className="btn-ghost"
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px' }}
+                    title="تحديث البيانات"
+                  >
+                    <RefreshCw size={16} className={(isLoadingProducts || isLoadingBanners) ? 'spin' : ''} />
+                    <span>تحديث</span>
+                  </button>
+
+                  {storeSubTab === 'products' ? (
+                    <button
+                      onClick={handleOpenAddProduct}
+                      className="btn-primary"
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontWeight: 800 }}
+                    >
+                      <PlusCircle size={18} />
+                      <span>إضافة منتج جديد</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleOpenAddBanner}
+                      className="btn-primary"
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontWeight: 800 }}
+                    >
+                      <PlusCircle size={18} />
+                      <span>إضافة شريحة سلايدر جديدة</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Sub-Tabs Switcher */}
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                marginBottom: '22px',
+                borderBottom: '1px solid var(--border-subtle)',
+                paddingBottom: '14px',
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setStoreSubTab('products')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 18px',
+                    borderRadius: '10px',
+                    fontSize: '0.88rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    background: storeSubTab === 'products' ? 'var(--gold-primary)' : 'rgba(255, 255, 255, 0.05)',
+                    color: storeSubTab === 'products' ? '#000' : 'var(--text-secondary)',
+                    border: `1px solid ${storeSubTab === 'products' ? 'var(--gold-primary)' : 'rgba(255, 255, 255, 0.1)'}`,
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <ShoppingBag size={17} />
+                  <span>معرض المنتجات والعروض ({productsList.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStoreSubTab('slider');
+                    if (bannersList.length === 0) loadBanners();
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 18px',
+                    borderRadius: '10px',
+                    fontSize: '0.88rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    background: storeSubTab === 'slider' ? 'var(--gold-primary)' : 'rgba(255, 255, 255, 0.05)',
+                    color: storeSubTab === 'slider' ? '#000' : 'var(--text-secondary)',
+                    border: `1px solid ${storeSubTab === 'slider' ? 'var(--gold-primary)' : 'rgba(255, 255, 255, 0.1)'}`,
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <ImageIcon size={17} />
+                  <span>سلايدر وبانرات المتجر ({bannersList.length})</span>
+                </button>
+              </div>
+
+              {/* Products SubTab View */}
+              {storeSubTab === 'products' && (
+                <>
+                  {/* KPI Summary Cards */}
+                  <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                gap: '16px',
+                marginBottom: '26px',
+              }}>
+                <div className="kpi-card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>إجمالي المنتجات</span>
+                    <ShoppingBag size={18} color="var(--gold-primary)" />
+                  </div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#fff', marginTop: '8px' }}>
+                    {productsList.length}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    معروضة في شاشة المتجر
+                  </div>
+                </div>
+
+                <div className="kpi-card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>متوفرة للطلب الآن</span>
+                    <CheckCircle2 size={18} color="#10b981" />
+                  </div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981', marginTop: '8px' }}>
+                    {productsList.filter((p) => p.inStock !== false).length}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    يمكن للمستخدمين شراؤها فوراً
+                  </div>
+                </div>
+
+                <div className="kpi-card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>غير متوفرة حالياً</span>
+                    <AlertCircle size={18} color="#ef4444" />
+                  </div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#ef4444', marginTop: '8px' }}>
+                    {productsList.filter((p) => p.inStock === false).length}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    تظهر كـ نفد من المخزون
+                  </div>
+                </div>
+
+                <div className="kpi-card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>عروض وخصومات نشطة</span>
+                    <Flame size={18} color="#f97316" />
+                  </div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f97316', marginTop: '8px' }}>
+                    {productsList.filter((p) => p.originalPrice && p.originalPrice > p.price).length}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    منتجات بأسعار مخفضة
+                  </div>
+                </div>
+              </div>
+
+              {/* Products Cards Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+                gap: '20px',
+              }}>
+                {productsList.map((prod, index) => {
+                  let featList = [];
+                  try {
+                    if (typeof prod.features === 'string') {
+                      const parsed = JSON.parse(prod.features);
+                      if (Array.isArray(parsed)) featList = parsed;
+                      else featList = [prod.features];
+                    } else if (Array.isArray(prod.features)) {
+                      featList = prod.features;
+                    }
+                  } catch (_) {
+                    featList = prod.features ? [prod.features] : [];
+                  }
+
+                  const hasDiscount = prod.originalPrice && prod.originalPrice > prod.price;
+                  const discountVal = prod.discountPercent || (hasDiscount ? Math.round((1 - prod.price / prod.originalPrice) * 100) : null);
+
+                  return (
+                    <div
+                      key={prod.id}
+                      className="kpi-card fade-in"
+                      style={{
+                        padding: '0',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        border: prod.inStock !== false ? '1px solid var(--border-subtle)' : '1px dashed rgba(239, 68, 68, 0.4)',
+                        opacity: prod.inStock !== false ? 1 : 0.72,
+                        transition: 'all 0.22s ease',
+                      }}
+                    >
+                      {/* Product Visual Header / Image Preview */}
+                      <div style={{
+                        position: 'relative',
+                        height: '175px',
+                        background: 'linear-gradient(180deg, rgba(20, 24, 33, 0.8) 0%, rgba(13, 16, 23, 0.98) 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                      }}>
+                        {/* Status Badge (Top Right in RTL) */}
+                        <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 2 }}>
+                          {prod.badgeText && (
+                            <span style={{
+                              background: 'rgba(0, 0, 0, 0.85)',
+                              color: 'var(--gold-primary)',
+                              border: '1px solid rgba(245, 190, 24, 0.35)',
+                              padding: '4px 10px',
+                              borderRadius: '8px',
+                              fontSize: '0.74rem',
+                              fontWeight: 800,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}>
+                              <Sparkles size={12} />
+                              {prod.badgeText}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Stock Availability Pill (Top Left in RTL) */}
+                        <div style={{ position: 'absolute', top: '12px', left: '12px', zIndex: 2 }}>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleProductStock(prod.id)}
+                            title="اضغط للتبديل السريع"
+                            style={{
+                              background: prod.inStock !== false ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                              color: prod.inStock !== false ? '#10b981' : '#f87171',
+                              border: `1px solid ${prod.inStock !== false ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
+                              borderRadius: '20px',
+                              padding: '4px 12px',
+                              fontSize: '0.74rem',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                            }}
+                          >
+                            <span style={{
+                              width: '7px',
+                              height: '7px',
+                              borderRadius: '50%',
+                              background: prod.inStock !== false ? '#10b981' : '#f87171',
+                            }}></span>
+                            <span>{prod.inStock !== false ? 'متوفر للطلب' : 'غير متوفر حالياً'}</span>
+                          </button>
+                        </div>
+
+                        {/* Real Image Rendering */}
+                        {resolveProductImageUrl(prod.imageAsset) ? (
+                          <img
+                            src={resolveProductImageUrl(prod.imageAsset)}
+                            alt={prod.name}
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              zIndex: 1,
+                            }}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : null}
+
+                        {/* Fallback if image fails or is empty */}
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          color: 'var(--text-secondary)',
+                          zIndex: 0,
+                        }}>
+                          <div style={{
+                            width: '84px',
+                            height: '56px',
+                            borderRadius: '12px',
+                            background: 'rgba(245, 190, 24, 0.1)',
+                            border: '1px solid rgba(245, 190, 24, 0.25)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                          }}>
+                            <ImageIcon size={30} color="var(--gold-primary)" />
+                          </div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            بدون صورة
+                          </span>
+                        </div>
+
+                        {/* Aesthetic Gradient Overlay for badges and texts readability */}
+                        <div style={{
+                          position: 'absolute',
+                          inset: 0,
+                          background: 'linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.05) 50%, rgba(0, 0, 0, 0.65) 100%)',
+                          zIndex: 1,
+                          pointerEvents: 'none',
+                        }} />
+
+                        {/* Discount Ribbon (Bottom Right) */}
+                        {hasDiscount && (
+                          <div style={{
+                            position: 'absolute',
+                            bottom: '10px',
+                            right: '12px',
+                            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                            color: '#fff',
+                            padding: '3px 10px',
+                            borderRadius: '8px',
+                            fontSize: '0.74rem',
+                            fontWeight: 800,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.35)',
+                          }}>
+                            <Flame size={12} />
+                            <span>خصم {discountVal}% 🔥</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Card Content */}
+                      <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div>
+                          {/* Title & Price Header */}
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
+                            <div style={{ flex: 1 }}>
+                              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', margin: '0 0 4px 0' }}>
+                                {prod.name}
+                              </h3>
+                              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
+                                {prod.subtitle}
+                              </p>
+                            </div>
+
+                            <div style={{ textAlign: 'left', minWidth: '85px' }}>
+                              <div style={{ fontSize: '1.45rem', fontWeight: 900, color: 'var(--gold-primary)', lineHeight: 1 }}>
+                                {prod.price} <span style={{ fontSize: '0.82rem' }}>ج.م</span>
+                              </div>
+                              {hasDiscount && (
+                                <div style={{ fontSize: '0.78rem', color: '#888', textDecoration: 'line-through', marginTop: '3px' }}>
+                                  {prod.originalPrice} ج.م
+                                </div>
+                              )}
+                              <div style={{ fontSize: '0.68rem', color: '#10b981', fontWeight: 700, marginTop: '2px' }}>
+                                شحن مجاني
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '14px 0' }} />
+
+                          {/* Features List */}
+                          <div style={{ marginBottom: '16px' }}>
+                            <div style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '8px' }}>
+                              المواصفات الفنية والمميزات:
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              {featList.map((feat, fIdx) => (
+                                <div key={fIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                                  <CheckCircle2 size={14} color="var(--gold-primary)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                  <span style={{ lineHeight: 1.35 }}>{feat}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions Row */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          paddingTop: '14px',
+                          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                          marginTop: 'auto',
+                        }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditProduct(prod)}
+                            className="btn-primary"
+                            style={{
+                              flex: 1,
+                              padding: '9px 12px',
+                              fontSize: '0.82rem',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                            }}
+                          >
+                            <Edit3 size={15} />
+                            <span>تعديل السعر والعروض</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleToggleProductStock(prod.id)}
+                            style={{
+                              padding: '9px 12px',
+                              borderRadius: '8px',
+                              background: prod.inStock !== false ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.15)',
+                              color: prod.inStock !== false ? '#f87171' : '#10b981',
+                              border: `1px solid ${prod.inStock !== false ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.3)'}`,
+                              fontSize: '0.82rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                            }}
+                            title={prod.inStock !== false ? 'جعله غير متوفر' : 'جعله متوفر'}
+                          >
+                            <span>{prod.inStock !== false ? 'تعيين غير متوفر' : 'تعيين متوفر'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProduct(prod)}
+                            style={{
+                              padding: '9px',
+                              borderRadius: '8px',
+                              background: 'rgba(239, 68, 68, 0.1)',
+                              color: '#f87171',
+                              border: '1px solid rgba(239, 68, 68, 0.25)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                            title="حذف المنتج نهائياً من المتجر"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* Slider & Banners Management Section */}
+          {storeSubTab === 'slider' && (
+            <div>
+              {/* Slider KPIs */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                gap: '16px',
+                marginBottom: '26px',
+              }}>
+                <div className="kpi-card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>إجمالي شرائح السلايدر</span>
+                    <ImageIcon size={18} color="var(--gold-primary)" />
+                  </div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#fff', marginTop: '8px' }}>
+                    {bannersList.length}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    بانرات مسجلة في شريط العرض
+                  </div>
+                </div>
+
+                <div className="kpi-card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>معروضة ونشطة بالسلايدر</span>
+                    <CheckCircle2 size={18} color="#10b981" />
+                  </div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981', marginTop: '8px' }}>
+                    {bannersList.filter((b) => b.isActive !== false).length}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    تظهر وتنزلق للمستخدمين في التطبيق
+                  </div>
+                </div>
+
+                <div className="kpi-card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>شرائح مخفية مؤقتاً</span>
+                    <EyeOff size={18} color="#f59e0b" />
+                  </div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b', marginTop: '8px' }}>
+                    {bannersList.filter((b) => b.isActive === false).length}
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    معطلة ومستثناة من العرض التلقائي
+                  </div>
+                </div>
+              </div>
+
+              {/* Banners Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                gap: '20px',
+              }}>
+                {bannersList.length === 0 ? (
+                  <div style={{
+                    gridColumn: '1 / -1',
+                    textAlign: 'center',
+                    padding: '60px 20px',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    borderRadius: '16px',
+                    border: '1px dashed var(--border-subtle)',
+                  }}>
+                    <ImageIcon size={48} color="var(--text-muted)" style={{ margin: '0 auto 16px', opacity: 0.6 }} />
+                    <h3 style={{ color: '#fff', fontSize: '1.1rem', marginBottom: '8px' }}>لا توجد أي شرائح في السلايدر حالياً</h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '18px' }}>
+                      أضف صور وبانرات توضيحية لتعريف المستخدمين بأماكن التثبيت وخصائص ملصق ركنة
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleOpenAddBanner}
+                      className="btn-primary"
+                      style={{ padding: '8px 20px', fontSize: '0.88rem' }}
+                    >
+                      <PlusCircle size={16} />
+                      <span>إضافة أول شريحة الآن</span>
+                    </button>
+                  </div>
+                ) : (
+                  bannersList.map((banner, index) => {
+                    const resolvedImg = resolveProductImageUrl(banner.image);
+                    return (
+                      <div
+                        key={banner.id || index}
+                        style={{
+                          background: 'var(--bg-card)',
+                          border: `1px solid ${banner.isActive !== false ? 'rgba(245, 190, 24, 0.25)' : 'rgba(255, 255, 255, 0.08)'}`,
+                          borderRadius: '16px',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          transition: 'all 0.25s ease',
+                          boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
+                          opacity: banner.isActive !== false ? 1 : 0.72,
+                        }}
+                      >
+                        {/* Card Image Banner with Overlay */}
+                        <div style={{ position: 'relative', height: '170px', width: '100%', background: '#0a0a0c' }}>
+                          {resolvedImg ? (
+                            <img
+                              src={resolvedImg}
+                              alt={banner.title || 'شريحة سلايدر'}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                filter: banner.isActive === false ? 'grayscale(80%)' : 'none',
+                              }}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div style={{
+                              width: '100%',
+                              height: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: 'linear-gradient(135deg, #1c1c24, #0f0f14)',
+                              color: 'var(--text-muted)',
+                            }}>
+                              <ImageIcon size={36} />
+                            </div>
+                          )}
+
+                          {/* Gradient overlay */}
+                          <div style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'linear-gradient(to top, rgba(15,15,20,0.92) 0%, rgba(15,15,20,0.2) 60%, transparent 100%)',
+                          }} />
+
+                          {/* Top Bar Badges */}
+                          <div style={{
+                            position: 'absolute',
+                            top: '10px',
+                            left: '12px',
+                            right: '12px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}>
+                            <span style={{
+                              background: banner.isActive !== false ? 'rgba(16, 185, 129, 0.9)' : 'rgba(239, 68, 68, 0.9)',
+                              color: '#fff',
+                              fontSize: '0.7rem',
+                              fontWeight: 800,
+                              padding: '3px 9px',
+                              borderRadius: '20px',
+                              backdropFilter: 'blur(4px)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}>
+                              {banner.isActive !== false ? '● نشطة في السلايدر' : '○ مخفية مؤقتاً'}
+                            </span>
+
+                            <span style={{
+                              background: 'rgba(0, 0, 0, 0.65)',
+                              color: 'var(--gold-primary)',
+                              fontSize: '0.72rem',
+                              fontWeight: 800,
+                              padding: '3px 8px',
+                              borderRadius: '8px',
+                              border: '1px solid rgba(245, 190, 24, 0.3)',
+                            }}>
+                              الترتيب: #{banner.sortOrder || (index + 1)}
+                            </span>
+                          </div>
+
+                          {/* Bottom of Image overlay: Badge and Location */}
+                          <div style={{
+                            position: 'absolute',
+                            bottom: '8px',
+                            right: '12px',
+                            left: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          }}>
+                            {banner.badge && (
+                              <span style={{
+                                background: 'rgba(245, 190, 24, 0.95)',
+                                color: '#000',
+                                fontSize: '0.68rem',
+                                fontWeight: 900,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                              }}>
+                                {banner.badge}
+                              </span>
+                            )}
+                            {banner.location && (
+                              <span style={{
+                                color: '#e2e8f0',
+                                fontSize: '0.74rem',
+                                fontWeight: 700,
+                                textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                              }}>
+                                📍 {banner.location}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Card Body */}
+                        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                          <h4 style={{
+                            color: '#fff',
+                            fontSize: '0.98rem',
+                            fontWeight: 800,
+                            margin: '0 0 6px',
+                            lineHeight: 1.3,
+                          }}>
+                            {banner.title || 'بدون عنوان رئيسي'}
+                          </h4>
+
+                          <p style={{
+                            color: 'var(--text-secondary)',
+                            fontSize: '0.8rem',
+                            margin: '0 0 14px',
+                            lineHeight: 1.45,
+                            flex: 1,
+                          }}>
+                            {banner.subtitle || 'لا يوجد وصف فرعي للشريحة'}
+                          </p>
+
+                          {/* Image path info */}
+                          <div style={{
+                            background: 'rgba(255, 255, 255, 0.03)',
+                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                            borderRadius: '8px',
+                            padding: '6px 10px',
+                            marginBottom: '14px',
+                            fontSize: '0.72rem',
+                            color: 'var(--text-muted)',
+                            direction: 'ltr',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            🖼️ {banner.image}
+                          </div>
+
+                          {/* Card Actions */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            borderTop: '1px solid var(--border-subtle)',
+                            paddingTop: '12px',
+                          }}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditBanner(banner)}
+                              className="btn-ghost"
+                              style={{
+                                flex: 1,
+                                padding: '7px 12px',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                justifyContent: 'center',
+                                gap: '6px',
+                                border: '1px solid var(--border-subtle)',
+                              }}
+                            >
+                              <Edit3 size={14} />
+                              <span>تعديل الشريحة</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleToggleBanner(banner)}
+                              style={{
+                                padding: '7px 11px',
+                                borderRadius: '8px',
+                                background: banner.isActive !== false ? 'rgba(245, 190, 24, 0.12)' : 'rgba(16, 185, 129, 0.15)',
+                                color: banner.isActive !== false ? 'var(--gold-primary)' : '#34d399',
+                                border: `1px solid ${banner.isActive !== false ? 'rgba(245, 190, 24, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                              title={banner.isActive !== false ? 'إخفاء الشريحة مؤقتاً من السلايدر' : 'تفعيل ظهور الشريحة في السلايدر'}
+                            >
+                              {banner.isActive !== false ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBanner(banner)}
+                              style={{
+                                padding: '7px 11px',
+                                borderRadius: '8px',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                color: '#f87171',
+                                border: '1px solid rgba(239, 68, 68, 0.25)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                              title="حذف الشريحة نهائياً من السلايدر"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Add / Edit Product Modal */}
+              {productModalOpen && (
+                <div style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'rgba(0, 0, 0, 0.78)',
+                  backdropFilter: 'blur(6px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 9999,
+                  padding: '20px',
+                }}>
+                  <div style={{
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '18px',
+                    width: '100%',
+                    maxWidth: '560px',
+                    maxHeight: '90vh',
+                    overflowY: 'auto',
+                    padding: '26px',
+                    boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+                  }} className="fade-in">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '34px',
+                          height: '34px',
+                          borderRadius: '8px',
+                          background: 'rgba(245, 190, 24, 0.15)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'var(--gold-primary)',
+                        }}>
+                          <ShoppingBag size={18} />
+                        </div>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                          {editingProduct ? 'تعديل بيانات المنتج والعروض' : 'إضافة منتج جديد لمتجر ركنة'}
+                        </h3>
+                      </div>
+                      <button
+                        onClick={() => setProductModalOpen(false)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSaveProduct} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {/* Name */}
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                          اسم المنتج (Title):
+                        </label>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="مثال: ملصق شنطة السيارة الذكي (Trunk Badge)"
+                          value={productForm.name}
+                          onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                          required
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+
+                      {/* Subtitle */}
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                          الوصف المختصر (Subtitle):
+                        </label>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="مثال: مخصص للتثبيت الخارجي المتين على شنطة أو خلفية السيارة"
+                          value={productForm.subtitle}
+                          onChange={(e) => setProductForm({ ...productForm, subtitle: e.target.value })}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+
+                      {/* Pricing & Discounts Grid */}
+                      <div style={{
+                        background: 'rgba(245, 190, 24, 0.04)',
+                        border: '1px solid rgba(245, 190, 24, 0.15)',
+                        borderRadius: '12px',
+                        padding: '14px',
+                      }}>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--gold-primary)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Percent size={14} />
+                          <span>التحكم في الأسعار والعروض والخصومات:</span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                              سعر البيع (ج.م) *:
+                            </label>
+                            <input
+                              type="number"
+                              step="1"
+                              min="1"
+                              className="input-field"
+                              placeholder="149"
+                              value={productForm.price}
+                              onChange={(e) => {
+                                const newPrice = e.target.value;
+                                let disc = productForm.discountPercent;
+                                if (productForm.originalPrice && Number(productForm.originalPrice) > Number(newPrice)) {
+                                  disc = Math.round((1 - Number(newPrice) / Number(productForm.originalPrice)) * 100);
+                                }
+                                setProductForm({ ...productForm, price: newPrice, discountPercent: disc });
+                              }}
+                              required
+                              style={{ width: '100%', fontWeight: 700, color: 'var(--gold-primary)' }}
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                              السعر قبل الخصم:
+                            </label>
+                            <input
+                              type="number"
+                              step="1"
+                              min="0"
+                              className="input-field"
+                              placeholder="189"
+                              value={productForm.originalPrice}
+                              onChange={(e) => {
+                                const orig = e.target.value;
+                                let disc = '';
+                                if (orig && Number(orig) > Number(productForm.price)) {
+                                  disc = Math.round((1 - Number(productForm.price) / Number(orig)) * 100);
+                                }
+                                setProductForm({ ...productForm, originalPrice: orig, discountPercent: disc });
+                              }}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                              نسبة الخصم %:
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              className="input-field"
+                              placeholder="20"
+                              value={productForm.discountPercent}
+                              onChange={(e) => setProductForm({ ...productForm, discountPercent: e.target.value })}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Badge Text */}
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                          شارة التمييز / بادج العرض (Badge Text):
+                        </label>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="مثال: هيكل مدرع مقاوم للعوامل الجوية / أو: عرض محدود"
+                          value={productForm.badgeText}
+                          onChange={(e) => setProductForm({ ...productForm, badgeText: e.target.value })}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+
+                      {/* Image Selector, Upload & Presets */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <label style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                            الصورة المعروضة للمنتج:
+                          </label>
+                          {productForm.imageAsset && (
+                            <button
+                              type="button"
+                              onClick={() => setProductForm({ ...productForm, imageAsset: '' })}
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                color: '#f87171',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                borderRadius: '6px',
+                                padding: '3px 10px',
+                                fontSize: '0.74rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <Trash2 size={12} />
+                              إزالة الصورة
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Image Preview & Upload Button Row */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '14px',
+                          padding: '12px',
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px dashed rgba(255, 255, 255, 0.15)',
+                          borderRadius: '12px',
+                          marginBottom: '10px',
+                        }}>
+                          {/* Live Image Box */}
+                          <div style={{
+                            width: '100px',
+                            height: '66px',
+                            borderRadius: '8px',
+                            background: '#0d1017',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            position: 'relative',
+                          }}>
+                            {resolveProductImageUrl(productForm.imageAsset) ? (
+                              <img
+                                src={resolveProductImageUrl(productForm.imageAsset)}
+                                alt="معاينة"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: 'var(--text-muted)' }}>
+                                <ImageIcon size={22} />
+                                <span style={{ fontSize: '0.66rem' }}>لا توجد صورة</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Upload controls */}
+                          <div style={{ flex: 1 }}>
+                            <input
+                              type="file"
+                              ref={imageFileInputRef}
+                              accept="image/*"
+                              onChange={handleImageFileChange}
+                              style={{ display: 'none' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => imageFileInputRef.current?.click()}
+                              disabled={isUploadingImage}
+                              style={{
+                                background: 'linear-gradient(135deg, rgba(245, 190, 24, 0.2) 0%, rgba(245, 190, 24, 0.08) 100%)',
+                                color: 'var(--gold-primary)',
+                                border: '1px solid rgba(245, 190, 24, 0.4)',
+                                borderRadius: '8px',
+                                padding: '7px 14px',
+                                fontSize: '0.8rem',
+                                fontWeight: 800,
+                                cursor: isUploadingImage ? 'wait' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                marginBottom: '6px',
+                              }}
+                            >
+                              <Upload size={14} />
+                              <span>{isUploadingImage ? 'جاري رفع الصورة...' : 'رفع صورة جديدة من جهازك'}</span>
+                            </button>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                              يدعم ملفات JPG, PNG, WebP حتى 10MB ويتم رفعها وتخزينها فوراً.
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Presets and URL Input */}
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => setProductForm({ ...productForm, imageAsset: 'assets/images/store/tag_trunk.jpg' })}
+                            style={{
+                              background: productForm.imageAsset === 'assets/images/store/tag_trunk.jpg' ? 'rgba(245, 190, 24, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                              color: productForm.imageAsset === 'assets/images/store/tag_trunk.jpg' ? 'var(--gold-primary)' : 'var(--text-secondary)',
+                              border: `1px solid ${productForm.imageAsset === 'assets/images/store/tag_trunk.jpg' ? 'var(--gold-primary)' : 'rgba(255, 255, 255, 0.1)'}`,
+                              borderRadius: '8px',
+                              padding: '5px 12px',
+                              fontSize: '0.76rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            🚗 ملصق الشنطة الخارجي
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setProductForm({ ...productForm, imageAsset: 'assets/images/store/tag_glass.jpg' })}
+                            style={{
+                              background: productForm.imageAsset === 'assets/images/store/tag_glass.jpg' ? 'rgba(245, 190, 24, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                              color: productForm.imageAsset === 'assets/images/store/tag_glass.jpg' ? 'var(--gold-primary)' : 'var(--text-secondary)',
+                              border: `1px solid ${productForm.imageAsset === 'assets/images/store/tag_glass.jpg' ? 'var(--gold-primary)' : 'rgba(255, 255, 255, 0.1)'}`,
+                              borderRadius: '8px',
+                              padding: '5px 12px',
+                              fontSize: '0.76rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            🪟 ملصق الزجاج الشفاف
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setProductForm({ ...productForm, imageAsset: 'assets/images/store/tag_scan.jpg' })}
+                            style={{
+                              background: productForm.imageAsset === 'assets/images/store/tag_scan.jpg' ? 'rgba(245, 190, 24, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                              color: productForm.imageAsset === 'assets/images/store/tag_scan.jpg' ? 'var(--gold-primary)' : 'var(--text-secondary)',
+                              border: `1px solid ${productForm.imageAsset === 'assets/images/store/tag_scan.jpg' ? 'var(--gold-primary)' : 'rgba(255, 255, 255, 0.1)'}`,
+                              borderRadius: '8px',
+                              padding: '5px 12px',
+                              fontSize: '0.76rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            📱 مسح الهاتف الذكي
+                          </button>
+                        </div>
+
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="أو اكتب مسار الصورة / الرابط المباشر https://..."
+                          value={productForm.imageAsset}
+                          onChange={(e) => setProductForm({ ...productForm, imageAsset: e.target.value })}
+                          style={{ width: '100%', direction: 'ltr', fontSize: '0.82rem' }}
+                        />
+                      </div>
+
+                      {/* Features Bullets */}
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                          المواصفات والمميزات (اكتب كل ميزة في سطر منفصل):
+                        </label>
+                        <textarea
+                          className="input-field"
+                          rows={4}
+                          placeholder="شريحة NFC مدمجة معززة لسرعة القراءة في ثانية واحدة&#10;رمز QR محمي بطبقة كربونية مضادة للخدش والأتربة&#10;مقاوم للماء وغسيل السيارات وموجات الحرارة العالية&#10;لاصق 3M قوي جداً لا يترك أي أثر عند الإزالة"
+                          value={productForm.featuresText}
+                          onChange={(e) => setProductForm({ ...productForm, featuresText: e.target.value })}
+                          style={{ width: '100%', resize: 'vertical', lineHeight: 1.5 }}
+                        />
+                      </div>
+
+                      {/* Order and InStock Checkbox */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'center' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            ترتيب الظهور بالمتجر:
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            className="input-field"
+                            value={productForm.sortOrder}
+                            onChange={(e) => setProductForm({ ...productForm, sortOrder: parseInt(e.target.value) || 1 })}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '22px' }}>
+                          <input
+                            type="checkbox"
+                            id="prodInStockCheck"
+                            checked={productForm.inStock}
+                            onChange={(e) => setProductForm({ ...productForm, inStock: e.target.checked })}
+                            style={{ width: '18px', height: '18px', accentColor: 'var(--gold-primary)', cursor: 'pointer' }}
+                          />
+                          <label htmlFor="prodInStockCheck" style={{ fontSize: '0.86rem', fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
+                            متوفر للطلب في المتجر الآن
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Modal Actions */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginTop: '14px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setProductModalOpen(false)}
+                          className="btn-ghost"
+                          style={{ padding: '10px 18px' }}
+                        >
+                          إلغاء
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSavingProduct}
+                          className="btn-primary"
+                          style={{ padding: '10px 24px', fontWeight: 800 }}
+                        >
+                          {isSavingProduct ? 'جاري الحفظ...' : (editingProduct ? 'حفظ تعديلات المنتج' : 'إضافة المنتج للمتجر')}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Add / Edit Banner Modal */}
+              {bannerModalOpen && (
+                <div style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'rgba(0, 0, 0, 0.78)',
+                  backdropFilter: 'blur(6px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 9999,
+                  padding: '20px',
+                }}>
+                  <div style={{
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '18px',
+                    width: '100%',
+                    maxWidth: '560px',
+                    maxHeight: '90vh',
+                    overflowY: 'auto',
+                    padding: '26px',
+                    boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+                  }} className="fade-in">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '34px',
+                          height: '34px',
+                          borderRadius: '8px',
+                          background: 'rgba(245, 190, 24, 0.15)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                          <ImageIcon size={18} color="var(--gold-primary)" />
+                        </div>
+                        <div>
+                          <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>
+                            {editingBanner ? 'تعديل شريحة السلايدر' : 'إضافة شريحة جديدة للسلايدر'}
+                          </h3>
+                          <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                            تحكم بالصورة المعروضة والنصوص التوضيحية في شريط العرض العلوي
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setBannerModalOpen(false)}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          borderRadius: '8px',
+                          padding: '6px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSaveBanner} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {/* Banner Image Preview & Upload */}
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                          صورة الشريحة / البانر: *
+                        </label>
+
+                        {/* Hidden File Input */}
+                        <input
+                          type="file"
+                          ref={bannerFileInputRef}
+                          style={{ display: 'none' }}
+                          accept="image/*"
+                          onChange={handleBannerImageFileChange}
+                        />
+
+                        {/* Live Image Preview */}
+                        <div style={{
+                          height: '180px',
+                          borderRadius: '12px',
+                          border: '1px solid var(--border-subtle)',
+                          overflow: 'hidden',
+                          background: '#09090c',
+                          position: 'relative',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginBottom: '10px',
+                        }}>
+                          {resolveProductImageUrl(bannerForm.image) ? (
+                            <img
+                              src={resolveProductImageUrl(bannerForm.image)}
+                              alt="معاينة الشريحة"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          ) : (
+                            <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                              <ImageIcon size={40} style={{ opacity: 0.4, margin: '0 auto 8px' }} />
+                              <div style={{ fontSize: '0.8rem' }}>لم يتم تحديد أو رفع صورة بعد</div>
+                            </div>
+                          )}
+
+                          {isUploadingBannerImage && (
+                            <div style={{
+                              position: 'absolute',
+                              inset: 0,
+                              background: 'rgba(0,0,0,0.7)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '8px',
+                              color: 'var(--gold-primary)',
+                              fontSize: '0.85rem',
+                              fontWeight: 700,
+                            }}>
+                              <RefreshCw size={24} className="spin" />
+                              <span>جاري رفع الصورة إلى الخادم...</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Upload & Clear Buttons */}
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                          <button
+                            type="button"
+                            onClick={() => bannerFileInputRef.current && bannerFileInputRef.current.click()}
+                            disabled={isUploadingBannerImage}
+                            className="btn-primary"
+                            style={{
+                              flex: 1,
+                              padding: '8px 12px',
+                              fontSize: '0.82rem',
+                              fontWeight: 800,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                            }}
+                          >
+                            <UploadCloud size={16} />
+                            <span>رفع صورة جديدة من جهازك</span>
+                          </button>
+
+                          {bannerForm.image && (
+                            <button
+                              type="button"
+                              onClick={() => setBannerForm({ ...bannerForm, image: '' })}
+                              style={{
+                                padding: '8px 14px',
+                                borderRadius: '10px',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                color: '#f87171',
+                                border: '1px solid rgba(239, 68, 68, 0.25)',
+                                cursor: 'pointer',
+                                fontSize: '0.82rem',
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                              }}
+                            >
+                              <Trash2 size={15} />
+                              <span>إزالة الصورة</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Preset Fast Selection */}
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', alignSelf: 'center', marginLeft: '4px' }}>
+                            أو اختر صورة جاهزة:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setBannerForm({ ...bannerForm, image: 'assets/images/store/tag_trunk.jpg' })}
+                            style={{
+                              background: bannerForm.image === 'assets/images/store/tag_trunk.jpg' ? 'rgba(245, 190, 24, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                              color: bannerForm.image === 'assets/images/store/tag_trunk.jpg' ? 'var(--gold-primary)' : 'var(--text-secondary)',
+                              border: `1px solid ${bannerForm.image === 'assets/images/store/tag_trunk.jpg' ? 'var(--gold-primary)' : 'rgba(255, 255, 255, 0.1)'}`,
+                              borderRadius: '8px',
+                              padding: '4px 10px',
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            🚗 ملصق الشنطة
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setBannerForm({ ...bannerForm, image: 'assets/images/store/tag_glass.jpg' })}
+                            style={{
+                              background: bannerForm.image === 'assets/images/store/tag_glass.jpg' ? 'rgba(245, 190, 24, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                              color: bannerForm.image === 'assets/images/store/tag_glass.jpg' ? 'var(--gold-primary)' : 'var(--text-secondary)',
+                              border: `1px solid ${bannerForm.image === 'assets/images/store/tag_glass.jpg' ? 'var(--gold-primary)' : 'rgba(255, 255, 255, 0.1)'}`,
+                              borderRadius: '8px',
+                              padding: '4px 10px',
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            🪟 ملصق الزجاج
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setBannerForm({ ...bannerForm, image: 'assets/images/store/tag_scan.jpg' })}
+                            style={{
+                              background: bannerForm.image === 'assets/images/store/tag_scan.jpg' ? 'rgba(245, 190, 24, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                              color: bannerForm.image === 'assets/images/store/tag_scan.jpg' ? 'var(--gold-primary)' : 'var(--text-secondary)',
+                              border: `1px solid ${bannerForm.image === 'assets/images/store/tag_scan.jpg' ? 'var(--gold-primary)' : 'rgba(255, 255, 255, 0.1)'}`,
+                              borderRadius: '8px',
+                              padding: '4px 10px',
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            📱 مسح الهاتف
+                          </button>
+                        </div>
+
+                        {/* Direct input */}
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="أو اكتب رابط مباشر للصورة https://..."
+                          value={bannerForm.image}
+                          onChange={(e) => setBannerForm({ ...bannerForm, image: e.target.value })}
+                          style={{ width: '100%', direction: 'ltr', fontSize: '0.82rem' }}
+                        />
+                      </div>
+
+                      {/* Title & Badge */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '14px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            العنوان الرئيسي:
+                          </label>
+                          <input
+                            type="text"
+                            className="input-field"
+                            placeholder="مثال: تثبيت ملصق الزجاج الخلفي"
+                            value={bannerForm.title}
+                            onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            شارة مميزة (Badge):
+                          </label>
+                          <input
+                            type="text"
+                            className="input-field"
+                            placeholder="مثال: الأكثر طلباً"
+                            value={bannerForm.badge}
+                            onChange={(e) => setBannerForm({ ...bannerForm, badge: e.target.value })}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Location Note */}
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                          مكان التثبيت / الملاحظة المكانية:
+                        </label>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="مثال: يوضع على زجاج السيارة الخلفي بشكل مخفي وأنيق"
+                          value={bannerForm.location}
+                          onChange={(e) => setBannerForm({ ...bannerForm, location: e.target.value })}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+
+                      {/* Subtitle / Description */}
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                          الوصف الفرعي للشريحة:
+                        </label>
+                        <textarea
+                          className="input-field"
+                          rows={2}
+                          placeholder="مثال: قراءة فورية بدون تلامس عبر الهاتف الذكي أو مسح الرمز المباشر"
+                          value={bannerForm.subtitle}
+                          onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
+                          style={{ width: '100%', resize: 'vertical', lineHeight: 1.4 }}
+                        />
+                      </div>
+
+                      {/* Sort Order and Active Checkbox */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'center' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            ترتيب الشريحة في السلايدر:
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            className="input-field"
+                            value={bannerForm.sortOrder}
+                            onChange={(e) => setBannerForm({ ...bannerForm, sortOrder: parseInt(e.target.value) || 1 })}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '22px' }}>
+                          <input
+                            type="checkbox"
+                            id="bannerIsActiveCheck"
+                            checked={bannerForm.isActive}
+                            onChange={(e) => setBannerForm({ ...bannerForm, isActive: e.target.checked })}
+                            style={{ width: '18px', height: '18px', accentColor: 'var(--gold-primary)', cursor: 'pointer' }}
+                          />
+                          <label htmlFor="bannerIsActiveCheck" style={{ fontSize: '0.86rem', fontWeight: 700, color: '#fff', cursor: 'pointer' }}>
+                            نشطة وتظهر في السلايدر الآن
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Modal Actions */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginTop: '14px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setBannerModalOpen(false)}
+                          className="btn-ghost"
+                          style={{ padding: '10px 18px' }}
+                        >
+                          إلغاء
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isUploadingBannerImage}
+                          className="btn-primary"
+                          style={{ padding: '10px 24px', fontWeight: 800 }}
+                        >
+                          {editingBanner ? 'حفظ تعديلات الشريحة' : 'إضافة الشريحة للسلايدر'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

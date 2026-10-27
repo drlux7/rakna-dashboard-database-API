@@ -70,6 +70,8 @@ export class ReporterController {
               model: tag.car.model,
               colorName: tag.car.colorName,
               displayTitle: tag.car.nickname || `${tag.car.brand} ${tag.car.model}`,
+              allowFreeChat: tag.car.allowFreeChat ?? false,
+              allowReporterPhotos: tag.car.allowReporterPhotos ?? true,
             }
           : null,
       });
@@ -122,8 +124,116 @@ export class ReporterController {
       }
 
       const reporterToken = sessionToken || `rep_${uuidv4()}`;
+      const COOLDOWN_SECONDS = 15;
+      const MAX_UNANSWERED_MESSAGES = 5;
 
-      // Create Chat
+      // ──────────────── Check if an active chat already exists for this reporter & car ────────────────
+      const existingChat = await prisma.chat.findFirst({
+        where: {
+          carId: tag.car.id,
+          reporterSessionToken: reporterToken,
+          status: 'ACTIVE',
+          createdAt: { gt: new Date(Date.now() - 3 * 60 * 60 * 1000) }, // within last 3 hours
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (existingChat) {
+        // Check cooldown since last reporter message
+        const lastReporterMsg = await prisma.message.findFirst({
+          where: { chatId: existingChat.id, senderType: 'REPORTER' },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (lastReporterMsg) {
+          const elapsed = (Date.now() - new Date(lastReporterMsg.createdAt).getTime()) / 1000;
+          if (elapsed < COOLDOWN_SECONDS) {
+            const waitSec = Math.ceil(COOLDOWN_SECONDS - elapsed);
+            res.status(429).json({
+              success: false,
+              message: `يرجى الانتظار ${waitSec} ثانية قبل إرسال رسالة أخرى منعاً للإزعاج.`,
+              retryAfter: waitSec,
+            });
+            return;
+          }
+        }
+
+        // Check unanswered quota
+        const lastOwnerMsg = await prisma.message.findFirst({
+          where: { chatId: existingChat.id, senderType: 'OWNER' },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        const reporterCount = await prisma.message.count({
+          where: {
+            chatId: existingChat.id,
+            senderType: 'REPORTER',
+            ...(lastOwnerMsg ? { createdAt: { gt: lastOwnerMsg.createdAt } } : {}),
+          },
+        });
+
+        if (reporterCount >= MAX_UNANSWERED_MESSAGES) {
+          res.status(429).json({
+            success: false,
+            message: `لقد أرسلت الحد الأقصى (${MAX_UNANSWERED_MESSAGES} رسائل). يرجى انتظار رد صاحب السيارة.`,
+            limitReached: true,
+            remainingMessages: 0,
+          });
+          return;
+        }
+
+        // Append initial message to existing chat
+        if (initialMessage && initialMessage.trim().length > 0) {
+          await prisma.message.create({
+            data: {
+              chatId: existingChat.id,
+              senderType: 'REPORTER',
+              content: initialMessage.trim().substring(0, 500),
+              imageUrl: imageUrl || null,
+              isViewOnce: Boolean(isViewOnce),
+            },
+          });
+
+          await prisma.chat.update({
+            where: { id: existingChat.id },
+            data: { lastMessageAt: new Date() },
+          });
+
+          try {
+            await prisma.notification.create({
+              data: {
+                userId: tag.car.userId,
+                carId: tag.car.id,
+                tagCode: tag.tagCode,
+                type: 'CAR_ALERT',
+                title: 'تنبيه جديد بخصوص سيارتك',
+                message: `رسالة جديدة: "${initialMessage.trim().substring(0, 80)}"`,
+                actionLabel: 'فتح المحادثة',
+              },
+            });
+          } catch (_) {}
+        }
+
+        const remaining = Math.max(0, MAX_UNANSWERED_MESSAGES - (reporterCount + 1));
+
+        res.status(200).json({
+          success: true,
+          message: 'تم إرسال بلاغك وتنبيه صاحب السيارة بنجاح ومجهول الهوية بالكامل',
+          chatId: existingChat.id,
+          chat: {
+            id: existingChat.id,
+            carId: existingChat.carId,
+            contactReason: existingChat.contactReason,
+            status: existingChat.status,
+          },
+          sessionToken: reporterToken,
+          remainingMessages: remaining,
+          cooldownSeconds: COOLDOWN_SECONDS,
+        });
+        return;
+      }
+
+      // Create new chat
       const chat = await prisma.chat.create({
         data: {
           carId: tag.car.id,
@@ -174,7 +284,15 @@ export class ReporterController {
         success: true,
         message: 'تم إرسال بلاغك وتنبيه صاحب السيارة بنجاح ومجهول الهوية بالكامل',
         chatId: chat.id,
+        chat: {
+          id: chat.id,
+          carId: chat.carId,
+          contactReason: chat.contactReason,
+          status: chat.status,
+        },
         sessionToken: reporterToken,
+        remainingMessages: MAX_UNANSWERED_MESSAGES - 1,
+        cooldownSeconds: COOLDOWN_SECONDS,
       });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر إنشاء المحادثة' });
@@ -209,6 +327,52 @@ export class ReporterController {
         return;
       }
 
+      const COOLDOWN_SECONDS = 15;
+      const MAX_UNANSWERED_MESSAGES = 5;
+
+      // ──────────────── 1. Anti-Spam Check: Cooldown between consecutive reporter messages ────────────────
+      const lastReporterMessage = await prisma.message.findFirst({
+        where: { chatId: chat.id, senderType: 'REPORTER' },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (lastReporterMessage) {
+        const elapsedSec = (Date.now() - new Date(lastReporterMessage.createdAt).getTime()) / 1000;
+        if (elapsedSec < COOLDOWN_SECONDS) {
+          const waitSec = Math.ceil(COOLDOWN_SECONDS - elapsedSec);
+          res.status(429).json({
+            success: false,
+            message: `يرجى الانتظار ${waitSec} ثانية قبل إرسال رسالة أخرى منعاً للإزعاج.`,
+            retryAfter: waitSec,
+          });
+          return;
+        }
+      }
+
+      // ──────────────── 2. Anti-Spam Check: Limit consecutive messages without owner reply ────────────────
+      const lastOwnerMessage = await prisma.message.findFirst({
+        where: { chatId: chat.id, senderType: 'OWNER' },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const reporterMessagesCount = await prisma.message.count({
+        where: {
+          chatId: chat.id,
+          senderType: 'REPORTER',
+          ...(lastOwnerMessage ? { createdAt: { gt: lastOwnerMessage.createdAt } } : {}),
+        },
+      });
+
+      if (reporterMessagesCount >= MAX_UNANSWERED_MESSAGES) {
+        res.status(429).json({
+          success: false,
+          message: `لقد أرسلت الحد الأقصى (${MAX_UNANSWERED_MESSAGES} رسائل). يرجى انتظار رد صاحب السيارة.`,
+          limitReached: true,
+          remainingMessages: 0,
+        });
+        return;
+      }
+
       const message = await prisma.message.create({
         data: {
           chatId: chat.id,
@@ -224,9 +388,30 @@ export class ReporterController {
         data: { lastMessageAt: new Date() },
       });
 
+      // Send instant push notification to Car Owner
+      try {
+        await prisma.notification.create({
+          data: {
+            userId: chat.car.userId,
+            carId: chat.car.id,
+            tagCode: '',
+            type: 'CAR_ALERT',
+            title: 'رسالة جديدة من المُبلّغ',
+            message: content.trim().substring(0, 80),
+            actionLabel: 'فتح المحادثة',
+          },
+        });
+      } catch (notifErr) {
+        console.error('Failed to create notification for reporter message:', notifErr);
+      }
+
+      const remaining = Math.max(0, MAX_UNANSWERED_MESSAGES - (reporterMessagesCount + 1));
+
       res.status(201).json({
         success: true,
         message,
+        remainingMessages: remaining,
+        cooldownSeconds: COOLDOWN_SECONDS,
       });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر إرسال الرسالة' });
@@ -267,6 +452,85 @@ export class ReporterController {
       });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر تقديم البلاغ' });
+    }
+  }
+
+  /**
+   * جلب رسائل المحادثة للمُبلّغ المجهول لمتابعة ردود صاحب السيارة لحظياً
+   */
+  static async getReporterChatMessages(req: Request, res: Response): Promise<void> {
+    try {
+      const chatId = req.params.chatId as string;
+
+      const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+        include: {
+          car: true,
+          messages: {
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      });
+
+      if (!chat) {
+        res.status(404).json({ success: false, message: 'المحادثة غير موجودة' });
+        return;
+      }
+
+      // تحديد رسائل المالك كمقروءة للمُبلّغ
+      await prisma.message.updateMany({
+        where: {
+          chatId: chat.id,
+          senderType: 'OWNER',
+          isRead: false,
+        },
+        data: { isRead: true },
+      });
+
+      const MAX_UNANSWERED_MESSAGES = 5;
+      const lastOwnerMsg = [...chat.messages].reverse().find((m) => m.senderType === 'OWNER');
+      const reporterMsgsSince = chat.messages.filter((m) => {
+        if (m.senderType !== 'REPORTER') return false;
+        if (!lastOwnerMsg) return true;
+        return new Date(m.createdAt) > new Date(lastOwnerMsg.createdAt);
+      });
+      const remaining = Math.max(0, MAX_UNANSWERED_MESSAGES - reporterMsgsSince.length);
+
+      res.json({
+        success: true,
+        chat: {
+          id: chat.id,
+          status: chat.status,
+          contactReason: chat.contactReason,
+          carTitle: chat.car ? (chat.car.nickname || `${chat.car.brand} ${chat.car.model}`) : '',
+          carColor: chat.car?.colorName || '',
+        },
+        messages: chat.messages,
+        remainingMessages: remaining,
+        limitReached: remaining <= 0,
+        maxAllowed: MAX_UNANSWERED_MESSAGES,
+        cooldownSeconds: 15,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر جلب رسائل المحادثة' });
+    }
+  }
+
+  /**
+   * جلب كافة الرسائل السريعة المعتمدة النشطة لتطبيق ركنة
+   */
+  static async getQuickMessages(req: Request, res: Response): Promise<void> {
+    try {
+      const messages = await prisma.quickMessage.findMany({
+        where: { isActive: true },
+        orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
+      });
+      res.json({
+        success: true,
+        messages,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر جلب الرسائل السريعة' });
     }
   }
 }
