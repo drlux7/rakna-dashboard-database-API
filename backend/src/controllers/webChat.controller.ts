@@ -12,8 +12,17 @@ export class WebChatController {
       const cleanTag = rawTag.startsWith('#') ? rawTag : `#${rawTag}`;
 
       // 1. Fetch tag and car details
-      const tag: any = await prisma.tag.findUnique({
-        where: { tagCode: cleanTag },
+      const tag: any = await prisma.tag.findFirst({
+        where: {
+          OR: [
+            { tagCode: cleanTag },
+            { tagCode: rawTag },
+            { secretToken: rawTag },
+            { secretToken: cleanTag.replace(/^#/, '') },
+            { secretToken: { startsWith: rawTag } },
+            { secretToken: { startsWith: cleanTag.replace(/^#/, '') } },
+          ],
+        },
         include: {
           car: true,
         },
@@ -37,8 +46,26 @@ export class WebChatController {
 
       const activeList = quickMessages.length > 0 ? quickMessages : defaultQuickMessages;
 
-      // Check if tag is active and linked
-      const isReady = tag && tag.status === 'ACTIVE' && tag.car && tag.car.isTagActive;
+      // ── Determine page state based on tag status ──────────────────────────
+      // SCENARIO 1a: Tag doesn't exist at all
+      // SCENARIO 1b: Tag exists but not yet activated (IN_STOCK / UNASSIGNED)
+      // SCENARIO 1c: Tag is PAUSED by owner
+      // SCENARIO 2:  Tag is ACTIVE → show emergency chat page
+      type PageState = 'NOT_FOUND' | 'NOT_ACTIVATED' | 'PAUSED' | 'ACTIVE';
+
+      let pageState: PageState;
+      if (!tag) {
+        pageState = 'NOT_FOUND';
+      } else if (tag.status === 'ACTIVE' && tag.car && tag.car.isTagActive) {
+        pageState = 'ACTIVE';
+      } else if (tag.status === 'PAUSED') {
+        pageState = 'PAUSED';
+      } else {
+        // IN_STOCK or UNASSIGNED (not yet activated by owner)
+        pageState = 'NOT_ACTIVATED';
+      }
+
+      const isReady = pageState === 'ACTIVE';
 
       const carInfo = tag?.car
         ? {
@@ -250,18 +277,69 @@ export class WebChatController {
       border-top: 1px dashed rgba(255, 255, 255, 0.08);
     }
 
-    /* Inactive State Screen */
-    .inactive-card {
+    /* Inactive / Error State Cards */
+    .state-card {
       text-align: center;
-      padding: 40px 20px;
+      padding: 48px 24px 40px;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 20px;
-      margin: 40px auto;
+      margin: 48px auto;
+      max-width: 440px;
+      position: relative;
+      overflow: hidden;
     }
-    .inactive-icon {
-      font-size: 54px;
+    .state-card::before {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; left: 0;
+      height: 3px;
+    }
+    .state-card.not-found::before  { background: linear-gradient(90deg, #EF4444, #B91C1C); }
+    .state-card.not-activated::before { background: linear-gradient(90deg, #F59E0B, #D97706); }
+    .state-card.paused::before     { background: linear-gradient(90deg, #6366F1, #4F46E5); }
+    .state-icon { font-size: 60px; margin-bottom: 18px; display: block; }
+    .state-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: #FFF;
+      margin-bottom: 10px;
+      line-height: 1.3;
+    }
+    .state-body {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.7;
+      max-width: 340px;
+      margin: 0 auto 24px;
+    }
+    .state-body b { color: #CBD5E1; }
+    .state-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #0B0F19;
+      font-size: 13px;
+      font-weight: 800;
+      padding: 12px 24px;
+      border-radius: 24px;
+      text-decoration: none;
+      box-shadow: 0 4px 16px rgba(212, 175, 55, 0.35);
+      transition: all 0.2s ease;
+    }
+    .state-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(212,175,55,0.5); }
+    .state-tag-pill {
+      display: inline-block;
       margin-bottom: 16px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 700;
+      letter-spacing: 0.5px;
     }
 
     /* Chat Section */
@@ -538,19 +616,47 @@ export class WebChatController {
   </header>
 
   <main class="container">
-    ${
-      !isReady
-        ? `
-      <div class="inactive-card">
-        <div class="inactive-icon">🔒</div>
-        <h2 style="font-size: 20px; margin-bottom: 8px; color: #FFF;">هذا الملصق غير متاح حالياً</h2>
-        <p style="color: var(--text-muted); font-size: 13px; line-height: 1.6; max-width: 380px; margin: 0 auto 20px;">
-          ملصق الـ QR / NFC (${cleanTag}) غير مربوط بسيارة نشطة أو تم إيقافه مؤقتاً من قبل المالك.
+    ${ pageState === 'NOT_FOUND' ? `
+      <!-- SCENARIO 1a: Tag not found in system -->
+      <div class="state-card not-found">
+        <span class="state-icon">❓</span>
+        <div class="state-tag-pill">${cleanTag}</div>
+        <h2 class="state-title">ملصق غير معرّف</h2>
+        <p class="state-body">
+          لا يوجد ملصق ركنة مسجّل بهذا الرمز في نظامنا.<br>
+          إذا اشتريت المنتج حديثاً، تأكد من صحة المسح أو تواصل مع الدعم.
         </p>
-        <a href="https://rakna.app" class="btn-download" style="display: inline-flex; margin: 0 auto;">زيارة موقع ركنة</a>
+        <a href="https://rakna.app" class="state-cta">🌐 موقع ركنة</a>
       </div>
-      `
-        : `
+
+    ` : pageState === 'NOT_ACTIVATED' ? `
+      <!-- SCENARIO 1b: Tag exists but owner hasn't activated it yet -->
+      <div class="state-card not-activated">
+        <span class="state-icon">⏳</span>
+        <div class="state-tag-pill">${cleanTag}</div>
+        <h2 class="state-title">هذا الملصق غير مفعّل بعد</h2>
+        <p class="state-body">
+          الملصق موجود في النظام ولكن المالك لم يقم بتفعيله بعد.<br><br>
+          <b>إذا كنت المالك:</b> افتح تطبيق ركنة وادخل كود التفعيل المرفق في الكرت داخل العلبة.
+        </p>
+        <a href="https://rakna.app/download" class="state-cta">📲 تحميل تطبيق ركنة للتفعيل</a>
+      </div>
+
+    ` : pageState === 'PAUSED' ? `
+      <!-- SCENARIO 1c: Tag is paused by owner -->
+      <div class="state-card paused">
+        <span class="state-icon">⏸️</span>
+        <div class="state-tag-pill">${cleanTag}</div>
+        <h2 class="state-title">الملصق متوقف مؤقتاً</h2>
+        <p class="state-body">
+          أوقف صاحب السيارة تشغيل هذا الملصق مؤقتاً.<br>
+          لا يمكن إرسال أي تنبيه في الوقت الحالي.<br><br>
+          <b>إذا كانت هناك حالة طارئة</b> يُرجى التواصل مع إدارة المبنى أو الجهات المختصة.
+        </p>
+        <a href="https://rakna.app" class="state-cta">🏠 الرئيسية</a>
+      </div>
+
+    ` : `
       <!-- Protected Vehicle Card -->
       <section class="car-card">
         <div class="car-header">
@@ -633,8 +739,7 @@ export class WebChatController {
           </div>
         </div>
       </section>
-      `
-    }
+      `}
   </main>
 
   <footer class="footer">

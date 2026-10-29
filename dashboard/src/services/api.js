@@ -64,17 +64,30 @@ class AdminApiService {
     return this.request('/admin/stats');
   }
 
-  // Batch Tag Generator
+  // Batch Tag Generator (Vehicle Stickers & QR Codes)
   async generateTagsBatch(quantity, tagType, batchNumber) {
     return this.request('/admin/tags/batch', {
       method: 'POST',
-      body: JSON.stringify({ quantity, tagType, batchNumber }),
+      body: JSON.stringify({ quantity, count: quantity, tagType, batchNumber, batchName: batchNumber }),
+    });
+  }
+
+  // Batch Activation Codes Generator (Package Secret Cards)
+  async generateActivationCodesBatch(quantity, batchNumber) {
+    return this.request('/admin/activation-codes/batch', {
+      method: 'POST',
+      body: JSON.stringify({ quantity, count: quantity, batchNumber, batchName: batchNumber }),
     });
   }
 
   // List all Tags
   async listTags() {
     return this.request('/admin/tags');
+  }
+
+  // List all Activation Codes
+  async listActivationCodes(status = 'ALL', search = '') {
+    return this.request(`/admin/activation-codes?status=${status}&search=${encodeURIComponent(search)}`);
   }
 
   // List Orders & update status

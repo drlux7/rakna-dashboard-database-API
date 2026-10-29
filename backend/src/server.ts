@@ -139,6 +139,7 @@ tagsRouter.get('/my-tags', authenticateOwner, TagsController.getMyTags);
 tagsRouter.post('/activate', authenticateOwner, TagsController.activateTagForCar);
 tagsRouter.post('/:tagCode/toggle-pause', authenticateOwner, TagsController.togglePauseTag);
 tagsRouter.post('/:tagCode/unlink', authenticateOwner, TagsController.unlinkTag);
+tagsRouter.post('/:tagCode/reissue-code', authenticateOwner, TagsController.reissueActivationCode);
 tagsRouter.get('/:tagCode/test-signal', authenticateOwner, TagsController.testSignal);
 apiRouter.use('/tags', tagsRouter);
 
@@ -202,6 +203,8 @@ adminRouter.post('/login', AdminController.login);
 adminRouter.get('/stats', authenticateAdmin, AdminController.getStats);
 adminRouter.post('/tags/batch', authenticateAdmin, AdminController.generateTagsBatch);
 adminRouter.get('/tags', authenticateAdmin, AdminController.listTags);
+adminRouter.post('/activation-codes/batch', authenticateAdmin, AdminController.generateActivationCodesBatch);
+adminRouter.get('/activation-codes', authenticateAdmin, AdminController.listActivationCodes);
 adminRouter.get('/orders', authenticateAdmin, AdminController.listOrders);
 adminRouter.patch('/orders/:id/status', authenticateAdmin, AdminController.updateOrderStatus);
 adminRouter.get('/users', authenticateAdmin, AdminController.listUsers);

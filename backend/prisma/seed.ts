@@ -92,28 +92,58 @@ async function main() {
     },
   });
 
-  const unassignedTags = [
+  const unassignedTagsData = [
     { tagCode: '#TAG-8821', type: 'NANO_GLASS' },
     { tagCode: '#TAG-9012', type: 'TRUNK_BADGE' },
     { tagCode: '#TAG-3420', type: 'TRUNK_BADGE' },
     { tagCode: '#TAG-7711', type: 'NANO_GLASS' },
   ];
 
-  for (const t of unassignedTags) {
-    await prisma.tag.upsert({
+  const seededUnassignedTags: { id: string; tagCode: string }[] = [];
+  for (const t of unassignedTagsData) {
+    const tag = await prisma.tag.upsert({
       where: { tagCode: t.tagCode },
       update: {},
       create: {
         tagCode: t.tagCode,
         secretToken: `sec_tok_${t.tagCode.toLowerCase().replace(/[^a-z0-9]/g, '')}_nfc`,
         tagType: t.type,
-        status: 'UNASSIGNED',
+        status: 'IN_STOCK',
         batchNumber: 'BATCH-2026-Q1',
-        userId: demoOwner.id,
+      },
+    });
+    seededUnassignedTags.push({ id: tag.id, tagCode: tag.tagCode });
+  }
+  console.log('✅ Tags seeded (1 active + 4 in-stock)');
+
+  // 4b. Seed Activation Codes (one per tag, each printed in its own package)
+  // Code for the already-active #A247 tag (mark it as redeemed)
+  await prisma.activationCode.upsert({
+    where: { code: 'ACT-0001-A1' },
+    update: {},
+    create: {
+      code: 'ACT-0001-A1',
+      isRedeemed: true,
+      redeemedAt: new Date(),
+      usedOnTagId: tagA247.id,
+      batchNumber: 'BATCH-2026-Q1',
+    },
+  });
+
+  // Fresh (unredeemed) codes for the 4 in-stock tags — NOT linked to any tag yet
+  const freshCodes = ['ACT-8492-X1', 'ACT-3310-B2', 'ACT-7741-C3', 'ACT-5529-D4'];
+  for (const code of freshCodes) {
+    await prisma.activationCode.upsert({
+      where: { code },
+      update: {},
+      create: {
+        code,
+        isRedeemed: false,
+        batchNumber: 'BATCH-2026-Q1',
       },
     });
   }
-  console.log('✅ Tags seeded (1 active + 4 unassigned)');
+  console.log('✅ Activation codes seeded (1 redeemed + 4 fresh ready-to-use)');
 
   // 5. Seed Cars
   // Car 1: Activated with Tag #A247

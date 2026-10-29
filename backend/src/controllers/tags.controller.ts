@@ -35,6 +35,20 @@ export class TagsController {
       const activeCount = linkedTags.filter((t) => t.status === 'ACTIVE').length;
       const availableCount = unassignedTags.length;
 
+      const activeTagsFormatted = linkedTags.map((t) => ({
+        id: t.id,
+        tagCode: t.tagCode,
+        tagType: t.tagType,
+        status: t.status,
+        isTagActive: t.status === 'ACTIVE',
+        car: {
+          id: t.car!.id,
+          displayTitle: t.car!.nickname?.trim() ? t.car!.nickname : `${t.car!.brand} ${t.car!.model}`,
+          plateNumber: t.car!.plateNumber,
+          colorName: t.car!.colorName,
+        },
+      }));
+
       res.json({
         success: true,
         stats: {
@@ -42,19 +56,8 @@ export class TagsController {
           activeCount,
           availableCount,
         },
-        linkedTags: linkedTags.map((t) => ({
-          id: t.id,
-          tagCode: t.tagCode,
-          tagType: t.tagType,
-          status: t.status,
-          isTagActive: t.status === 'ACTIVE',
-          car: {
-            id: t.car!.id,
-            displayTitle: t.car!.nickname?.trim() ? t.car!.nickname : `${t.car!.brand} ${t.car!.model}`,
-            plateNumber: t.car!.plateNumber,
-            colorName: t.car!.colorName,
-          },
-        })),
+        activeTags: activeTagsFormatted,
+        linkedTags: activeTagsFormatted,
         unassignedTags: unassignedTags.map((t) => ({
           id: t.id,
           tagCode: t.tagCode,
@@ -68,92 +71,136 @@ export class TagsController {
   }
 
   /**
-   * ربط وتفعيل Tag متاح بسيارة باستخدام كود التفعيل السري المرفق في الباكدج
+   * ربط وتفعيل Tag بسيارة باستخدام tag_id + activation_code + بيانات السيارة
+   * الدورة: تحقق → transaction ذري (حرق الكود + تفعيل التاج)
    */
   static async activateTagForCar(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { carId, tagCode, activationCode } = req.body;
 
+      // ── 1. Validate inputs ─────────────────────────────────────────────────
       if (!carId) {
         res.status(400).json({ success: false, message: 'معرف السيارة مطلوب' });
         return;
       }
-
-      if (!activationCode && !tagCode) {
-        res.status(400).json({ success: false, message: 'كود التفعيل (Activation Code) المرفق في الباكدج مطلوب' });
+      if (!tagCode) {
+        res.status(400).json({ success: false, message: 'معرف الملصق (tagCode) مطلوب' });
+        return;
+      }
+      if (!activationCode) {
+        res.status(400).json({ success: false, message: 'كود التفعيل (activation code) المرفق في الكرت مطلوب' });
         return;
       }
 
-      const cleanActivation = activationCode?.trim().toUpperCase();
-      const cleanTag = tagCode ? (tagCode.trim().startsWith('#') ? tagCode.trim() : `#${tagCode.trim()}`) : null;
+      const cleanTagCode = tagCode.trim().startsWith('#') ? tagCode.trim() : `#${tagCode.trim()}`;
+      const cleanCode = activationCode.trim().toUpperCase();
 
-      // 1. Verify Car belongs to user
+      // ── 2. Verify the car belongs to the authenticated user ────────────────
       const car = await prisma.car.findFirst({
         where: { id: carId, userId: req.user!.id },
       });
-
       if (!car) {
         res.status(404).json({ success: false, message: 'السيارة المحددة غير موجودة في حسابك' });
         return;
       }
 
-      // 2. Lookup Tag by activationCode or tagCode
-      let tag = null;
-      if (cleanActivation) {
-        tag = await prisma.tag.findUnique({
-          where: { activationCode: cleanActivation },
-        });
-      } else if (cleanTag) {
-        tag = await prisma.tag.findUnique({
-          where: { tagCode: cleanTag },
-        });
-      }
+      // ── 3. Validate tag_id ─────────────────────────────────────────────────
+      const tag = await prisma.tag.findUnique({ where: { tagCode: cleanTagCode } });
 
       if (!tag) {
-        res.status(404).json({ 
-          success: false, 
-          message: 'كود التفعيل غير صالح أو غير مسجل في النظام. تأكد من إدخال الكود المكتوب في الباكدج بدقة.' 
+        res.status(404).json({
+          success: false,
+          message: `الملصق (${cleanTagCode}) غير موجود في النظام. تأكد من المسح أو الإدخال اليدوي بدقة.`,
         });
         return;
       }
 
-      // If both provided, ensure they match
-      if (cleanTag && tag.tagCode !== cleanTag) {
-        res.status(400).json({ 
-          success: false, 
-          message: 'كود التفعيل لا يتطابق مع ملصق الـ Tag المدخل.' 
+      // Tag must not already be active
+      if (tag.status === 'ACTIVE') {
+        res.status(409).json({
+          success: false,
+          message: `الملصق (${cleanTagCode}) مفعّل بالفعل ومربوط بسيارة أخرى. لا يمكن إعادة تفعيله.`,
         });
         return;
       }
 
-      // If activation code was required but tag has a different code
-      if (cleanActivation && tag.activationCode && tag.activationCode.toUpperCase() !== cleanActivation) {
-        res.status(400).json({ 
-          success: false, 
-          message: 'كود التفعيل غير صحيح لهذا الـ Tag.' 
-        });
-        return;
-      }
-
-      // 3. Ensure tag is not already linked to another car or user
+      // Tag must not already be linked to a different car
       if (tag.carId && tag.carId !== carId) {
-        res.status(400).json({ 
-          success: false, 
-          message: 'قاعدة ركنة: هذا الـ Tag مرتبط ومفعل بالفعل بسيارة أخرى!' 
+        res.status(409).json({
+          success: false,
+          message: 'قاعدة ركنة (1 Tag = 1 Car): هذا الملصق مربوط بسيارة أخرى ولا يمكن إعادة تفعيله.',
         });
         return;
       }
 
-      if (tag.userId && tag.userId !== req.user!.id && tag.status === 'ACTIVE') {
-        res.status(400).json({ 
-          success: false, 
-          message: 'هذا الكود مستخدم بالفعل ومربوط بحساب آخر.' 
+      // ── 3b. If tag is already owned by this user in unassigned status (re-linking) ──
+      if (tag.userId === req.user!.id && tag.status === 'UNASSIGNED') {
+        await prisma.$transaction([
+          prisma.tag.update({
+            where: { id: tag.id },
+            data: {
+              carId: car.id,
+              status: 'ACTIVE',
+              activatedAt: new Date(),
+            },
+          }),
+          prisma.car.update({
+            where: { id: car.id },
+            data: {
+              isActivated: true,
+              isTagActive: true,
+            },
+          }),
+        ]);
+
+        res.json({
+          success: true,
+          tag: {
+            tagCode: tag.tagCode,
+            tagType: tag.tagType,
+            status: 'ACTIVE',
+          },
+          message: `تم إعادة ربط الملصق (${tag.tagCode}) بسيارتك (${car.brand} ${car.model}) بنجاح! 🚗✨`,
         });
         return;
       }
 
-      // 4. Link tag and activate car in a transaction
+      // ── 4. Validate activation code (for new unactivated tags) ──────────────
+      if (!activationCode) {
+        res.status(400).json({ success: false, message: 'كود التفعيل (activation code) المرفق في الكرت مطلوب لتفعيل هذا الملصق لأول مرة' });
+        return;
+      }
+
+      const actCode = await prisma.activationCode.findUnique({ where: { code: cleanCode } });
+
+      if (!actCode) {
+        res.status(404).json({
+          success: false,
+          message: 'كود التفعيل غير موجود في النظام. تأكد من الكود المطبوع في الكرت داخل العلبة.',
+        });
+        return;
+      }
+
+      if (actCode.isRedeemed) {
+        res.status(409).json({
+          success: false,
+          message: 'هذا الكود تم استخدامه سابقاً ولا يمكن إعادة استخدامه. إذا كانت لديك مشكلة، تواصل مع الدعم الفني.',
+        });
+        return;
+      }
+
+      // ── 5. Atomic Transaction: burn the code + activate the tag ───────────
       await prisma.$transaction([
+        // 5a. Mark activation code as redeemed (burned) — links it to this tag forever
+        prisma.activationCode.update({
+          where: { id: actCode.id },
+          data: {
+            isRedeemed: true,
+            redeemedAt: new Date(),
+            usedOnTagId: tag.id,
+          },
+        }),
+        // 5b. Activate the tag and link it to the user's car
         prisma.tag.update({
           where: { id: tag.id },
           data: {
@@ -163,6 +210,7 @@ export class TagsController {
             activatedAt: new Date(),
           },
         }),
+        // 5c. Mark the car as activated
         prisma.car.update({
           where: { id: car.id },
           data: {
@@ -175,16 +223,15 @@ export class TagsController {
       res.json({
         success: true,
         tag: {
-          id: tag.id,
           tagCode: tag.tagCode,
           tagType: tag.tagType,
           status: 'ACTIVE',
         },
-        message: `تم تفعيل الـ Tag (${tag.tagCode}) وربطه بسيارتك (${car.brand} ${car.model}) بنجاح! 🚗✨`,
+        message: `تم تفعيل الملصق (${tag.tagCode}) وربطه بسيارتك (${car.brand} ${car.model}) بنجاح! 🚗✨`,
       });
     } catch (error) {
       console.error('Error activating tag:', error);
-      res.status(500).json({ success: false, message: 'تعذر ربط وتفعيل الـ Tag بالسيارة' });
+      res.status(500).json({ success: false, message: 'تعذر تفعيل الملصق. يُرجى المحاولة مرة أخرى.' });
     }
   }
 
@@ -283,6 +330,95 @@ export class TagsController {
       });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر فك ارتباط الـ Tag' });
+    }
+  }
+
+  /**
+   * SCENARIO 4 — إلغاء الربط وإصدار كود تفعيل جديد عند بيع السيارة
+   *
+   * المالك القديم يضغط "نقل ملكية" من داخل التطبيق:
+   *  1. يُلغى ربط التاج عن السيارة وتعود حالته IN_STOCK.
+   *  2. يُولَّد كود تفعيل جديد يرسله المالك القديم للمشتري.
+   *  3. الكود القديم يبقى مسجّلاً تاريخياً (محروق) ولا يُحذف.
+   */
+  static async reissueActivationCode(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const tagCode = req.params.tagCode as string;
+      const cleanTag = tagCode.startsWith('#') ? tagCode : `#${tagCode}`;
+
+      // 1. Verify tag belongs to this user and is currently ACTIVE
+      const tag = await prisma.tag.findUnique({
+        where: { tagCode: cleanTag },
+        include: { car: true },
+      });
+
+      if (!tag || tag.userId !== req.user!.id) {
+        res.status(404).json({ success: false, message: 'الملصق غير موجود في حسابك' });
+        return;
+      }
+
+      if (tag.status !== 'ACTIVE') {
+        res.status(400).json({ success: false, message: 'الملصق غير مفعّل ولا يحتاج إلى نقل ملكية' });
+        return;
+      }
+
+      // 2. Generate new unique activation code  e.g. ACT-7234-KR
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let newCode = '';
+      let attempts = 0;
+      do {
+        const numPart = Math.floor(1000 + Math.random() * 9000);
+        const a1 = chars.charAt(Math.floor(Math.random() * chars.length));
+        const a2 = chars.charAt(Math.floor(Math.random() * chars.length));
+        newCode = `ACT-${numPart}-${a1}${a2}`;
+        attempts++;
+        if (attempts > 50) {
+          res.status(500).json({ success: false, message: 'تعذر توليد كود تفعيل جديد، حاول مرة أخرى' });
+          return;
+        }
+      } while (await prisma.activationCode.findUnique({ where: { code: newCode } }));
+
+      const carId = tag.carId;
+
+      // 3. Atomic transaction: unlink tag + reset car + create fresh activation code
+      await prisma.$transaction([
+        // Detach tag from car — back to IN_STOCK (no user, no car)
+        prisma.tag.update({
+          where: { id: tag.id },
+          data: {
+            status: 'IN_STOCK',
+            carId: null,
+            userId: null,
+            activatedAt: null,
+          },
+        }),
+        // Reset the car's activation state
+        ...(carId
+          ? [
+              prisma.car.update({
+                where: { id: carId },
+                data: { isActivated: false, isTagActive: false },
+              }),
+            ]
+          : []),
+        // Create a brand-new unredeemed activation code for the new buyer
+        prisma.activationCode.create({
+          data: {
+            code: newCode,
+            isRedeemed: false,
+          },
+        }),
+      ]);
+
+      res.json({
+        success: true,
+        newActivationCode: newCode,
+        message: `تم إلغاء ربط الملصق (${cleanTag}) بنجاح. أرسل الكود الجديد للمالك الجديد ليقوم بالتفعيل من تطبيقه.`,
+        instructions: 'شارك هذا الكود بشكل آمن مع المشتري الجديد فقط. لا تنشره علناً.',
+      });
+    } catch (error) {
+      console.error('Error reissuing activation code:', error);
+      res.status(500).json({ success: false, message: 'تعذر إعادة إصدار كود التفعيل' });
     }
   }
 

@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'rakna_secret_default_key';
+const getJwtSecret = () => process.env.JWT_SECRET || 'rakna_super_secret_jwt_key_2026_veritag';
 
 export interface AuthenticatedUser {
   id: string;
@@ -23,7 +25,7 @@ export const authenticateOwner = (req: AuthRequest, res: Response, next: NextFun
 
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as AuthenticatedUser;
+    const decoded = jwt.verify(token, getJwtSecret()) as AuthenticatedUser;
     req.user = decoded;
     next();
   } catch (error) {
@@ -40,7 +42,7 @@ export const authenticateAdmin = (req: AuthRequest, res: Response, next: NextFun
 
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as AuthenticatedUser;
+    const decoded = jwt.verify(token, getJwtSecret()) as AuthenticatedUser;
     if (!decoded.role || !['SUPER_ADMIN', 'ADMIN', 'LOGISTICS', 'SUPPORT'].includes(decoded.role)) {
       res.status(403).json({ success: false, message: 'ليس لديك صلاحية الوصول إلى هذه الوظيفة' });
       return;

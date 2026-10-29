@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
 
 export class ReporterController {
@@ -12,8 +13,17 @@ export class ReporterController {
       const tagCode = req.params.tagCode as string;
       const cleanTag = tagCode.startsWith('#') ? tagCode : `#${tagCode}`;
 
-      const tag = await prisma.tag.findUnique({
-        where: { tagCode: cleanTag },
+      const tag = await prisma.tag.findFirst({
+        where: {
+          OR: [
+            { tagCode: cleanTag },
+            { tagCode: tagCode },
+            { secretToken: tagCode },
+            { secretToken: cleanTag.replace(/^#/, '') },
+            { secretToken: { startsWith: tagCode } },
+            { secretToken: { startsWith: cleanTag.replace(/^#/, '') } },
+          ],
+        },
         include: {
           car: true,
         },
@@ -27,6 +37,19 @@ export class ReporterController {
         return;
       }
 
+      // Check if the current scanner is the owner of the tag
+      let isOwner = false;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET || 'rakna_super_secret_jwt_key_2026_veritag') as any;
+          if (decoded && (tag.userId === decoded.id || tag.car?.userId === decoded.id)) {
+            isOwner = true;
+          }
+        } catch (_) {}
+      }
+
       // Log scan activity
       const method = (req.query.method as string) === 'NFC' ? 'NFC' : 'QR';
       await prisma.tagScanLog.create({
@@ -38,8 +61,8 @@ export class ReporterController {
         },
       });
 
-      // If car is linked and active, create scan notification for owner
-      if (tag.car && tag.status === 'ACTIVE' && tag.car.isTagActive) {
+      // If car is linked and active and NOT scanned by the owner himself, create scan notification
+      if (tag.car && tag.status === 'ACTIVE' && tag.car.isTagActive && !isOwner) {
         await prisma.notification.create({
           data: {
             userId: tag.car.userId,
@@ -62,6 +85,7 @@ export class ReporterController {
           type: tag.tagType,
           isActive: isCarActive,
           statusText: isCarActive ? 'نشط' : (tag.status === 'PAUSED' ? 'متوقف مؤقتاً' : 'غير مفعّل'),
+          isOwner,
         },
         car: tag.car
           ? {
@@ -116,6 +140,19 @@ export class ReporterController {
       if (!tag || !tag.car) {
         res.status(404).json({ success: false, message: 'المركبة غير متاحة أو لم يتم ربطها بعد' });
         return;
+      }
+
+      // Check if the caller is the owner
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET || 'rakna_super_secret_jwt_key_2026_veritag') as any;
+          if (decoded && (tag.userId === decoded.id || tag.car.userId === decoded.id)) {
+            res.status(400).json({ success: false, message: 'أنت صاحب هذا الملصق، لا يمكنك محادثة نفسك 😅' });
+            return;
+          }
+        } catch (_) {}
       }
 
       if (tag.status === 'PAUSED' || !tag.car.isTagActive) {

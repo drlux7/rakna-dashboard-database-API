@@ -4,7 +4,10 @@ import { prisma } from '../config/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { whatsAppService } from '../services/whatsapp.service';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'rakna_secret_default_key';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const getJwtSecret = () => process.env.JWT_SECRET || 'rakna_super_secret_jwt_key_2026_veritag';
 
 // Mock OTP store for dev/testing (in production, use Redis with expiration)
 const otpStore = new Map<string, { code: string; expiresAt: number }>();
@@ -15,7 +18,7 @@ export class AuthController {
    */
   static async sendOtp(req: Request, res: Response): Promise<void> {
     try {
-      let { phone } = req.body;
+      let { phone, isLogin } = req.body;
       if (!phone || typeof phone !== 'string') {
         res.status(400).json({ success: false, message: 'يرجى إدخال رقم هاتف صحيح' });
         return;
@@ -27,6 +30,22 @@ export class AuthController {
           phone = '+20' + phone.substring(1);
         } else if (phone.startsWith('1')) {
           phone = '+20' + phone;
+        }
+      }
+
+      // في حالة تسجيل الدخول، التحقق من أن الرقم مسجل مسبقاً في قاعدة البيانات
+      if (isLogin === true || isLogin === 'true') {
+        const existingUser = await prisma.user.findUnique({
+          where: { phone },
+        });
+
+        if (!existingUser) {
+          res.status(404).json({
+            success: false,
+            code: 'USER_NOT_FOUND',
+            message: 'هذا الرقم غير مسجل في قاعدة البيانات، يجب تسجيل الدخول كمستخدم جديد',
+          });
+          return;
         }
       }
 
@@ -68,7 +87,7 @@ export class AuthController {
    */
   static async verifyOtp(req: Request, res: Response): Promise<void> {
     try {
-      let { phone, otp } = req.body;
+      let { phone, otp, name } = req.body;
       if (!phone || !otp) {
         res.status(400).json({ success: false, message: 'رقم الهاتف وكود التحقق مطلوبان' });
         return;
@@ -92,13 +111,17 @@ export class AuthController {
 
       otpStore.delete(phone);
 
+      const resolvedName = (name && typeof name === 'string' && name.trim().length > 0)
+        ? name.trim()
+        : 'صاحب المركبة';
+
       // Find or create user
       let user = await prisma.user.findUnique({ where: { phone } });
       if (!user) {
         user = await prisma.user.create({
           data: {
             phone,
-            name: 'صاحب المركبة',
+            name: resolvedName,
             isVerified: true,
           },
         });
@@ -113,6 +136,11 @@ export class AuthController {
             actionLabel: 'استكشف التطبيق',
           },
         });
+      } else if (resolvedName !== 'صاحب المركبة' && (!user.name || user.name === 'صاحب المركبة')) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { name: resolvedName },
+        });
       }
 
       if (user.isBlocked) {
@@ -123,7 +151,7 @@ export class AuthController {
       // Generate JWT
       const token = jwt.sign(
         { id: user.id, phone: user.phone },
-        JWT_SECRET,
+        getJwtSecret(),
         { expiresIn: '30d' }
       );
 

@@ -7,7 +7,10 @@ import { prisma } from '../config/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { whatsAppService } from '../services/whatsapp.service';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'rakna_secret_default_key';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const getJwtSecret = () => process.env.JWT_SECRET || 'rakna_super_secret_jwt_key_2026_veritag';
 
 export class AdminController {
   /**
@@ -38,7 +41,7 @@ export class AdminController {
 
       const token = jwt.sign(
         { id: admin.id, email: admin.email, role: admin.role, name: admin.name },
-        JWT_SECRET,
+        getJwtSecret(),
         { expiresIn: '7d' }
       );
 
@@ -112,10 +115,12 @@ export class AdminController {
    */
   static async generateTagsBatch(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { count, tagType, batchName } = req.body;
-      const amount = Math.min(Math.max(parseInt(count) || 10, 1), 500); // 1 to 500 per batch
-      const type = tagType === 'NANO_GLASS' ? 'NANO_GLASS' : 'TRUNK_BADGE';
-      const batchNumber = batchName || `BATCH-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+      const rawCount = req.body.count ?? req.body.quantity;
+      const rawBatch = req.body.batchName || req.body.batchNumber;
+      const amount = Math.min(Math.max(parseInt(rawCount) || 10, 1), 500); // 1 to 500 per batch
+      const type = req.body.tagType === 'NANO_GLASS' ? 'NANO_GLASS' : 'TRUNK_BADGE';
+      const batchNumber = rawBatch || `BATCH-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+      const withCodes = req.body.generatePairedCodes === true;
 
       const createdTags: any[] = [];
 
@@ -135,13 +140,24 @@ export class AdminController {
           continue;
         }
 
-        // Generate unique activationCode for package e.g. ACT-49821
-        const numPart = Math.floor(10000 + Math.random() * 90000);
-        const activationCode = `ACT-${numPart}`;
-        const actExists = await prisma.tag.findUnique({ where: { activationCode } });
-        if (actExists) {
-          i--;
-          continue;
+        let activationCodeStr: string | null = null;
+        if (withCodes) {
+          const numPart = Math.floor(1000 + Math.random() * 9000);
+          const alphaPart = chars.charAt(Math.floor(Math.random() * chars.length)) + chars.charAt(Math.floor(Math.random() * chars.length));
+          activationCodeStr = `ACT-${numPart}-${alphaPart}`;
+          const actExists = await prisma.activationCode.findUnique({ where: { code: activationCodeStr } });
+          if (actExists) {
+            i--;
+            continue;
+          }
+
+          await prisma.activationCode.create({
+            data: {
+              code: activationCodeStr,
+              isRedeemed: false,
+              batchNumber,
+            },
+          });
         }
 
         const secretToken = `sec_${uuidv4().replace(/-/g, '')}`;
@@ -156,11 +172,11 @@ export class AdminController {
           color: { dark: '#000000', light: '#FFFFFF' },
         });
 
+        // Create tag (no activationCode field in tags table)
         const tag = await prisma.tag.create({
           data: {
             tagCode,
             secretToken,
-            activationCode,
             tagType: type,
             status: 'IN_STOCK',
             batchNumber,
@@ -171,7 +187,7 @@ export class AdminController {
         createdTags.push({
           id: tag.id,
           tagCode: tag.tagCode,
-          activationCode: tag.activationCode,
+          activationCode: activationCodeStr,
           tagType: tag.tagType,
           status: tag.status,
           batchNumber: tag.batchNumber,
@@ -189,6 +205,54 @@ export class AdminController {
       });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر توليد دفعة الـ Tags' });
+    }
+  }
+
+  /**
+   * وحدة توليد دفعات أكواد التفعيل لكرت الباكدج (Activation Codes Generator)
+   */
+  static async generateActivationCodesBatch(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const rawCount = req.body.count ?? req.body.quantity;
+      const rawBatch = req.body.batchName || req.body.batchNumber;
+      const amount = Math.min(Math.max(parseInt(rawCount) || 10, 1), 500);
+      const batchNumber = rawBatch || `ACT-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const createdCodes: any[] = [];
+
+      for (let i = 0; i < amount; i++) {
+        const numPart = Math.floor(1000 + Math.random() * 9000);
+        const a1 = chars.charAt(Math.floor(Math.random() * chars.length));
+        const a2 = chars.charAt(Math.floor(Math.random() * chars.length));
+        const code = `ACT-${numPart}-${a1}${a2}`;
+
+        const exists = await prisma.activationCode.findUnique({ where: { code } });
+        if (exists) {
+          i--;
+          continue;
+        }
+
+        const act = await prisma.activationCode.create({
+          data: {
+            code,
+            isRedeemed: false,
+            batchNumber,
+          },
+        });
+
+        createdCodes.push(act);
+      }
+
+      res.status(201).json({
+        success: true,
+        message: `تم توليد ${createdCodes.length} كود تفعيل جديد بنجاح للدفعة (${batchNumber})`,
+        batchNumber,
+        count: createdCodes.length,
+        codes: createdCodes,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر توليد دفعة أكواد التفعيل' });
     }
   }
 
@@ -215,14 +279,66 @@ export class AdminController {
         include: {
           user: { select: { name: true, phone: true } },
           car: { select: { brand: true, model: true, colorName: true, plateNumber: true } },
+          activationCode: { select: { code: true, isRedeemed: true, redeemedAt: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: 100,
       });
 
-      res.json({ success: true, count: tags.length, tags });
+      const formattedTags = tags.map((t: any) => ({
+        ...t,
+        activationCode: t.activationCode?.code || null,
+        isRedeemed: t.activationCode?.isRedeemed || false,
+        redeemedAt: t.activationCode?.redeemedAt || null,
+      }));
+
+      res.json({ success: true, count: formattedTags.length, tags: formattedTags });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر جلب ملصقات الـ Tags' });
+    }
+  }
+
+  /**
+   * استعراض كافة أكواد التفعيل
+   */
+  static async listActivationCodes(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { status, search } = req.query;
+      let whereClause: any = {};
+      if (status === 'REDEEMED') {
+        whereClause.isRedeemed = true;
+      } else if (status === 'FRESH') {
+        whereClause.isRedeemed = false;
+      }
+      if (search && typeof search === 'string') {
+        whereClause.code = { contains: search.trim() };
+      }
+
+      const codes = await prisma.activationCode.findMany({
+        where: whereClause,
+        include: {
+          usedOnTag: {
+            select: {
+              tagCode: true,
+              tagType: true,
+              status: true,
+              car: {
+                select: {
+                  brand: true,
+                  model: true,
+                  plateNumber: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      });
+
+      res.json({ success: true, count: codes.length, codes });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر جلب أكواد التفعيل' });
     }
   }
 

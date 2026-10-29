@@ -195,77 +195,201 @@ body {
   animation: fadeIn 0.25s ease-out forwards;
 }
 
-/* Print Stylesheet for Tags & QR Codes */
-@media print {
-  body {
-    background: #fff !important;
-    color: #000 !important;
-  }
-  .no-print, header, aside, .btn-gold, .btn-ghost {
-    display: none !important;
-  }
-  .print-sheet {
-    display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 15px !important;
-    padding: 20px !important;
-  }
-  .print-tag-card {
-    border: 2px dashed #333 !important;
-    padding: 15px !important;
-    page-break-inside: avoid;
-    text-align: center !important;
-    background: #fff !important;
-    color: #000 !important;
-  }
-  .print-tag-card .qr-box {
-    box-shadow: none !important;
-    border: 1px solid #ddd !important;
-  }
-}
-
+/* ==========================================================================
+   PRINT STUDIO STYLESHEET (محرر الطباعة المتطور للمطابع والباكدج)
+   ========================================================================== */
 .qr-box svg {
   width: 128px !important;
   height: 128px !important;
   display: block !important;
 }
 
-/* In-Stock-only print mode: triggered by body.printing-instock */
+/* Base Print Sheet Classes */
+.print-sheet-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.print-sheet-grid.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.print-sheet-grid.cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* Printable Sticker Card */
+.print-tag-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(245, 190, 24, 0.3);
+  border-radius: 14px;
+  padding: 18px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  position: relative;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* Printable Packaging Activation Card */
+.print-activation-card {
+  background: #ffffff;
+  color: #111827;
+  border: 2px solid #1f2937;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  position: relative;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
 @media print {
-  body.printing-instock * {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-family: 'Cairo', sans-serif !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 1. Hide everything that should not be printed */
+  .no-print,
+  aside,
+  header,
+  nav,
+  button,
+  .btn-gold,
+  .btn-ghost,
+  .sidebar,
+  .top-navbar,
+  .toast-container,
+  form,
+  .search-box,
+  .filters-bar {
     display: none !important;
   }
-  body.printing-instock .instock-print-sheet,
-  body.printing-instock .instock-print-sheet * {
-    display: revert !important;
-  }
-  body.printing-instock .instock-print-sheet {
-    display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 16px !important;
-    padding: 20px !important;
-    background: #fff !important;
-  }
-  body.printing-instock .print-tag-card {
-    border: 2px dashed #333 !important;
-    padding: 15px !important;
-    page-break-inside: avoid !important;
-    text-align: center !important;
-    background: #fff !important;
-    color: #000 !important;
-    position: relative !important;
-  }
-  body.printing-instock .qr-box {
-    background: #fff !important;
+
+  /* 2. Reset containers to full width and transparent/white backgrounds */
+  #root,
+  .app-container,
+  .dashboard-layout,
+  main,
+  .main-content,
+  .glass-panel {
+    background: transparent !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
     box-shadow: none !important;
-    border: 1px solid #ddd !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* 3. The printable sheets */
+  .print-sheet-grid {
+    display: grid !important;
+    gap: 12mm !important;
+    padding: 5mm !important;
+  }
+
+  .print-sheet-grid.cols-3 {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  .print-sheet-grid.cols-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Stickers Sheet for Vehicle Badges */
+  .print-tag-card {
+    border: 1.5px dashed #333333 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border-radius: 12px !important;
+    padding: 14px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    text-align: center !important;
+    box-shadow: none !important;
+  }
+
+  .print-tag-card .tag-code {
+    color: #000000 !important;
+    font-weight: 900 !important;
+    font-size: 1.2rem !important;
+  }
+
+  .print-tag-card .qr-box {
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: 1px solid #cccccc !important;
+    margin: 0 auto 10px auto !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
   }
-  body.printing-instock .qr-box svg {
+
+  .print-tag-card .qr-box svg {
     display: block !important;
     width: 128px !important;
     height: 128px !important;
+  }
+
+  /* Activation Secret Cards for Package Insertion */
+  .print-activation-card {
+    border: 2px solid #000000 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border-radius: 14px !important;
+    padding: 18px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    text-align: center !important;
+    box-shadow: none !important;
+  }
+
+  .print-activation-card .act-code-box {
+    background: #f3f4f6 !important;
+    border: 2px dashed #000000 !important;
+    color: #000000 !important;
+    font-size: 1.25rem !important;
+    font-weight: 900 !important;
+    padding: 10px 14px !important;
+    margin: 10px 0 !important;
+  }
+
+  /* Modal Print Studio overlay during print */
+  .print-studio-modal {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+  }
+
+  .print-studio-toolbar {
+    display: none !important;
+  }
+
+  .print-studio-canvas {
+    background: #ffffff !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
   }
 }

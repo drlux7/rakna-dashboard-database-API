@@ -84,7 +84,6 @@ model Tag {
   id                    String         @id @default(uuid())
   tagCode               String         @unique // e.g. "#A247" or "TAG-8821"
   secretToken           String         @unique // Encrypted token embedded in NFC chip
-  activationCode        String?        @unique // Secret activation code/PIN sent in package
   tagType               String         @default("TRUNK_BADGE") // TRUNK_BADGE, NANO_GLASS
   status                String         @default("IN_STOCK") // IN_STOCK, UNASSIGNED, ACTIVE, PAUSED, REVOKED
   
@@ -103,8 +102,27 @@ model Tag {
   updatedAt             DateTime       @updatedAt
 
   scanLogs              TagScanLog[]
+  activationCode        ActivationCode? // The single activation code that was used to activate this tag
 
   @@map("tags")
+}
+
+// Activation codes printed on the cards inside the package
+model ActivationCode {
+  id              String    @id @default(uuid())
+  code            String    @unique // e.g. "ACT-8492-X1"
+  isRedeemed      Boolean   @default(false)
+  redeemedAt      DateTime?
+
+  // The tag this code was used on (set once, immutable thereafter)
+  usedOnTagId     String?   @unique
+  usedOnTag       Tag?      @relation(fields: [usedOnTagId], references: [id], onDelete: SetNull)
+
+  batchNumber     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("activation_codes")
 }
 
 model Chat {

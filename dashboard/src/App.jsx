@@ -88,12 +88,34 @@ export default function App() {
   const [orderFilter, setOrderFilter] = useState('ALL');
   const [govFilter, setGovFilter] = useState('ALL');
 
-  // Generator form
+  // Generator Sub-Tabs & Forms
+  const [genSubTab, setGenSubTab] = useState('stickers'); // 'stickers' | 'activation_cards'
+
+  // Vehicle Stickers (Tags) Generator
   const [genQuantity, setGenQuantity] = useState(10);
   const [genType, setGenType] = useState('TRUNK_BADGE');
   const [genBatch, setGenBatch] = useState('BATCH-2026-Q1');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedTags, setGeneratedTags] = useState([]);
+
+  // Activation Codes (Packaging Cards) Generator
+  const [actQuantity, setActQuantity] = useState(25);
+  const [actBatch, setActBatch] = useState('ACT-BATCH-2026-01');
+  const [isGeneratingAct, setIsGeneratingAct] = useState(false);
+  const [generatedActCodes, setGeneratedActCodes] = useState([]);
+  const [activationCodesList, setActivationCodesList] = useState([]);
+  const [actFilter, setActFilter] = useState('ALL');
+  const [actSearch, setActSearch] = useState('');
+
+  // Interactive Print Studio State
+  const [isPrintStudioOpen, setIsPrintStudioOpen] = useState(false);
+  const [printStudioType, setPrintStudioType] = useState('stickers'); // 'stickers' | 'activation_cards'
+  const [printStudioTitle, setPrintStudioTitle] = useState('');
+  const [printStudioSubtitle, setPrintStudioSubtitle] = useState('');
+  const [printStudioItems, setPrintStudioItems] = useState([]);
+  const [printColumns, setPrintColumns] = useState(3);
+  const [printShowCutLines, setPrintShowCutLines] = useState(true);
+  const [printShowHeader, setPrintShowHeader] = useState(true);
 
   const [waConfig, setWaConfig] = useState({
     provider: 'GREEN_API',
@@ -239,7 +261,7 @@ export default function App() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const [statsRes, tagsRes, ordersRes, usersRes, waRes, waConfRes, supportRes, abuseRes, quickRes, prodRes, banRes] = await Promise.all([
+      const [statsRes, tagsRes, ordersRes, usersRes, waRes, waConfRes, supportRes, abuseRes, quickRes, prodRes, banRes, actRes] = await Promise.all([
         api.getStats().catch(() => null),
         api.listTags().catch(() => null),
         api.listOrders().catch(() => null),
@@ -251,12 +273,14 @@ export default function App() {
         api.getQuickMessages().catch(() => null),
         api.getProducts().catch(() => null),
         api.getBanners().catch(() => null),
+        api.listActivationCodes().catch(() => null),
       ]);
 
       if (statsRes && statsRes.stats) setStats(statsRes.stats);
       if (tagsRes && tagsRes.tags) setTags(tagsRes.tags);
       if (ordersRes && ordersRes.orders) setOrders(ordersRes.orders);
       if (usersRes && usersRes.users) setUsersList(usersRes.users);
+      if (actRes && actRes.codes) setActivationCodesList(actRes.codes);
       if (waRes && waRes.messages) {
         setWhatsappMessages(waRes.messages);
         if (waRes.stats) setWhatsappStats(waRes.stats);
@@ -419,6 +443,41 @@ export default function App() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleGenerateActBatch = async (e) => {
+    e.preventDefault();
+    setIsGeneratingAct(true);
+    try {
+      const res = await api.generateActivationCodesBatch(Number(actQuantity), actBatch);
+      if (res.success) {
+        setGeneratedActCodes(res.codes);
+        showToast(`تم بنجاح توليد ${res.count} كود تفعيل سري وجاهز للطباعة والتعليب! 🎉`);
+        loadAllData();
+      }
+    } catch (err) {
+      alert(err.message || 'تعذر توليد دفعة كروت التفعيل');
+    } finally {
+      setIsGeneratingAct(false);
+    }
+  };
+
+  const openPrintStudioForStickers = (items, title, subtitle) => {
+    setPrintStudioType('stickers');
+    setPrintStudioTitle(title || 'شيت طباعة ملصقات السيارات والـ QR');
+    setPrintStudioSubtitle(subtitle || 'جاهزة للقص واللصق على هياكل وزجاج السيارات');
+    setPrintStudioItems(items);
+    setPrintColumns(3);
+    setIsPrintStudioOpen(true);
+  };
+
+  const openPrintStudioForActCards = (items, title, subtitle) => {
+    setPrintStudioType('activation_cards');
+    setPrintStudioTitle(title || 'شيت طباعة كروت أكواد التفعيل السرية');
+    setPrintStudioSubtitle(subtitle || 'تُطبع وتُوضع داخل كرتون العلبة ليستخدمها المشتري');
+    setPrintStudioItems(items);
+    setPrintColumns(2);
+    setIsPrintStudioOpen(true);
   };
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
@@ -1910,361 +1969,853 @@ export default function App() {
             </div>
           )}
 
-          {/* ════════════════ TAB 2: BATCH TAG GENERATOR ════════════════ */}
+          {/* ════════════════ TAB 2: SEPARATED GENERATOR & PRINT STUDIO ════════════════ */}
           {currentTab === 'generator' && (
             <div className="fade-in">
-              <div className="glass-panel" style={{ padding: '28px', marginBottom: '32px' }}>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', marginBottom: '8px' }}>
-                  توليد دفعة جديدة وطباعة الـ QR Codes للمطابع
-                </h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '24px' }}>
-                  يتم توليد الأكواد المشفرة مسبقاً وتخزينها في قاعدة البيانات مع مفاتيح NFC السرية لضمان عدم التزييف وسرعة الربط مع السيارات.
-                </p>
+              {/* Generator Sub-Tabs Switcher */}
+              <div className="no-print" style={{
+                display: 'flex',
+                gap: '12px',
+                marginBottom: '28px',
+                borderBottom: '1px solid var(--border-subtle)',
+                paddingBottom: '14px',
+                flexWrap: 'wrap',
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setGenSubTab('stickers')}
+                  className={genSubTab === 'stickers' ? 'btn-gold' : 'btn-ghost'}
+                  style={{ fontSize: '0.92rem', padding: '10px 18px', gap: '8px' }}
+                >
+                  <QrCode size={18} />
+                  <span>🏷️ توليد وطباعة ملصقات الـ Tags (QR Codes) للمطابع</span>
+                </button>
 
-                <form onSubmit={handleGenerateBatch} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', alignItems: 'end' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                      نوع الملصق (Tag Type)
-                    </label>
-                    <select
-                      value={genType}
-                      onChange={(e) => setGenType(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '12px',
-                        background: 'var(--bg-input)',
-                        color: '#fff',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: '10px',
-                        fontFamily: 'var(--font-arabic)',
-                      }}
-                    >
-                      <option value="TRUNK_BADGE">ملصق شنطة السيارة المدرع (Trunk Badge)</option>
-                      <option value="NANO_GLASS">ملصق الزجاج الشفاف (Nano Glass Tag)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                      الكمية المطلوبة
-                    </label>
-                    <select
-                      value={genQuantity}
-                      onChange={(e) => setGenQuantity(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '12px',
-                        background: 'var(--bg-input)',
-                        color: '#fff',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: '10px',
-                        fontFamily: 'var(--font-arabic)',
-                      }}
-                    >
-                      <option value={5}>5 ملصقات تجريبية</option>
-                      <option value={10}>10 ملصقات</option>
-                      <option value={25}>25 ملصق</option>
-                      <option value={50}>50 ملصق (شيت مطبعة كامل)</option>
-                      <option value={100}>100 ملصق</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                      رقم دفعة الإنتاج (Batch No.)
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={genBatch}
-                      onChange={(e) => setGenBatch(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '12px',
-                        background: 'var(--bg-input)',
-                        color: '#fff',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: '10px',
-                        fontFamily: 'var(--font-mono)',
-                        direction: 'ltr',
-                      }}
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isGenerating}
-                    className="btn-gold"
-                    style={{ height: '48px', fontSize: '0.95rem' }}
-                  >
-                    <QrCode size={18} />
-                    <span>{isGenerating ? 'جاري التوليد...' : 'توليد الرموز المشفرة الآن'}</span>
-                  </button>
-                </form>
+                <button
+                  type="button"
+                  onClick={() => setGenSubTab('activation_cards')}
+                  className={genSubTab === 'activation_cards' ? 'btn-gold' : 'btn-ghost'}
+                  style={{ fontSize: '0.92rem', padding: '10px 18px', gap: '8px' }}
+                >
+                  <Key size={18} />
+                  <span>🔐 توليد وطباعة كروت أكواد التفعيل (Activation Cards) للعلبة</span>
+                </button>
               </div>
 
-              {/* Generated Result Preview & Print Action */}
-              {generatedTags.length > 0 && (
-                <div className="glass-panel" style={{ padding: '28px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
-                    <div>
-                      <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff' }}>
-                        الدفعة المولدة حديثاً: {genBatch} ({generatedTags.length} ملصق)
+              {/* ──────────────── SUB-TAB 1: VEHICLE STICKERS (TAGS) ──────────────── */}
+              {genSubTab === 'stickers' && (
+                <div>
+                  <div className="glass-panel" style={{ padding: '28px', marginBottom: '32px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '12px' }}>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <QrCode size={22} color="var(--gold-primary)" />
+                        توليد دفعة ملصقات سيارات جديدة (QR Codes للمطابع)
                       </h3>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                        رموز QR عالية الدقة المتجهة جاهزة للتصدير والطباعة.
-                      </p>
+                      <span style={{ fontSize: '0.78rem', background: 'rgba(245, 190, 24, 0.12)', color: 'var(--gold-primary)', padding: '4px 10px', borderRadius: '12px', border: '1px solid rgba(245, 190, 24, 0.3)' }}>
+                        شيتات طباعة ملصقات السيارات
+                      </span>
                     </div>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '24px' }}>
+                      توليد ملصقات الـ QR المشفرة وشريحة NFC المخصصة للصق على زجاج وشنط السيارات. الأكواد سرية ولا يُطبع عليها كود التفعيل لحمايتها من السرقة في الشارع.
+                    </p>
 
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <button
-                        onClick={() => window.print()}
-                        className="btn-gold"
-                        style={{ fontSize: '0.88rem' }}
-                      >
-                        <Printer size={16} />
-                        <span>طباعة بطاقات الـ QR (Print Sheet)</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* QR Grid Cards */}
-                  <div className="print-sheet" style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
-                    gap: '20px',
-                  }}>
-                    {generatedTags.map((t) => (
-                      <div
-                        key={t.id}
-                        className="print-tag-card"
-                        style={{
-                          background: 'var(--bg-card)',
-                          border: '1px solid rgba(245, 190, 24, 0.25)',
-                          borderRadius: '14px',
-                          padding: '20px',
-                          textAlign: 'center',
-                          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-                        }}
-                      >
-                        <div style={{ fontSize: '0.72rem', color: 'var(--gold-primary)', fontWeight: 800, letterSpacing: '1px', marginBottom: '8px' }}>
-                          RAKNA VERITAG™
-                        </div>
-
-                        {/* Render SVG QR */}
-                        <div
-                          className="qr-box"
+                    <form onSubmit={handleGenerateBatch} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', alignItems: 'end' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                          نوع الملصق (Tag Type)
+                        </label>
+                        <select
+                          value={genType}
+                          onChange={(e) => setGenType(e.target.value)}
                           style={{
-                            background: '#ffffff',
-                            padding: '8px',
-                            borderRadius: '12px',
-                            width: '144px',
-                            height: '144px',
-                            margin: '0 auto 12px auto',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
+                            width: '100%',
+                            padding: '12px',
+                            background: 'var(--bg-input)',
+                            color: '#fff',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: '10px',
+                            fontFamily: 'var(--font-arabic)',
                           }}
-                          dangerouslySetInnerHTML={{
-                            __html: (t.qrCodeSvg || '')
-                              .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;" ')
+                        >
+                          <option value="TRUNK_BADGE">ملصق شنطة السيارة المدرع (Trunk Badge)</option>
+                          <option value="NANO_GLASS">ملصق الزجاج الشفاف (Nano Glass Tag)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                          الكمية المطلوبة
+                        </label>
+                        <select
+                          value={genQuantity}
+                          onChange={(e) => setGenQuantity(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '12px',
+                            background: 'var(--bg-input)',
+                            color: '#fff',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: '10px',
+                            fontFamily: 'var(--font-arabic)',
+                          }}
+                        >
+                          <option value={5}>5 ملصقات تجريبية</option>
+                          <option value={10}>10 ملصقات</option>
+                          <option value={25}>25 ملصق</option>
+                          <option value={50}>50 ملصق (شيت مطبعة كامل)</option>
+                          <option value={100}>100 ملصق</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                          رقم دفعة الإنتاج (Batch No.)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={genBatch}
+                          onChange={(e) => setGenBatch(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '12px',
+                            background: 'var(--bg-input)',
+                            color: '#fff',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: '10px',
+                            fontFamily: 'var(--font-mono)',
+                            direction: 'ltr',
                           }}
                         />
-
-                        <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#fff' }} className="tag-code">
-                          {t.tagCode}
-                        </div>
-
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                          {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
-                        </div>
-
-                        {t.activationCode && (
-                          <div style={{
-                            margin: '10px 0 6px',
-                            padding: '6px 10px',
-                            background: 'rgba(212, 175, 55, 0.12)',
-                            border: '1px dashed var(--gold-primary)',
-                            borderRadius: '8px',
-                          }}>
-                            <div style={{ fontSize: '0.65rem', color: 'var(--gold-primary)', fontWeight: 700 }}>
-                              كود التفعيل (Activation Code) للباكدج:
-                            </div>
-                            <div style={{ fontSize: '0.92rem', fontWeight: 900, color: '#fff', letterSpacing: '1px', fontFamily: 'var(--font-mono)' }}>
-                              {t.activationCode}
-                            </div>
-                          </div>
-                        )}
-
-                        <div style={{
-                          fontSize: '0.65rem',
-                          color: '#6b7280',
-                          fontFamily: 'var(--font-mono)',
-                          marginTop: '6px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}>
-                          NFC: {t.secretToken?.substring(0, 16)}...
-                        </div>
                       </div>
-                    ))}
+
+                      <button
+                        type="submit"
+                        disabled={isGenerating}
+                        className="btn-gold"
+                        style={{ height: '48px', fontSize: '0.95rem' }}
+                      >
+                        <QrCode size={18} />
+                        <span>{isGenerating ? 'جاري التوليد...' : 'توليد ملصقات الـ QR الآن'}</span>
+                      </button>
+                    </form>
                   </div>
-                </div>
-              )}
 
-              {/* ════════ IN-STOCK QR PRINT SECTION ════════ */}
-              {(() => {
-                const inStockTags = tags.filter((t) => t.status === 'IN_STOCK');
-                return (
-                  <div className="glass-panel" style={{ padding: '28px', marginTop: '32px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
-                      <div>
-                        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <Package size={22} color="var(--gold-primary)" />
-                          المخزون الجاهز للطباعة — IN STOCK
-                        </h3>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.87rem', marginTop: '6px' }}>
-                          الملصقات التالية ({inStockTags.length} ملصق) موجودة في المخزن ولم تُسلَّم بعد — جاهزة للطباعة والتعبئة.
-                        </p>
-                      </div>
-                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                        {inStockTags.length > 0 && (
+                  {/* Generated Result Preview & Print Action */}
+                  {generatedTags.length > 0 && (
+                    <div className="glass-panel" style={{ padding: '28px', marginBottom: '32px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+                        <div>
+                          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff' }}>
+                            الدفعة المولدة حديثاً: {genBatch} ({generatedTags.length} ملصق)
+                          </h3>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                            رموز QR عالية الدقة المتجهة جاهزة للتصدير والطباعة.
+                          </p>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
                           <button
-                            id="btn-print-instock"
-                            onClick={() => {
-                              document.body.classList.add('printing-instock');
-                              window.print();
-                              setTimeout(() => document.body.classList.remove('printing-instock'), 1200);
-                            }}
+                            type="button"
+                            onClick={() => openPrintStudioForStickers(generatedTags, `دفعة ملصقات: ${genBatch}`, 'جاهزة للطباعة على ورق الملصقات للمطابع')}
                             className="btn-gold"
-                            style={{ fontSize: '0.88rem' }}
+                            style={{ fontSize: '0.88rem', gap: '8px' }}
                           >
                             <Printer size={16} />
-                            <span>طباعة المخزون فقط ({inStockTags.length})</span>
+                            <span>فتح محرر الطباعة للدفعة ({generatedTags.length})</span>
                           </button>
-                        )}
-                        <button
-                          onClick={() => { setTagFilter('IN_STOCK'); setCurrentTab('tags'); }}
-                          className="btn-ghost"
-                          style={{ fontSize: '0.85rem' }}
-                        >
-                          <Eye size={15} />
-                          <span>عرض في جدول دليل الملصقات</span>
-                        </button>
+                        </div>
                       </div>
-                    </div>
 
-                    {inStockTags.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
-                        <Package size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
-                        <p style={{ fontSize: '1rem' }}>لا توجد ملصقات في المخزن حالياً.</p>
-                        <p style={{ fontSize: '0.85rem', marginTop: '8px' }}>قم بتوليد دفعة جديدة من القسم أعلاه.</p>
-                      </div>
-                    ) : (
-                      <div
-                        id="instock-print-sheet"
-                        className="instock-print-sheet"
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
-                          gap: '20px',
-                        }}
-                      >
-                        {inStockTags.map((t) => (
-                          <div
-                            key={t.id}
-                            className="print-tag-card"
-                            style={{
-                              background: 'var(--bg-card)',
-                              border: '1px solid rgba(245, 190, 24, 0.3)',
-                              borderRadius: '14px',
-                              padding: '20px',
-                              textAlign: 'center',
-                              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-                              position: 'relative',
-                            }}
-                          >
-                            <div style={{
-                              position: 'absolute',
-                              top: '10px',
-                              left: '10px',
-                              background: 'rgba(34,197,94,0.15)',
-                              border: '1px solid rgba(34,197,94,0.4)',
-                              color: '#4ade80',
-                              fontSize: '0.6rem',
-                              fontWeight: 800,
-                              padding: '2px 7px',
-                              borderRadius: '6px',
-                              letterSpacing: '0.5px',
-                            }}>
-                              IN STOCK
-                            </div>
-
-                            <div style={{ fontSize: '0.72rem', color: 'var(--gold-primary)', fontWeight: 800, letterSpacing: '1px', marginBottom: '8px', marginTop: '4px' }}>
+                      {/* QR Grid Cards Preview */}
+                      <div className="print-sheet-grid cols-3">
+                        {generatedTags.map((t) => (
+                          <div key={t.id} className="print-tag-card">
+                            <div style={{ fontSize: '0.72rem', color: 'var(--gold-primary)', fontWeight: 800, letterSpacing: '1px', marginBottom: '8px' }}>
                               RAKNA VERITAG™
                             </div>
-
                             <div
                               className="qr-box"
-                              style={{
-                                background: '#ffffff',
-                                padding: '8px',
-                                borderRadius: '12px',
-                                width: '144px',
-                                height: '144px',
-                                margin: '0 auto 12px auto',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
-                              }}
                               dangerouslySetInnerHTML={{
                                 __html: (t.qrCodeSvg || '')
                                   .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;" ')
                               }}
                             />
-
-                            <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#fff' }} className="tag-code">
+                            <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#fff' }} className="tag-code">
                               {t.tagCode}
                             </div>
-
                             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                               {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
                             </div>
-
-                            {t.activationCode && (
-                              <div style={{
-                                margin: '10px 0 6px',
-                                padding: '6px 10px',
-                                background: 'rgba(212, 175, 55, 0.12)',
-                                border: '1px dashed var(--gold-primary)',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
+                            <div
+                              style={{ fontSize: '0.65rem', color: '#9ca3af', fontFamily: 'var(--font-mono)', marginTop: '6px', cursor: 'pointer' }}
+                              title={`اضغط لنسخ الرمز المشفر بالكامل: ${t.secretToken}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (t.secretToken) {
+                                  navigator.clipboard.writeText(t.secretToken);
+                                  alert(`تم نسخ رمز الشريحة الكامل:\n${t.secretToken}`);
+                                }
                               }}
-                              onClick={() => handleCopyCode(t.activationCode)}
-                              title="انقر لنسخ كود التفعيل"
-                              >
-                                <div style={{ fontSize: '0.62rem', color: 'var(--gold-primary)', fontWeight: 700 }}>
-                                  كود التفعيل:
-                                </div>
-                                <div style={{ fontSize: '0.88rem', fontWeight: 900, color: '#fff', letterSpacing: '1px', fontFamily: 'var(--font-mono)' }}>
-                                  {t.activationCode}
-                                </div>
-                              </div>
-                            )}
-
-                            <div style={{ fontSize: '0.62rem', color: '#6b7280', fontFamily: 'var(--font-mono)', marginTop: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              NFC: {t.secretToken?.substring(0, 16)}...
+                            >
+                              NFC: {t.secretToken?.substring(0, 16)}... 📋
                             </div>
                           </div>
                         ))}
                       </div>
-                    )}
+                    </div>
+                  )}
+
+                  {/* IN-STOCK QR PRINT SECTION */}
+                  {(() => {
+                    const inStockTags = tags.filter((t) => t.status === 'IN_STOCK');
+                    return (
+                      <div className="glass-panel" style={{ padding: '28px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
+                          <div>
+                            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <Package size={22} color="var(--gold-primary)" />
+                              المخزون الجاهز للطباعة — IN STOCK
+                            </h3>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.87rem', marginTop: '6px' }}>
+                              الملصقات التالية ({inStockTags.length} ملصق) موجودة في المخزن ولم تُسلَّم بعد — جاهزة للطباعة والقص.
+                            </p>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            {inStockTags.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => openPrintStudioForStickers(inStockTags, 'مخزون ملصقات السيارات الجاهز للطباعة', 'ملصقات المخزن IN STOCK')}
+                                className="btn-gold"
+                                style={{ fontSize: '0.88rem', gap: '8px' }}
+                              >
+                                <Printer size={16} />
+                                <span>محرر طباعة المخزون ({inStockTags.length})</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => { setTagFilter('IN_STOCK'); setCurrentTab('tags'); }}
+                              className="btn-ghost"
+                              style={{ fontSize: '0.85rem' }}
+                            >
+                              <Eye size={15} />
+                              <span>عرض في جدول دليل الملصقات</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {inStockTags.length === 0 ? (
+                          <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
+                            <Package size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
+                            <p style={{ fontSize: '1rem' }}>لا توجد ملصقات في المخزن حالياً.</p>
+                            <p style={{ fontSize: '0.85rem', marginTop: '8px' }}>قم بتوليد دفعة جديدة من النموذج أعلاه.</p>
+                          </div>
+                        ) : (
+                          <div className="print-sheet-grid cols-3">
+                            {inStockTags.map((t) => (
+                              <div key={t.id} className="print-tag-card">
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '10px',
+                                  left: '10px',
+                                  background: 'rgba(34,197,94,0.15)',
+                                  border: '1px solid rgba(34,197,94,0.4)',
+                                  color: '#4ade80',
+                                  fontSize: '0.6rem',
+                                  fontWeight: 800,
+                                  padding: '2px 7px',
+                                  borderRadius: '6px',
+                                  letterSpacing: '0.5px',
+                                }}>
+                                  IN STOCK
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--gold-primary)', fontWeight: 800, letterSpacing: '1px', marginBottom: '8px', marginTop: '4px' }}>
+                                  RAKNA VERITAG™
+                                </div>
+                                <div
+                                  className="qr-box"
+                                  dangerouslySetInnerHTML={{
+                                    __html: (t.qrCodeSvg || '')
+                                      .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;" ')
+                                  }}
+                                />
+                                <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#fff' }} className="tag-code">
+                                  {t.tagCode}
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                  {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
+                                </div>
+                                <div
+                                  style={{ fontSize: '0.62rem', color: '#9ca3af', fontFamily: 'var(--font-mono)', marginTop: '6px', cursor: 'pointer' }}
+                                  title={`اضغط لنسخ الرمز المشفر بالكامل: ${t.secretToken}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (t.secretToken) {
+                                      navigator.clipboard.writeText(t.secretToken);
+                                      alert(`تم نسخ رمز الشريحة الكامل:\n${t.secretToken}`);
+                                    }
+                                  }}
+                                >
+                                  NFC: {t.secretToken?.substring(0, 16)}... 📋
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* ──────────────── SUB-TAB 2: ACTIVATION CODES (PACKAGE CARDS) ──────────────── */}
+              {genSubTab === 'activation_cards' && (
+                <div>
+                  <div className="glass-panel" style={{ padding: '28px', marginBottom: '32px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '12px' }}>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <Key size={22} color="var(--gold-primary)" />
+                        توليد دفعة كروت أكواد التفعيل (Secret Activation Cards)
+                      </h3>
+                      <span style={{ fontSize: '0.78rem', background: 'rgba(56, 189, 248, 0.12)', color: '#38bdf8', padding: '4px 10px', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                        كروت التعليب داخل العلبة
+                      </span>
+                    </div>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '24px' }}>
+                      قسم مستقل تماماً لتوليد كروت التفعيل المطبوعة التي توضع سرياً داخل علبة المنتج. يستخدمها المشتري عند فتح التطبيق لربط الملصق بسيارته وحرق الكود فورياً.
+                    </p>
+
+                    <form onSubmit={handleGenerateActBatch} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', alignItems: 'end' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                          عدد كروت التفعيل المطلوبة
+                        </label>
+                        <select
+                          value={actQuantity}
+                          onChange={(e) => setActQuantity(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '12px',
+                            background: 'var(--bg-input)',
+                            color: '#fff',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: '10px',
+                            fontFamily: 'var(--font-arabic)',
+                          }}
+                        >
+                          <option value={10}>10 كروت تفعيل</option>
+                          <option value={25}>25 كرت تفعيل</option>
+                          <option value={50}>50 كرت (دفعة تعليب كاملة)</option>
+                          <option value={100}>100 كرت تفعيل</option>
+                          <option value={200}>200 كرت تفعيل</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                          رقم دفعة الكروت (Batch No.)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={actBatch}
+                          onChange={(e) => setActBatch(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '12px',
+                            background: 'var(--bg-input)',
+                            color: '#fff',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: '10px',
+                            fontFamily: 'var(--font-mono)',
+                            direction: 'ltr',
+                          }}
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isGeneratingAct}
+                        className="btn-gold"
+                        style={{ height: '48px', fontSize: '0.95rem' }}
+                      >
+                        <Key size={18} />
+                        <span>{isGeneratingAct ? 'جاري التوليد...' : 'توليد كروت التفعيل الآن'}</span>
+                      </button>
+                    </form>
                   </div>
-                );
-              })()}
+
+                  {/* Generated Activation Cards Preview */}
+                  {generatedActCodes.length > 0 && (
+                    <div className="glass-panel" style={{ padding: '28px', marginBottom: '32px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+                        <div>
+                          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff' }}>
+                            كروت التفعيل المولدة حديثاً: {actBatch} ({generatedActCodes.length} كرت)
+                          </h3>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                            كروت جاهزة للطباعة على ورق كوشيه مقوى لقصها ووضعها داخل علبة المنتج.
+                          </p>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <button
+                            type="button"
+                            onClick={() => openPrintStudioForActCards(generatedActCodes, `دفعة كروت التفعيل: ${actBatch}`, 'كروت التفعيل السرية داخل العلبة')}
+                            className="btn-gold"
+                            style={{ fontSize: '0.88rem', gap: '8px' }}
+                          >
+                            <Printer size={16} />
+                            <span>فتح محرر طباعة الكروت ({generatedActCodes.length})</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Cards Grid Preview */}
+                      <div className="print-sheet-grid cols-2">
+                        {generatedActCodes.map((c) => (
+                          <div key={c.id || c.code} className="print-activation-card">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px', marginBottom: '12px' }}>
+                              <span style={{ fontWeight: 900, color: '#111827', fontSize: '0.95rem' }}>🚗 ركنة RAKNA</span>
+                              <span style={{ fontSize: '0.72rem', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '10px', fontWeight: 700 }}>
+                                كرت تفعيل سري
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: '#4b5563', marginBottom: '6px' }}>
+                              كود التفعيل السري المخصص للسيارة:
+                            </div>
+                            <div className="act-code-box" style={{
+                              background: '#f8fafc',
+                              border: '2px dashed #0284c7',
+                              color: '#0f172a',
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '1.4rem',
+                              fontWeight: 900,
+                              letterSpacing: '2px',
+                              padding: '10px',
+                              borderRadius: '8px',
+                              margin: '10px 0',
+                            }}>
+                              {c.code}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#6b7280', lineHeight: '1.5', marginTop: '10px' }}>
+                              1. امسح رمز الـ QR على ملصق سيارتك.<br />
+                              2. ادخل هذا الكود داخل تطبيق ركنة لتفعيل الحماية فورياً.
+                            </div>
+                            <div style={{ fontSize: '0.65rem', color: '#9ca3af', marginTop: '8px', borderTop: '1px solid #f3f4f6', paddingTop: '6px' }}>
+                              الدفعة: {c.batchNumber || actBatch} • صالح للاستخدام مرة واحدة
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Registered Activation Codes Inventory */}
+                  {(() => {
+                    let list = activationCodesList;
+                    if (actFilter === 'FRESH') list = list.filter((c) => !c.isRedeemed);
+                    if (actFilter === 'REDEEMED') list = list.filter((c) => c.isRedeemed);
+                    if (actSearch.trim()) {
+                      list = list.filter((c) => c.code.toLowerCase().includes(actSearch.trim().toLowerCase()));
+                    }
+                    const freshCount = activationCodesList.filter((c) => !c.isRedeemed).length;
+
+                    return (
+                      <div className="glass-panel" style={{ padding: '28px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
+                          <div>
+                            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <Package size={22} color="var(--gold-primary)" />
+                              سجل كروت التفعيل بالمخزن ({activationCodesList.length})
+                            </h3>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.87rem', marginTop: '4px' }}>
+                              لديك ({freshCount}) كرت تفعيل جاهز للتعليب غير مستخدم حالياً.
+                            </p>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            {freshCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => openPrintStudioForActCards(activationCodesList.filter((c) => !c.isRedeemed), 'كروت التفعيل الجاهزة للتعليب', 'كروت غير مستخدمة بالمخزن')}
+                                className="btn-gold"
+                                style={{ fontSize: '0.88rem', gap: '8px' }}
+                              >
+                                <Printer size={16} />
+                                <span>طباعة الكروت الجاهزة للتعليب ({freshCount})</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Search and Filter Bar */}
+                        <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                          <input
+                            type="text"
+                            placeholder="بحث بكود التفعيل (مثل ACT-...)"
+                            value={actSearch}
+                            onChange={(e) => setActSearch(e.target.value)}
+                            style={{
+                              padding: '8px 14px',
+                              background: 'var(--bg-input)',
+                              color: '#fff',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: '8px',
+                              fontSize: '0.85rem',
+                              minWidth: '220px',
+                            }}
+                          />
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => setActFilter('ALL')}
+                              className={actFilter === 'ALL' ? 'btn-gold' : 'btn-ghost'}
+                              style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+                            >
+                              الكل ({activationCodesList.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActFilter('FRESH')}
+                              className={actFilter === 'FRESH' ? 'btn-gold' : 'btn-ghost'}
+                              style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+                            >
+                              جاهزة للتعليب ({freshCount})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActFilter('REDEEMED')}
+                              className={actFilter === 'REDEEMED' ? 'btn-gold' : 'btn-ghost'}
+                              style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+                            >
+                              مستخدمة ومحروقة ({activationCodesList.length - freshCount})
+                            </button>
+                          </div>
+                        </div>
+
+                        {list.length === 0 ? (
+                          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                            لا توجد كروت تفعيل مطابقة للبحث أو الفلتر الحالي.
+                          </div>
+                        ) : (
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
+                              <thead>
+                                <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+                                  <th style={{ padding: '12px' }}>كود التفعيل</th>
+                                  <th style={{ padding: '12px' }}>الحالة</th>
+                                  <th style={{ padding: '12px' }}>الدفعة</th>
+                                  <th style={{ padding: '12px' }}>التاج المستهلك</th>
+                                  <th style={{ padding: '12px' }}>السيارة المرتبطة</th>
+                                  <th style={{ padding: '12px' }}>تاريخ الاستخدام</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {list.map((c) => (
+                                  <tr key={c.id || c.code} style={{ borderBottom: '1px solid var(--border-subtle)', fontSize: '0.88rem' }}>
+                                    <td style={{ padding: '12px' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopyCode(c.code)}
+                                        style={{
+                                          background: 'rgba(212, 175, 55, 0.1)',
+                                          border: '1px solid rgba(212, 175, 55, 0.25)',
+                                          color: 'var(--gold-primary)',
+                                          fontFamily: 'var(--font-mono)',
+                                          fontSize: '0.85rem',
+                                          fontWeight: 800,
+                                          padding: '4px 8px',
+                                          borderRadius: '6px',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '4px',
+                                        }}
+                                      >
+                                        <span>{c.code}</span>
+                                        <span style={{ fontSize: '0.7rem' }}>📋</span>
+                                      </button>
+                                    </td>
+                                    <td style={{ padding: '12px' }}>
+                                      {c.isRedeemed ? (
+                                        <span className="badge badge-paused">مستخدم (محروق) 🔒</span>
+                                      ) : (
+                                        <span className="badge badge-active">جاهز للتعليب 🟢</span>
+                                      )}
+                                    </td>
+                                    <td style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                      {c.batchNumber || '-'}
+                                    </td>
+                                    <td style={{ padding: '12px' }}>
+                                      {c.usedOnTag ? (
+                                        <span className="tag-code">{c.usedOnTag.tagCode}</span>
+                                      ) : (
+                                        <span style={{ color: 'var(--text-muted)' }}>-</span>
+                                      )}
+                                    </td>
+                                    <td style={{ padding: '12px' }}>
+                                      {c.usedOnTag?.car ? (
+                                        <span>{c.usedOnTag.car.brand} {c.usedOnTag.car.model}</span>
+                                      ) : (
+                                        <span style={{ color: 'var(--text-muted)' }}>-</span>
+                                      )}
+                                    </td>
+                                    <td style={{ padding: '12px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                      {c.redeemedAt ? new Date(c.redeemedAt).toLocaleDateString('ar-EG') : 'لم يُستخدم بعد'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* ════════════════ INTERACTIVE PRINT STUDIO MODAL ════════════════ */}
+              {isPrintStudioOpen && (
+                <div
+                  className="print-studio-modal"
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(5, 7, 10, 0.94)',
+                    backdropFilter: 'blur(10px)',
+                    zIndex: 10000,
+                    overflowY: 'auto',
+                    padding: '24px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                  }}
+                >
+                  {/* Sticky Studio Toolbar (Hidden in Print) */}
+                  <div
+                    className="no-print print-studio-toolbar"
+                    style={{
+                      width: '100%',
+                      maxWidth: '920px',
+                      background: 'rgba(20, 26, 40, 0.95)',
+                      border: '1px solid var(--gold-primary)',
+                      borderRadius: '16px',
+                      padding: '16px 22px',
+                      marginBottom: '20px',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '14px',
+                      position: 'sticky',
+                      top: '16px',
+                      zIndex: 10001,
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Printer size={20} color="var(--gold-primary)" />
+                        <h4 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 800 }}>
+                          محرر الطباعة المباشر • Print Studio
+                        </h4>
+                      </div>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginTop: '3px' }}>
+                        {printStudioTitle} • ({printStudioItems.length} عنصر جاهز للطباعة)
+                      </p>
+                    </div>
+
+                    {/* Toolbar Controls */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', borderRadius: '8px', padding: '3px', border: '1px solid var(--border-subtle)' }}>
+                        <button
+                          type="button"
+                          onClick={() => setPrintColumns(3)}
+                          className={printColumns === 3 ? 'btn-gold' : 'btn-ghost'}
+                          style={{ fontSize: '0.75rem', padding: '5px 10px', borderRadius: '6px' }}
+                        >
+                          3 أعمدة (A4)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPrintColumns(2)}
+                          className={printColumns === 2 ? 'btn-gold' : 'btn-ghost'}
+                          style={{ fontSize: '0.75rem', padding: '5px 10px', borderRadius: '6px' }}
+                        >
+                          عمودين (كروت عريضة)
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setPrintShowCutLines(!printShowCutLines)}
+                        className="btn-ghost"
+                        style={{ fontSize: '0.78rem', padding: '6px 12px', border: printShowCutLines ? '1px solid var(--gold-primary)' : '1px solid var(--border-subtle)' }}
+                      >
+                        ✂️ خطوط القص: {printShowCutLines ? 'مفعّلة' : 'مخفية'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPrintShowHeader(!printShowHeader)}
+                        className="btn-ghost"
+                        style={{ fontSize: '0.78rem', padding: '6px 12px', border: printShowHeader ? '1px solid var(--gold-primary)' : '1px solid var(--border-subtle)' }}
+                      >
+                        🏢 الترويسة: {printShowHeader ? 'مفعّلة' : 'مخفية'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="btn-gold"
+                        style={{ padding: '8px 20px', fontSize: '0.9rem', fontWeight: 800, gap: '8px' }}
+                      >
+                        <Printer size={18} />
+                        <span>طباعة الآن (Print)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsPrintStudioOpen(false)}
+                        className="btn-ghost"
+                        style={{ padding: '8px 14px', fontSize: '0.9rem', color: '#f87171' }}
+                        title="إغلاق المحرر"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* WYSIWYG Print Canvas (Prints to Paper) */}
+                  <div
+                    className="printable-area print-studio-canvas"
+                    style={{
+                      width: '100%',
+                      maxWidth: '850px',
+                      background: '#ffffff',
+                      color: '#000000',
+                      borderRadius: '12px',
+                      padding: '30px',
+                      boxShadow: '0 12px 48px rgba(0,0,0,0.8)',
+                      minHeight: '600px',
+                    }}
+                  >
+                    {/* Printable Header */}
+                    {printShowHeader && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderBottom: '2px solid #000000',
+                        paddingBottom: '14px',
+                        marginBottom: '24px',
+                      }}>
+                        <div>
+                          <h2 style={{ fontSize: '1.4rem', fontWeight: 900, color: '#000', margin: 0 }}>
+                            ركنة RAKNA • {printStudioTitle}
+                          </h2>
+                          <div style={{ fontSize: '0.85rem', color: '#4b5563', marginTop: '4px' }}>
+                            {printStudioSubtitle} • التاريخ: {new Date().toLocaleDateString('ar-EG')}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: '#374151' }}>
+                          <div>TOTAL: {printStudioItems.length} UNITS</div>
+                          <div style={{ fontWeight: 800 }}>VERITAG SYSTEM</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Printable Grid */}
+                    <div className={`print-sheet-grid cols-${printColumns}`}>
+                      {printStudioType === 'stickers' ? (
+                        printStudioItems.map((t) => (
+                          <div
+                            key={t.id || t.tagCode}
+                            className="print-sticker-card"
+                            style={{
+                              border: printShowCutLines ? '1.5px dashed #333333' : '1px solid #e5e7eb',
+                              padding: '16px',
+                              textAlign: 'center',
+                              borderRadius: '10px',
+                            }}
+                          >
+                            <div style={{ fontSize: '0.72rem', color: '#000000', fontWeight: 900, letterSpacing: '1px', marginBottom: '8px' }}>
+                              RAKNA VERITAG™
+                            </div>
+                            <div
+                              className="qr-box"
+                              dangerouslySetInnerHTML={{
+                                __html: (t.qrCodeSvg || '')
+                                  .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;" ')
+                              }}
+                            />
+                            <div style={{ fontWeight: 900, fontSize: '1.2rem', color: '#000' }} className="tag-code">
+                              {t.tagCode}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#4b5563', marginTop: '4px' }}>
+                              {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
+                            </div>
+                            <div style={{ fontSize: '0.62rem', color: '#6b7280', fontFamily: 'var(--font-mono)', marginTop: '6px' }}>
+                              NFC: {t.secretToken?.substring(0, 16)}...
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        printStudioItems.map((c) => (
+                          <div
+                            key={c.id || c.code}
+                            className="print-activation-card"
+                            style={{
+                              border: printShowCutLines ? '2px dashed #000000' : '2px solid #000000',
+                              padding: '20px',
+                              textAlign: 'center',
+                              borderRadius: '12px',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid #000000', paddingBottom: '8px', marginBottom: '12px' }}>
+                              <span style={{ fontWeight: 900, color: '#000000', fontSize: '1.05rem' }}>🚗 ركنة RAKNA</span>
+                              <span style={{ fontSize: '0.75rem', border: '1px solid #000000', padding: '2px 8px', borderRadius: '4px', fontWeight: 800 }}>
+                                كرت تفعيل باكدج
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: '#1f2937', fontWeight: 700, marginBottom: '6px' }}>
+                              كود التفعيل السري المخصص للعلبة:
+                            </div>
+                            <div className="act-code-box" style={{
+                              background: '#f3f4f6',
+                              border: '2px dashed #000000',
+                              color: '#000000',
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '1.45rem',
+                              fontWeight: 900,
+                              letterSpacing: '2px',
+                              padding: '10px 14px',
+                              borderRadius: '8px',
+                              margin: '10px 0',
+                            }}>
+                              {c.code}
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#374151', lineHeight: '1.6', marginTop: '10px', textAlign: 'right' }}>
+                              • <b>الخطوة 1:</b> امسح رمز الـ QR الموجود على ملصق سيارتك.<br />
+                              • <b>الخطوة 2:</b> ادخل هذا الكود داخل تطبيق ركنة لإتمام الحماية.<br />
+                              ⚠️ <i>احتفظ بهذه البطاقة ولا تكشف الكود إلا عند التفعيل.</i>
+                            </div>
+                            <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: '10px', borderTop: '1px solid #e5e7eb', paddingTop: '6px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
+                              BATCH: {c.batchNumber || 'BATCH-ACT'} • ONE TIME ACTIVATION
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
