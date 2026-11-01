@@ -52,6 +52,9 @@ const server = http.createServer(app);
 const PORT = parseInt(process.env.PORT || '5000', 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
+// Trust reverse proxies (Cloudflare, Nginx, Render, Railway, etc.)
+app.set('trust proxy', true);
+
 // 1. Security & Core Middlewares
 app.use(
   helmet({
