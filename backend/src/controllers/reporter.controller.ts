@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
+import { webRateLimitService } from '../services/webRateLimit.service';
 
 export class ReporterController {
   /**
@@ -164,6 +165,19 @@ export class ReporterController {
       const COOLDOWN_SECONDS = 15;
       const MAX_UNANSWERED_MESSAGES = 5;
 
+      // ──────────────── 0. Daily Web IP Rate Limit (Max 5 quick messages per day) ────────────────
+      const clientIp = webRateLimitService.extractIp(req);
+      if (!webRateLimitService.canSendMessage(clientIp)) {
+        res.status(429).json({
+          success: false,
+          message: 'لقد استنفدت الحد اليومي (5 رسائل سريعة عبر الويب). يُرجى تحميل تطبيق ركنة للمزيد والتواصل بدون أي حدود.',
+          limitReached: true,
+          remainingMessages: 0,
+          requireAppDownload: true,
+        });
+        return;
+      }
+
       // ──────────────── Check if an active chat already exists for this reporter & car ────────────────
       const existingChat = await prisma.chat.findFirst({
         where: {
@@ -252,7 +266,11 @@ export class ReporterController {
           } catch (_) {}
         }
 
-        const remaining = Math.max(0, MAX_UNANSWERED_MESSAGES - (reporterCount + 1));
+        const ipUsage = webRateLimitService.incrementUsage(clientIp);
+        const remaining = Math.min(
+          Math.max(0, MAX_UNANSWERED_MESSAGES - (reporterCount + 1)),
+          ipUsage.remaining
+        );
 
         res.status(200).json({
           success: true,
@@ -267,6 +285,8 @@ export class ReporterController {
           initialMessage: existingMsgObj,
           sessionToken: reporterToken,
           remainingMessages: remaining,
+          limitReached: remaining <= 0,
+          requireAppDownload: remaining <= 0,
           cooldownSeconds: COOLDOWN_SECONDS,
         });
         return;
@@ -320,6 +340,9 @@ export class ReporterController {
         },
       });
 
+      const ipUsage = webRateLimitService.incrementUsage(clientIp);
+      const remaining = Math.min(MAX_UNANSWERED_MESSAGES - 1, ipUsage.remaining);
+
       res.status(201).json({
         success: true,
         message: 'تم إرسال بلاغك وتنبيه صاحب السيارة بنجاح ومجهول الهوية بالكامل',
@@ -332,7 +355,9 @@ export class ReporterController {
         },
         initialMessage: initialMsgObj,
         sessionToken: reporterToken,
-        remainingMessages: MAX_UNANSWERED_MESSAGES - 1,
+        remainingMessages: remaining,
+        limitReached: remaining <= 0,
+        requireAppDownload: remaining <= 0,
         cooldownSeconds: COOLDOWN_SECONDS,
       });
     } catch (error) {
@@ -370,6 +395,19 @@ export class ReporterController {
 
       const COOLDOWN_SECONDS = 15;
       const MAX_UNANSWERED_MESSAGES = 5;
+
+      // ──────────────── 0. Daily Web IP Rate Limit (Max 5 quick messages per day) ────────────────
+      const clientIp = webRateLimitService.extractIp(req);
+      if (!webRateLimitService.canSendMessage(clientIp)) {
+        res.status(429).json({
+          success: false,
+          message: 'لقد استنفدت الحد اليومي (5 رسائل سريعة عبر الويب). يُرجى تحميل تطبيق ركنة للمزيد والتواصل بدون أي حدود.',
+          limitReached: true,
+          remainingMessages: 0,
+          requireAppDownload: true,
+        });
+        return;
+      }
 
       // ──────────────── 1. Anti-Spam Check: Cooldown between consecutive reporter messages ────────────────
       const lastReporterMessage = await prisma.message.findFirst({
@@ -446,12 +484,18 @@ export class ReporterController {
         console.error('Failed to create notification for reporter message:', notifErr);
       }
 
-      const remaining = Math.max(0, MAX_UNANSWERED_MESSAGES - (reporterMessagesCount + 1));
+      const ipUsage = webRateLimitService.incrementUsage(clientIp);
+      const remaining = Math.min(
+        Math.max(0, MAX_UNANSWERED_MESSAGES - (reporterMessagesCount + 1)),
+        ipUsage.remaining
+      );
 
       res.status(201).json({
         success: true,
         message,
         remainingMessages: remaining,
+        limitReached: remaining <= 0,
+        requireAppDownload: remaining <= 0,
         cooldownSeconds: COOLDOWN_SECONDS,
       });
     } catch (error) {
@@ -535,7 +579,11 @@ export class ReporterController {
         if (!lastOwnerMsg) return true;
         return new Date(m.createdAt) > new Date(lastOwnerMsg.createdAt);
       });
-      const remaining = Math.max(0, MAX_UNANSWERED_MESSAGES - reporterMsgsSince.length);
+      const chatRemaining = Math.max(0, MAX_UNANSWERED_MESSAGES - reporterMsgsSince.length);
+
+      const clientIp = webRateLimitService.extractIp(req);
+      const ipUsage = webRateLimitService.getUsage(clientIp);
+      const remaining = Math.min(chatRemaining, ipUsage.remaining);
 
       res.json({
         success: true,
@@ -549,7 +597,9 @@ export class ReporterController {
         messages: chat.messages,
         remainingMessages: remaining,
         limitReached: remaining <= 0,
+        requireAppDownload: remaining <= 0,
         maxAllowed: MAX_UNANSWERED_MESSAGES,
+        dailyUsage: ipUsage.count,
         cooldownSeconds: 15,
       });
     } catch (error) {

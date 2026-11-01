@@ -1,0 +1,207 @@
+import fs from 'fs';
+import path from 'path';
+
+interface IpUsageRecord {
+  count: number;
+  date: string; // YYYY-MM-DD
+  lastUsedAt: string;
+}
+
+export class WebRateLimitService {
+  private static instance: WebRateLimitService;
+  public static readonly DAILY_LIMIT = 5;
+
+  private storeFile: string;
+  private cache: Record<string, IpUsageRecord> = {};
+
+  private constructor() {
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      try {
+        fs.mkdirSync(dataDir, { recursive: true });
+      } catch (_) {}
+    }
+    this.storeFile = path.join(dataDir, 'web_ip_limits.json');
+    this.loadStore();
+  }
+
+  public static getInstance(): WebRateLimitService {
+    if (!WebRateLimitService.instance) {
+      WebRateLimitService.instance = new WebRateLimitService();
+    }
+    return WebRateLimitService.instance;
+  }
+
+  /**
+   * استخراج وتوحيد عنوان الـ IP
+   */
+  public normalizeIp(rawIp?: string | null): string {
+    if (!rawIp) return '127.0.0.1';
+    let ip = rawIp.trim();
+    if (ip.startsWith('::ffff:')) {
+      ip = ip.substring(7);
+    }
+    if (ip === '::1' || ip === 'localhost') {
+      ip = '127.0.0.1';
+    }
+    return ip;
+  }
+
+  /**
+   * استخراج الـ IP بدقة من Express Request مع دعم Reverse Proxies
+   */
+  public extractIp(req: any): string {
+    if (!req) return '127.0.0.1';
+    const forwarded = req.headers ? (req.headers['x-forwarded-for'] || req.headers['x-real-ip']) : null;
+    if (typeof forwarded === 'string') {
+      const first = forwarded.split(',')[0].trim();
+      if (first) return this.normalizeIp(first);
+    }
+    if (Array.isArray(forwarded) && forwarded.length > 0) {
+      return this.normalizeIp(forwarded[0]);
+    }
+    const sockIp = req.socket ? req.socket.remoteAddress : null;
+    return this.normalizeIp(sockIp || req.ip || '127.0.0.1');
+  }
+
+  /**
+   * الحصول على تاريخ اليوم بنسق YYYY-MM-DD
+   */
+  private getTodayDate(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  /**
+   * قراءة السجل من القرص
+   */
+  private loadStore(): void {
+    try {
+      if (fs.existsSync(this.storeFile)) {
+        const content = fs.readFileSync(this.storeFile, 'utf8');
+        this.cache = JSON.parse(content) || {};
+        this.cleanOldRecords();
+      }
+    } catch (err) {
+      this.cache = {};
+    }
+  }
+
+  /**
+   * حفظ السجل على القرص
+   */
+  private saveStore(): void {
+    try {
+      fs.writeFileSync(this.storeFile, JSON.stringify(this.cache, null, 2), 'utf8');
+    } catch (err) {
+      console.error('[WebRateLimit] Error saving store file:', err);
+    }
+  }
+
+  /**
+   * حذف السجلات القديمة تلقائياً لتوفير المساحة
+   */
+  private cleanOldRecords(): void {
+    const today = this.getTodayDate();
+    let changed = false;
+    for (const ip of Object.keys(this.cache)) {
+      if (this.cache[ip].date !== today) {
+        delete this.cache[ip];
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.saveStore();
+    }
+  }
+
+  /**
+   * جلب تفاصيل الاستهلاك لعنوان IP معين
+   */
+  public getUsage(rawIp?: string | null): {
+    count: number;
+    maxAllowed: number;
+    remaining: number;
+    isLimitReached: boolean;
+    date: string;
+  } {
+    const ip = this.normalizeIp(rawIp);
+    const today = this.getTodayDate();
+    const record = this.cache[ip];
+
+    let count = 0;
+    if (record && record.date === today) {
+      count = record.count;
+    }
+
+    const remaining = Math.max(0, WebRateLimitService.DAILY_LIMIT - count);
+    const isLimitReached = remaining <= 0;
+
+    return {
+      count,
+      maxAllowed: WebRateLimitService.DAILY_LIMIT,
+      remaining,
+      isLimitReached,
+      date: today,
+    };
+  }
+
+  /**
+   * التحقق مما إذا كان مسموحاً لهذا الـ IP بإرسال رسالة سريعة
+   */
+  public canSendMessage(rawIp?: string | null): boolean {
+    const usage = this.getUsage(rawIp);
+    return !usage.isLimitReached;
+  }
+
+  /**
+   * زيادة عدد الرسائل المستهلكة لهذا الـ IP بواحد وحفظها فوراً
+   */
+  public incrementUsage(rawIp?: string | null): {
+    count: number;
+    maxAllowed: number;
+    remaining: number;
+    isLimitReached: boolean;
+  } {
+    const ip = this.normalizeIp(rawIp);
+    const today = this.getTodayDate();
+
+    if (!this.cache[ip] || this.cache[ip].date !== today) {
+      this.cache[ip] = {
+        count: 1,
+        date: today,
+        lastUsedAt: new Date().toISOString(),
+      };
+    } else {
+      this.cache[ip].count += 1;
+      this.cache[ip].lastUsedAt = new Date().toISOString();
+    }
+
+    this.saveStore();
+
+    const count = this.cache[ip].count;
+    const remaining = Math.max(0, WebRateLimitService.DAILY_LIMIT - count);
+    const isLimitReached = remaining <= 0;
+
+    return {
+      count,
+      maxAllowed: WebRateLimitService.DAILY_LIMIT,
+      remaining,
+      isLimitReached,
+    };
+  }
+
+  /**
+   * إعادة ضبط الاستهلاك لـ IP محدد (للاختبار والدعم)
+   */
+  public resetIp(rawIp?: string | null): void {
+    const ip = this.normalizeIp(rawIp);
+    delete this.cache[ip];
+    this.saveStore();
+  }
+}
+
+export const webRateLimitService = WebRateLimitService.getInstance();

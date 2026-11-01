@@ -25,6 +25,10 @@ build/
 baileys_auth/
 backend/baileys_auth/
 
+# Runtime data & rate limits
+backend/data/
+data/
+
 # Uploads
 backend/uploads/*
 !backend/uploads/.gitkeep

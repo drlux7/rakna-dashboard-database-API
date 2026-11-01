@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/prisma';
+import { webRateLimitService } from '../services/webRateLimit.service';
 
 export class WebChatController {
   /**
@@ -10,6 +11,10 @@ export class WebChatController {
     try {
       const rawTag = (req.params.tagCode as string) || '';
       const cleanTag = rawTag.startsWith('#') ? rawTag : `#${rawTag}`;
+
+      // Check daily IP rate limit (5 quick messages per day)
+      const clientIp = webRateLimitService.extractIp(req);
+      const ipUsage = webRateLimitService.getUsage(clientIp);
 
       // 1. Fetch tag and car details
       const tag: any = await prisma.tag.findFirst({
@@ -533,16 +538,48 @@ export class WebChatController {
       animation: pulse 1s infinite;
     }
     .limit-reached-banner {
-      margin-bottom: 10px;
-      padding: 10px 14px;
-      border-radius: 12px;
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      color: #FCA5A5;
-      font-size: 12px;
-      font-weight: 700;
+      margin-bottom: 14px;
+      padding: 16px 18px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(245, 190, 24, 0.12) 100%);
+      border: 1px solid rgba(245, 190, 24, 0.4);
       text-align: center;
-      line-height: 1.4;
+      line-height: 1.5;
+      animation: fadeIn 0.3s ease;
+    }
+    .limit-reached-title {
+      color: #F87171;
+      font-size: 13.5px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .limit-reached-text {
+      color: #CBD5E1;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    .btn-download-app {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #F5BE18 0%, #D49B00 100%);
+      color: #000;
+      font-weight: 800;
+      font-size: 12.5px;
+      padding: 9px 20px;
+      border-radius: 10px;
+      text-decoration: none;
+      box-shadow: 0 4px 14px rgba(245, 190, 24, 0.35);
+      transition: all 0.2s ease;
+    }
+    .btn-download-app:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(245, 190, 24, 0.5);
     }
     .toast-popup {
       position: fixed;
@@ -706,12 +743,22 @@ export class WebChatController {
           <div class="quick-title">
             <span>⚡</span>
             <span>اضغط لإرسال تنبيه فوري لصاحب السيارة:</span>
-            <div id="quotaBadge" class="quota-badge">المتبقي: <b id="remainingCount">5</b> رسائل</div>
+            <div id="quotaBadge" class="quota-badge">المتبقي اليوم: <b id="remainingCount">${ipUsage.remaining}</b> من 5</div>
             <div id="cooldownBadge" class="cooldown-badge" style="display:none;">⏳ انتظر <b id="countdownSec">15</b>ث</div>
           </div>
 
-          <div id="limitReachedBanner" class="limit-reached-banner" style="display:none;">
-            ⚠️ وصلت للحد الأقصى (5 رسائل) • يرجى انتظار رد صاحب السيارة للمتابعة.
+          <div id="limitReachedBanner" class="limit-reached-banner" style="display:${ipUsage.isLimitReached ? 'block' : 'none'};">
+            <div class="limit-reached-title">
+              <span>⚠️</span>
+              <span>استنفدت الحد اليومي (5 رسائل سريعة)</span>
+            </div>
+            <div class="limit-reached-text">
+              لقد أرسلت الحد الأقصى المسموح به اليوم عبر المتصفح. إذا أردت المزيد من التواصل المباشر مع أصحاب السيارات والمتابعة، حمّل تطبيق <strong>ركنة Rakna</strong> الآن مجاناً!
+            </div>
+            <a href="https://rakna.app" target="_blank" class="btn-download-app">
+              <span>📲</span>
+              <span>تحميل تطبيق ركنة للمزيد</span>
+            </a>
           </div>
 
           <div class="quick-grid" id="quickGrid">
@@ -771,7 +818,7 @@ export class WebChatController {
     let isSending = false;
     let pollTimer = null;
     let cooldownTimer = null;
-    let remainingQuota = 5;
+    let remainingQuota = ${ipUsage.remaining};
     let inCooldown = false;
     const knownMessageIds = new Set();
 
@@ -783,6 +830,14 @@ export class WebChatController {
     const cooldownBadge = document.getElementById('cooldownBadge');
     const countdownSec = document.getElementById('countdownSec');
     const limitReachedBanner = document.getElementById('limitReachedBanner');
+
+    // Initial check for daily limit
+    if (remainingQuota <= 0) {
+      setTimeout(() => {
+        disableButtons(true);
+        if (limitReachedBanner) limitReachedBanner.style.display = 'block';
+      }, 50);
+    }
 
     // Toast Notification System
     function showToast(text, isError = false) {
@@ -899,7 +954,7 @@ export class WebChatController {
           } else {
             showToast(data.message || 'تعذر إرسال التنبيه لصاحب السيارة', true);
             if (data.retryAfter) startCooldown(data.retryAfter);
-            if (data.limitReached) updateQuota(0);
+            if (data.limitReached || res.status === 429) updateQuota(0);
             return false;
           }
         }
@@ -924,10 +979,10 @@ export class WebChatController {
             if (sendData.remainingMessages !== undefined) updateQuota(sendData.remainingMessages);
             startCooldown(sendData.cooldownSeconds || 15);
             showToast('تم إرسال الرسالة بنجاح');
-          } else if (sendRes.status === 429) {
-            showToast(sendData.message || 'يرجى الانتظار قليلاً قبل إرسال رسالة أخرى', true);
+          } else if (sendRes.status === 429 || sendData.limitReached) {
+            showToast(sendData.message || 'استنفدت الحد اليومي (5 رسائل). حمّل التطبيق للمزيد', true);
             if (sendData.retryAfter) startCooldown(sendData.retryAfter);
-            if (sendData.limitReached) updateQuota(0);
+            if (sendData.limitReached || sendRes.status === 429) updateQuota(0);
           } else {
             // Existing chat failed or expired -> clear and recreate automatically
             localStorage.removeItem('rakna_chat_' + TAG_CODE);
