@@ -889,7 +889,8 @@ export class WebChatController {
           if (data.success && data.chat) {
             currentChatId = data.chat.id;
             localStorage.setItem('rakna_chat_' + TAG_CODE, currentChatId);
-            appendMessage(text, 'me', new Date().toISOString());
+            const initialMsgId = (data.initialMessage && data.initialMessage.id) ? data.initialMessage.id : null;
+            appendMessage(text, 'me', new Date().toISOString(), initialMsgId);
             startPolling();
             if (data.remainingMessages !== undefined) updateQuota(data.remainingMessages);
             startCooldown(data.cooldownSeconds || 15);
@@ -918,7 +919,8 @@ export class WebChatController {
           });
           const sendData = await sendRes.json();
           if (sendData.success) {
-            appendMessage(text, 'me', new Date().toISOString());
+            const sendMsgId = (sendData.message && sendData.message.id) ? sendData.message.id : null;
+            appendMessage(text, 'me', new Date().toISOString(), sendMsgId);
             if (sendData.remainingMessages !== undefined) updateQuota(sendData.remainingMessages);
             startCooldown(sendData.cooldownSeconds || 15);
             showToast('تم إرسال الرسالة بنجاح');
@@ -953,6 +955,19 @@ export class WebChatController {
     function appendMessage(text, sender, timeStr, msgId) {
       if (msgId && knownMessageIds.has(msgId)) return;
       if (msgId) knownMessageIds.add(msgId);
+
+      // Prevent duplicate rendering of identical text from the same sender
+      const cleanText = (text || '').trim();
+      const existing = messagesBox.querySelectorAll('.message-item');
+      if (existing.length > 0) {
+        const lastItem = existing[existing.length - 1];
+        const isSameSender = lastItem.classList.contains(sender === 'me' ? 'me' : 'owner');
+        const bubble = lastItem.querySelector('.message-bubble');
+        if (isSameSender && bubble && bubble.innerText.trim() === cleanText) {
+          if (msgId) knownMessageIds.add(msgId);
+          return;
+        }
+      }
 
       if (emptyState) {
         emptyState.style.display = 'none';

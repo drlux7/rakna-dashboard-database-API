@@ -220,8 +220,9 @@ export class ReporterController {
         }
 
         // Append initial message to existing chat
+        let existingMsgObj = null;
         if (initialMessage && initialMessage.trim().length > 0) {
-          await prisma.message.create({
+          existingMsgObj = await prisma.message.create({
             data: {
               chatId: existingChat.id,
               senderType: 'REPORTER',
@@ -263,6 +264,7 @@ export class ReporterController {
             contactReason: existingChat.contactReason,
             status: existingChat.status,
           },
+          initialMessage: existingMsgObj,
           sessionToken: reporterToken,
           remainingMessages: remaining,
           cooldownSeconds: COOLDOWN_SECONDS,
@@ -292,8 +294,9 @@ export class ReporterController {
       const reasonArabic = reasonMap[contactReason] || 'تنبيه بخصوص سيارتك';
 
       // Insert Initial Message if present
+      let initialMsgObj = null;
       if (initialMessage && initialMessage.trim().length > 0) {
-        await prisma.message.create({
+        initialMsgObj = await prisma.message.create({
           data: {
             chatId: chat.id,
             senderType: 'REPORTER',
@@ -327,6 +330,7 @@ export class ReporterController {
           contactReason: chat.contactReason,
           status: chat.status,
         },
+        initialMessage: initialMsgObj,
         sessionToken: reporterToken,
         remainingMessages: MAX_UNANSWERED_MESSAGES - 1,
         cooldownSeconds: COOLDOWN_SECONDS,
