@@ -24,9 +24,28 @@ export class AdminController {
         return;
       }
 
-      const admin = await prisma.adminUser.findUnique({
+      let admin = await prisma.adminUser.findUnique({
         where: { email: email.trim().toLowerCase() },
       });
+
+      // Auto-bootstrap initial Super Admin if the database is newly initialized
+      if (!admin) {
+        const totalAdmins = await prisma.adminUser.count();
+        const normalizedEmail = email.trim().toLowerCase();
+        if (totalAdmins === 0 && (normalizedEmail === 'admin@rakna.app' || normalizedEmail === 'admin@rakna.tech')) {
+          const defaultHash = await bcrypt.hash('Admin@123456', 10);
+          admin = await prisma.adminUser.create({
+            data: {
+              email: normalizedEmail,
+              name: 'مدير النظام (Super Admin)',
+              passwordHash: defaultHash,
+              role: 'SUPER_ADMIN',
+              isActive: true,
+            },
+          });
+          console.log('[ADMIN] Auto-seeded initial Super Admin user:', admin.email);
+        }
+      }
 
       if (!admin || !admin.isActive) {
         res.status(401).json({ success: false, message: 'بيانات الدخول غير صحيحة أو الحساب معطل' });
