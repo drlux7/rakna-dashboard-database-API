@@ -97,6 +97,32 @@ app.use(express.urlencoded({ extended: true }));
 // Static uploads directory
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+// Static landing and public assets
+app.use(express.static(path.join(process.cwd(), 'public')));
+
+// Root Route: Serve Landing Page for rakna.tech / API Info for api.rakna.tech
+app.get('/', (req: Request, res: Response) => {
+  const host = (req.hostname || '').toLowerCase();
+  if (host.startsWith('api.')) {
+    return res.json({
+      status: 'online',
+      app: 'Rakna API Server',
+      version: '1.0.0',
+      timestamp: new Date().toISOString(),
+    });
+  }
+  const landingPath = path.join(process.cwd(), 'public/landing/index.html');
+  if (fs.existsSync(landingPath)) {
+    return res.sendFile(landingPath);
+  }
+  return res.json({
+    status: 'online',
+    app: 'Rakna API Server',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Public Stranger Web Chat & Deep-link Page for QR/NFC Scans
 app.get('/t/:tagCode', WebChatController.renderTagPage);
 

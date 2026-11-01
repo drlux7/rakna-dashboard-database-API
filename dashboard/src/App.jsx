@@ -399,7 +399,8 @@ export default function App() {
     if (!asset || typeof asset !== 'string' || !asset.trim()) return null;
     const clean = asset.trim();
     if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
-    if (clean.startsWith('/uploads/')) return `http://localhost:5000${clean}`;
+    const backendHost = (typeof window !== 'undefined' && window.location.hostname !== 'localhost') ? 'https://api.rakna.tech' : 'http://localhost:5000';
+    if (clean.startsWith('/uploads/')) return `${backendHost}${clean}`;
     if (clean.includes('tag_trunk')) return '/uploads/tag_trunk.jpg';
     if (clean.includes('tag_glass')) return '/uploads/tag_glass.jpg';
     if (clean.includes('tag_scan')) return '/uploads/tag_scan.jpg';
@@ -2060,7 +2061,7 @@ export default function App() {
             </h2>
             <span className="badge badge-active">
               <span className="pulse-dot" style={{ background: '#10b981' }}></span>
-              الخادم المحلي متصل (Port 5000)
+              {typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? 'الخادم السحابي متصل (api.rakna.tech)' : 'الخادم المحلي متصل (Port 5000)'}
             </span>
           </div>
 
