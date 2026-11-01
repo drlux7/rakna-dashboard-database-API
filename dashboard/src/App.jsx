@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock,
   Truck,
+  MapPin,
   ShieldCheck,
   Search,
   Filter,
@@ -64,8 +65,9 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState('overview');
 
   // Login form state
-  const [loginEmail, setLoginEmail] = useState('admin@rakna.app');
-  const [loginPassword, setLoginPassword] = useState('Admin@123456');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
 
@@ -118,7 +120,7 @@ export default function App() {
   const [printShowHeader, setPrintShowHeader] = useState(true);
 
   const [waConfig, setWaConfig] = useState({
-    provider: 'GREEN_API',
+    provider: 'BAILEYS',
     isAutoSendEnabled: true,
     greenApiIdInstance: '',
     greenApiToken: '',
@@ -223,6 +225,176 @@ export default function App() {
   const bannerFileInputRef = useRef(null);
   const [isUploadingBannerImage, setIsUploadingBannerImage] = useState(false);
 
+  // Error Tracking State & Actions
+  const [errorLogsList, setErrorLogsList] = useState([]);
+  const [isLoadingErrorLogs, setIsLoadingErrorLogs] = useState(false);
+  const [unresolvedErrorCount, setUnresolvedErrorCount] = useState(0);
+  const [expandedLogId, setExpandedLogId] = useState(null);
+  const [errorLevelFilter, setErrorLevelFilter] = useState('ALL'); // 'ALL' | 'UNRESOLVED' | 'RESOLVED'
+
+  // Governorates & Shipping state
+  const [governorates, setGovernorates] = useState([]);
+  const [loadingGovs, setLoadingGovs] = useState(false);
+  const [govSearch, setGovSearch] = useState('');
+  const [govStatusFilter, setGovStatusFilter] = useState('ALL'); // 'ALL', 'ACTIVE', 'INACTIVE'
+  const [govFeeFilter, setGovFeeFilter] = useState('ALL'); // 'ALL', 'FREE', 'PAID'
+  const [govModalOpen, setGovModalOpen] = useState(false);
+  const [editingGov, setEditingGov] = useState(null);
+  const [govForm, setGovForm] = useState({
+    nameAr: '',
+    nameEn: '',
+    shippingFee: 0,
+    deliveryTime: 'خلال 24-48 ساعة',
+    isActive: true,
+    sortOrder: 0,
+  });
+  const [isSavingGov, setIsSavingGov] = useState(false);
+
+  const loadGovernorates = async () => {
+    if (!token) return;
+    setLoadingGovs(true);
+    try {
+      const res = await api.getGovernorates();
+      if (res && res.success && res.governorates) {
+        setGovernorates(res.governorates);
+      }
+    } catch (err) {
+      console.error('Failed to load governorates:', err);
+    } finally {
+      setLoadingGovs(false);
+    }
+  };
+
+  const handleOpenAddGov = () => {
+    setEditingGov(null);
+    setGovForm({
+      nameAr: '',
+      nameEn: '',
+      shippingFee: 0,
+      deliveryTime: 'خلال 24-48 ساعة',
+      isActive: true,
+      sortOrder: (governorates.length || 0) + 1,
+    });
+    setGovModalOpen(true);
+  };
+
+  const handleOpenEditGov = (gov) => {
+    setEditingGov(gov);
+    setGovForm({
+      nameAr: gov.nameAr,
+      nameEn: gov.nameEn,
+      shippingFee: gov.shippingFee,
+      deliveryTime: gov.deliveryTime,
+      isActive: gov.isActive,
+      sortOrder: gov.sortOrder ?? 0,
+    });
+    setGovModalOpen(true);
+  };
+
+  const handleSaveGov = async (e) => {
+    e.preventDefault();
+    if (!govForm.nameAr.trim()) {
+      alert('يرجى إدخال اسم المحافظة بالعربية');
+      return;
+    }
+    setIsSavingGov(true);
+    try {
+      if (editingGov) {
+        const res = await api.updateGovernorate(editingGov.id, govForm);
+        if (res.success) {
+          showToast(`تم تحديث بيانات محافظة ${govForm.nameAr} بنجاح ✨`);
+          setGovModalOpen(false);
+          loadGovernorates();
+        }
+      } else {
+        const res = await api.createGovernorate(govForm);
+        if (res.success) {
+          showToast(`تمت إضافة محافظة ${govForm.nameAr} لقائمة الشحن بنجاح 🎉`);
+          setGovModalOpen(false);
+          loadGovernorates();
+        }
+      }
+    } catch (err) {
+      alert(err.message || 'تعذر حفظ بيانات المحافظة');
+    } finally {
+      setIsSavingGov(false);
+    }
+  };
+
+  const handleToggleGovStatus = async (gov) => {
+    try {
+      const newStatus = !gov.isActive;
+      const res = await api.toggleGovernorate(gov.id, newStatus);
+      if (res.success) {
+        showToast(newStatus ? `تم تفعيل التوصيل لمحافظة ${gov.nameAr} ✅` : `تم تعطيل التوصيل لمحافظة ${gov.nameAr} ⏸️`);
+        setGovernorates((prev) =>
+          prev.map((g) => (g.id === gov.id ? { ...g, isActive: newStatus } : g))
+        );
+      }
+    } catch (err) {
+      showToast('تعذر تحديث حالة تفعيل المحافظة');
+    }
+  };
+
+  const handleDeleteGov = async (gov) => {
+    if (!window.confirm(`هل أنت متأكد من حذف محافظة "${gov.nameAr}" من قائمة الشحن والتوصيل؟`)) {
+      return;
+    }
+    try {
+      const res = await api.deleteGovernorate(gov.id);
+      if (res.success) {
+        showToast(`تم حذف محافظة ${gov.nameAr} بنجاح 🗑️`);
+        setGovernorates((prev) => prev.filter((g) => g.id !== gov.id));
+      }
+    } catch (err) {
+      alert(err.message || 'تعذر حذف المحافظة');
+    }
+  };
+
+  const loadErrorLogs = async () => {
+    setIsLoadingErrorLogs(true);
+    try {
+      const res = await api.getErrorLogs();
+      if (res && res.success) {
+        setErrorLogsList(res.data || []);
+        setUnresolvedErrorCount(res.pagination?.unresolvedCount || 0);
+      }
+    } catch (err) {
+      console.error('Failed to load error logs:', err);
+    } finally {
+      setIsLoadingErrorLogs(false);
+    }
+  };
+
+  const handleToggleResolveError = async (id) => {
+    try {
+      await api.toggleResolveErrorLog(id);
+      loadErrorLogs();
+    } catch (err) {
+      alert(err.message || 'تعذر تحديث حالة الخطأ');
+    }
+  };
+
+  const handleDeleteErrorLog = async (id) => {
+    if (!window.confirm('هل أنت متأكد من حذف سجل هذا الخطأ؟')) return;
+    try {
+      await api.deleteErrorLog(id);
+      loadErrorLogs();
+    } catch (err) {
+      alert(err.message || 'تعذر حذف سجل الخطأ');
+    }
+  };
+
+  const handleClearAllErrors = async () => {
+    if (!window.confirm('هل أنت متأكد من مسح كافة سجلات الأخطاء؟')) return;
+    try {
+      await api.clearAllErrorLogs();
+      loadErrorLogs();
+    } catch (err) {
+      alert(err.message || 'تعذر مسح سجلات الأخطاء');
+    }
+  };
+
   const resolveProductImageUrl = (asset) => {
     if (!asset || typeof asset !== 'string' || !asset.trim()) return null;
     const clean = asset.trim();
@@ -261,12 +433,13 @@ export default function App() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const [statsRes, tagsRes, ordersRes, usersRes, waRes, waConfRes, supportRes, abuseRes, quickRes, prodRes, banRes, actRes] = await Promise.all([
+      const [statsRes, tagsRes, ordersRes, usersRes, waRes, govsRes, waConfRes, supportRes, abuseRes, quickRes, prodRes, banRes, actRes] = await Promise.all([
         api.getStats().catch(() => null),
         api.listTags().catch(() => null),
         api.listOrders().catch(() => null),
         api.listUsers().catch(() => null),
         api.getWhatsAppOutbox().catch(() => null),
+        api.getGovernorates().catch(() => null),
         api.getWhatsAppConfig().catch(() => null),
         api.getSupportThreads().catch(() => null),
         api.getAbuseReports('ALL').catch(() => null),
@@ -281,6 +454,7 @@ export default function App() {
       if (ordersRes && ordersRes.orders) setOrders(ordersRes.orders);
       if (usersRes && usersRes.users) setUsersList(usersRes.users);
       if (actRes && actRes.codes) setActivationCodesList(actRes.codes);
+      if (govsRes && govsRes.governorates) setGovernorates(govsRes.governorates);
       if (waRes && waRes.messages) {
         setWhatsappMessages(waRes.messages);
         if (waRes.stats) setWhatsappStats(waRes.stats);
@@ -324,7 +498,10 @@ export default function App() {
       if (res && res.qrData) {
         setQrType(res.qrData.type);
         if (res.qrData.type === 'qrCode' && res.qrData.message) {
-          setQrImage(`data:image/png;base64,${res.qrData.message}`);
+          const qrSrc = res.qrData.message.startsWith('data:')
+            ? res.qrData.message
+            : `data:image/png;base64,${res.qrData.message}`;
+          setQrImage(qrSrc);
         } else if (res.qrData.type === 'alreadyLogged') {
           setInstanceState('authorized');
           setQrImage(null);
@@ -348,7 +525,7 @@ export default function App() {
 
   useEffect(() => {
     let interval;
-    if (token && currentTab === 'whatsapp' && waConfig.provider === 'GREEN_API') {
+    if (token && currentTab === 'whatsapp' && (waConfig.provider === 'BAILEYS' || waConfig.provider === 'GREEN_API')) {
       loadQrAndState();
       interval = setInterval(async () => {
         try {
@@ -401,6 +578,18 @@ export default function App() {
   useEffect(() => {
     if (token && currentTab === 'store') {
       loadProducts();
+    }
+  }, [token, currentTab]);
+
+  useEffect(() => {
+    if (token && (currentTab === 'shipping_govs' || currentTab === 'orders' || currentTab === 'store')) {
+      loadGovernorates();
+    }
+  }, [token, currentTab]);
+
+  useEffect(() => {
+    if (token && currentTab === 'error_logs') {
+      loadErrorLogs();
     }
   }, [token, currentTab]);
 
@@ -516,14 +705,15 @@ export default function App() {
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: '64px',
-              height: '64px',
-              borderRadius: '20px',
-              background: 'linear-gradient(135deg, rgba(245, 190, 24, 0.2) 0%, rgba(245, 190, 24, 0.05) 100%)',
-              border: '1px solid rgba(245, 190, 24, 0.3)',
+              width: '74px',
+              height: '74px',
+              borderRadius: '22px',
+              overflow: 'hidden',
+              boxShadow: '0 8px 24px rgba(245, 190, 24, 0.25)',
               marginBottom: '16px',
+              border: '2px solid rgba(245, 190, 24, 0.4)',
             }}>
-              <Car size={34} color="#f5be18" />
+              <img src="/rakna_applogo.png" alt="Rakna Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <h1 style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f3f4f6', letterSpacing: '-0.5px' }}>
               ركنة <span style={{ color: '#f5be18' }}>Rakna</span>
@@ -559,6 +749,8 @@ export default function App() {
               <input
                 type="email"
                 required
+                placeholder="أدخل البريد الإلكتروني للإدارة..."
+                autoComplete="off"
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
                 style={{
@@ -579,23 +771,47 @@ export default function App() {
               <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
                 كلمة المرور
               </label>
-              <input
-                type="password"
-                required
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '10px',
-                  color: '#fff',
-                  fontFamily: 'var(--font-arabic)',
-                  outline: 'none',
-                  fontSize: '0.95rem',
-                }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showLoginPassword ? 'text' : 'password'}
+                  required
+                  placeholder="أدخل كلمة المرور..."
+                  autoComplete="new-password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 42px 12px 14px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '10px',
+                    color: '#fff',
+                    fontFamily: 'var(--font-arabic)',
+                    outline: 'none',
+                    fontSize: '0.95rem',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: 0,
+                  }}
+                  title={showLoginPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                >
+                  {showLoginPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <button
@@ -1392,13 +1608,13 @@ export default function App() {
             width: '42px',
             height: '42px',
             borderRadius: '12px',
-            background: 'linear-gradient(135deg, #f5be18 0%, #d49a08 100%)',
+            overflow: 'hidden',
+            boxShadow: '0 4px 14px rgba(245, 190, 24, 0.3)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 14px rgba(245, 190, 24, 0.3)',
           }}>
-            <Car size={24} color="#000" />
+            <img src="/rakna_applogo.png" alt="Rakna Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <div>
             <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#fff' }}>ركنة Rakna</div>
@@ -1472,6 +1688,40 @@ export default function App() {
           >
             <Package size={20} />
             <span>الطلبات والشحن (COD)</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentTab('shipping_govs')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '11px 14px',
+              borderRadius: '10px',
+              background: currentTab === 'shipping_govs' ? 'rgba(245, 190, 24, 0.15)' : 'transparent',
+              color: currentTab === 'shipping_govs' ? 'var(--gold-primary)' : 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              textAlign: 'right',
+              transition: 'all 0.18s ease',
+            }}
+          >
+            <MapPin size={20} color={currentTab === 'shipping_govs' ? 'var(--gold-primary)' : 'currentColor'} />
+            <span>محافظات الشحن والتوصيل</span>
+            {governorates.length > 0 && (
+              <span style={{
+                marginRight: 'auto',
+                background: 'rgba(245, 190, 24, 0.2)',
+                color: 'var(--gold-primary)',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                padding: '2px 8px',
+                borderRadius: '12px',
+              }}>
+                {governorates.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -1704,6 +1954,44 @@ export default function App() {
               </span>
             )}
           </button>
+
+          <button
+            onClick={() => {
+              setCurrentTab('error_logs');
+              loadErrorLogs();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '11px 14px',
+              borderRadius: '10px',
+              border: 'none',
+              background: currentTab === 'error_logs' ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+              color: currentTab === 'error_logs' ? '#f87171' : 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              textAlign: 'right',
+              transition: 'all 0.18s ease',
+            }}
+          >
+            <AlertTriangle size={20} color={currentTab === 'error_logs' ? '#f87171' : 'currentColor'} />
+            <span>سجل أخطاء النظام</span>
+            {unresolvedErrorCount > 0 && (
+              <span style={{
+                marginRight: 'auto',
+                background: 'rgba(239, 68, 68, 0.25)',
+                color: '#ef4444',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                padding: '2px 8px',
+                borderRadius: '12px',
+              }}>
+                {unresolvedErrorCount}
+              </span>
+            )}
+          </button>
         </nav>
 
         {/* Admin info & Logout */}
@@ -1766,6 +2054,9 @@ export default function App() {
               {currentTab === 'support' && 'مركز خدمة العملاء والدعم الفني المباشر'}
               {currentTab === 'abuse' && 'إشراف ومراقبة البلاغات والمحادثات المسيئة'}
               {currentTab === 'quick_messages' && 'إدارة الرسائل السريعة المعتمدة للمُبلّغين (Quick Messages)'}
+              {currentTab === 'store' && 'إدارة متجر ركنة والمنتجات والعروض'}
+              {currentTab === 'shipping_govs' && 'إدارة محافظات التوصيل وأسعار الشحن ومدد التسليم'}
+              {currentTab === 'error_logs' && 'مركز مراقبة وتتبع أخطاء النظام (System Error Tracking)'}
             </h2>
             <span className="badge badge-active">
               <span className="pulse-dot" style={{ background: '#10b981' }}></span>
@@ -3199,7 +3490,7 @@ export default function App() {
                     </div>
                     <div>
                       <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>ربط رقم الواتساب عبر QR Code (WhatsApp Phone Pairing)</span>
+                        <span>ربط رقم الواتساب عبر QR Code (سيرفر Baileys المجاني 🚀)</span>
                         {instanceState === 'authorized' ? (
                           <span style={{
                             background: '#25D366',
@@ -3225,7 +3516,7 @@ export default function App() {
                         )}
                       </h3>
                       <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                        امسح الـ QR Code من تطبيق واتساب بهاتفك لربط الرقم الذي سيقوم بإرسال رسائل الـ OTP تلقائياً للعملاء.
+                        امسح رمز الـ QR بهاتفك من تطبيق واتساب لربط رقمك عبر خادم Baileys المباشر (مجاني 100% للأبد وبدون أي اشتراكات أو أطراف ثالثة).
                       </p>
                     </div>
                   </div>
@@ -3290,7 +3581,7 @@ export default function App() {
                         النسخة متصلة ومصرح لها بالإرسال. عند قيام أي مستخدم بطلب كود OTP في تطبيق الهاتف، سيتم إرساله تلقائياً من رقمك المسجل هنا.
                       </p>
                       <div style={{ display: 'flex', gap: '16px', marginTop: '10px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                        <span>معرّف النسخة: <strong style={{ color: 'var(--gold-primary)' }}>{waConfig.greenApiIdInstance}</strong></span>
+                        <span>المزود: <strong style={{ color: 'var(--gold-primary)' }}>{waConfig.provider === 'BAILEYS' ? 'Baileys (خادم محلي مستقل)' : waConfig.provider}</strong></span>
                         <span>الحالة: <strong style={{ color: '#25D366' }}>Active / Authorized</strong></span>
                       </div>
                     </div>
@@ -7076,6 +7367,766 @@ export default function App() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ════════════════ TAB: SHIPPING & GOVERNORATES ════════════════ */}
+          {currentTab === 'shipping_govs' && (
+            <div className="fade-in">
+              {/* Header Banner */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '10px',
+                      background: 'rgba(245, 190, 24, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid rgba(245, 190, 24, 0.3)',
+                    }}>
+                      <MapPin size={22} color="var(--gold-primary)" />
+                    </div>
+                    <div>
+                      <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                        إدارة محافظات الشحن والتوصيل (27 محافظة مصرية)
+                      </h2>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', margin: '3px 0 0 0' }}>
+                        التحكم الكامل في أسعار الشحن، مدة التوصيل، وتفعيل أو إيقاف استلام الطلبات لكل محافظة لحظياً في التطبيق.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    onClick={loadGovernorates}
+                    disabled={loadingGovs}
+                    className="btn-ghost"
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    <RefreshCw size={16} className={loadingGovs ? 'spin' : ''} />
+                    <span>تحديث البيانات</span>
+                  </button>
+
+                  <button
+                    onClick={handleOpenAddGov}
+                    className="btn-primary"
+                    style={{ fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <PlusCircle size={18} />
+                    <span>إضافة محافظة جديدة</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* KPI Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                <div className="kpi-card">
+                  <div className="kpi-title">إجمالي المحافظات المسجلة</div>
+                  <div className="kpi-val" style={{ color: '#fff' }}>{governorates.length}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    تغطي جمهورية مصر العربية
+                  </div>
+                </div>
+
+                <div className="kpi-card">
+                  <div className="kpi-title">محافظات التوصيل النشطة</div>
+                  <div className="kpi-val" style={{ color: '#10b981' }}>
+                    {governorates.filter((g) => g.isActive).length}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    جاهزة لاستقبال الطلبات في التطبيق
+                  </div>
+                </div>
+
+                <div className="kpi-card">
+                  <div className="kpi-title">محافظات الشحن المجاني</div>
+                  <div className="kpi-val" style={{ color: 'var(--gold-primary)' }}>
+                    {governorates.filter((g) => g.shippingFee === 0).length}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    مصاريف الشحن 0 ج.م
+                  </div>
+                </div>
+
+                <div className="kpi-card">
+                  <div className="kpi-title">إجمالي طلبات الشحن المسجلة</div>
+                  <div className="kpi-val" style={{ color: '#60a5fa' }}>
+                    {governorates.reduce((acc, g) => acc + (g.ordersCount || 0), 0)}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    طلبات عبر كافة المحافظات
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters Bar */}
+              <div className="glass-panel" style={{ padding: '16px 20px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '280px' }}>
+                  <div style={{ position: 'relative', width: '100%', maxWidth: '360px' }}>
+                    <Search size={18} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input
+                      type="text"
+                      placeholder="ابحث باسم المحافظة (بالعربية أو الإنجليزية)..."
+                      value={govSearch}
+                      onChange={(e) => setGovSearch(e.target.value)}
+                      className="admin-input"
+                      style={{ paddingRight: '38px', width: '100%' }}
+                    />
+                  </div>
+
+                  {govSearch && (
+                    <button
+                      onClick={() => setGovSearch('')}
+                      className="btn-ghost"
+                      style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+                    >
+                      إلغاء البحث
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  {/* Status filter */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>حالة التوصيل:</span>
+                    <select
+                      value={govStatusFilter}
+                      onChange={(e) => setGovStatusFilter(e.target.value)}
+                      className="admin-input"
+                      style={{ padding: '6px 12px', fontSize: '0.84rem', minWidth: '130px' }}
+                    >
+                      <option value="ALL">جميع الحالات</option>
+                      <option value="ACTIVE">النشطة فقط ✅</option>
+                      <option value="INACTIVE">المعطلة مؤقتاً ⏸️</option>
+                    </select>
+                  </div>
+
+                  {/* Fee filter */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>تكلفة الشحن:</span>
+                    <select
+                      value={govFeeFilter}
+                      onChange={(e) => setGovFeeFilter(e.target.value)}
+                      className="admin-input"
+                      style={{ padding: '6px 12px', fontSize: '0.84rem', minWidth: '130px' }}
+                    >
+                      <option value="ALL">جميع الرسوم</option>
+                      <option value="FREE">شحن مجاني (0 ج.م)</option>
+                      <option value="PAID">شحن مدفوع</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Governorates Table */}
+              <div className="glass-panel" style={{ overflow: 'hidden' }}>
+                {loadingGovs && governorates.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+                    <RefreshCw size={36} className="spin" style={{ margin: '0 auto 16px', display: 'block', color: 'var(--gold-primary)' }} />
+                    <p style={{ margin: 0, fontSize: '0.95rem' }}>جارٍ تحميل بيانات المحافظات وأسعار الشحن...</p>
+                  </div>
+                ) : (
+                  (() => {
+                    const filteredGovs = governorates.filter((g) => {
+                      const matchesSearch =
+                        !govSearch.trim() ||
+                        g.nameAr?.toLowerCase().includes(govSearch.trim().toLowerCase()) ||
+                        g.nameEn?.toLowerCase().includes(govSearch.trim().toLowerCase());
+
+                      const matchesStatus =
+                        govStatusFilter === 'ALL' ||
+                        (govStatusFilter === 'ACTIVE' && g.isActive) ||
+                        (govStatusFilter === 'INACTIVE' && !g.isActive);
+
+                      const matchesFee =
+                        govFeeFilter === 'ALL' ||
+                        (govFeeFilter === 'FREE' && g.shippingFee === 0) ||
+                        (govFeeFilter === 'PAID' && g.shippingFee > 0);
+
+                      return matchesSearch && matchesStatus && matchesFee;
+                    });
+
+                    if (filteredGovs.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+                          <MapPin size={42} style={{ margin: '0 auto 14px', display: 'block', color: 'var(--text-muted)', opacity: 0.5 }} />
+                          <p style={{ margin: 0, fontSize: '1rem', color: '#fff', fontWeight: 600 }}>لم يتم العثور على أي محافظة مطابقة</p>
+                          <p style={{ margin: '6px 0 0 0', fontSize: '0.82rem' }}>جرب تعديل كلمات البحث أو الفلاتر المعروضة أعلاه.</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
+                          <thead>
+                            <tr style={{ background: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                              <th style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>ترتيب</th>
+                              <th style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>اسم المحافظة</th>
+                              <th style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>مصاريف الشحن</th>
+                              <th style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>مدة التوصيل المتوقعة</th>
+                              <th style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>طلبات الشحن</th>
+                              <th style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>حالة التوصيل</th>
+                              <th style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--text-secondary)', textAlign: 'center' }}>الإجراءات</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredGovs.map((gov) => (
+                              <tr key={gov.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)', transition: 'background 0.15s ease' }}>
+                                <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                  #{gov.sortOrder ?? 0}
+                                </td>
+                                <td style={{ padding: '14px 16px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div style={{
+                                      width: '28px',
+                                      height: '28px',
+                                      borderRadius: '8px',
+                                      background: gov.isActive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: gov.isActive ? '#10b981' : '#f87171',
+                                      flexShrink: 0,
+                                    }}>
+                                      <MapPin size={15} />
+                                    </div>
+                                    <div>
+                                      <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.94rem' }}>
+                                        {gov.nameAr}
+                                      </div>
+                                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', direction: 'ltr', textAlign: 'right' }}>
+                                        {gov.nameEn}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td style={{ padding: '14px 16px' }}>
+                                  {gov.shippingFee === 0 ? (
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      padding: '3px 10px',
+                                      borderRadius: '12px',
+                                      fontSize: '0.78rem',
+                                      fontWeight: 800,
+                                      background: 'rgba(16, 185, 129, 0.15)',
+                                      color: '#10b981',
+                                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                                    }}>
+                                      <span>شحن مجاني (0 ج.م)</span>
+                                    </span>
+                                  ) : (
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      padding: '3px 10px',
+                                      borderRadius: '12px',
+                                      fontSize: '0.78rem',
+                                      fontWeight: 800,
+                                      background: 'rgba(245, 190, 24, 0.15)',
+                                      color: 'var(--gold-primary)',
+                                      border: '1px solid rgba(245, 190, 24, 0.3)',
+                                    }}>
+                                      <span>{gov.shippingFee} ج.م</span>
+                                    </span>
+                                  )}
+                                </td>
+                                <td style={{ padding: '14px 16px', fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Clock size={14} color="var(--text-muted)" />
+                                    <span>{gov.deliveryTime || 'خلال 24-48 ساعة'}</span>
+                                  </div>
+                                </td>
+                                <td style={{ padding: '14px 16px', fontSize: '0.86rem' }}>
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '2px 8px',
+                                    borderRadius: '8px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    color: '#fff',
+                                  }}>
+                                    <span>{gov.ordersCount || 0} طلب</span>
+                                  </span>
+                                </td>
+                                <td style={{ padding: '14px 16px' }}>
+                                  <button
+                                    onClick={() => handleToggleGovStatus(gov)}
+                                    style={{
+                                      border: 'none',
+                                      background: 'transparent',
+                                      cursor: 'pointer',
+                                      padding: 0,
+                                    }}
+                                    title="انقر لتبديل حالة التوصيل"
+                                  >
+                                    {gov.isActive ? (
+                                      <span className="badge badge-active" style={{ cursor: 'pointer' }}>
+                                        <span className="pulse-dot" style={{ background: '#10b981' }}></span>
+                                        نشطة للتوصيل ✅
+                                      </span>
+                                    ) : (
+                                      <span className="badge badge-paused" style={{ cursor: 'pointer', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>
+                                        معطلة مؤقتاً ⏸️
+                                      </span>
+                                    )}
+                                  </button>
+                                </td>
+                                <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                    <button
+                                      onClick={() => handleOpenEditGov(gov)}
+                                      className="btn-ghost"
+                                      style={{ padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                      title="تعديل بيانات المحافظة ورسوم الشحن"
+                                    >
+                                      <Edit3 size={15} color="var(--gold-primary)" />
+                                      <span>تعديل</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleDeleteGov(gov)}
+                                      className="btn-ghost"
+                                      style={{ padding: '6px 8px', color: '#f87171' }}
+                                      title="حذف المحافظة نهائياً"
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+
+              {/* Add / Edit Governorate Modal */}
+              {govModalOpen && (
+                <div style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'rgba(0, 0, 0, 0.75)',
+                  backdropFilter: 'blur(6px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 9999,
+                  padding: '20px',
+                }}>
+                  <div className="glass-panel" style={{ width: '100%', maxWidth: '520px', padding: '28px', border: '1px solid rgba(245, 190, 24, 0.3)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <MapPin size={22} color="var(--gold-primary)" />
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                          {editingGov ? 'تعديل بيانات محافظة الشحن' : 'إضافة محافظة توصيل جديدة'}
+                        </h3>
+                      </div>
+                      <button
+                        onClick={() => setGovModalOpen(false)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSaveGov} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '6px' }}>
+                            اسم المحافظة (بالعربية) *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="مثال: القاهرة"
+                            value={govForm.nameAr}
+                            onChange={(e) => setGovForm({ ...govForm, nameAr: e.target.value })}
+                            className="admin-input"
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '6px' }}>
+                            اسم المحافظة (بالإنجليزية)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="مثال: Cairo"
+                            value={govForm.nameEn}
+                            onChange={(e) => setGovForm({ ...govForm, nameEn: e.target.value })}
+                            className="admin-input"
+                            style={{ direction: 'ltr', textAlign: 'right' }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '6px' }}>
+                            رسوم الشحن (ج.م) *
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            required
+                            placeholder="0 = شحن مجاني"
+                            value={govForm.shippingFee}
+                            onChange={(e) => setGovForm({ ...govForm, shippingFee: parseFloat(e.target.value) || 0 })}
+                            className="admin-input"
+                          />
+                          <span style={{ fontSize: '0.72rem', color: govForm.shippingFee === 0 ? '#10b981' : 'var(--text-muted)', marginTop: '3px', display: 'block' }}>
+                            {govForm.shippingFee === 0 ? '✨ سيتم احتساب الشحن مجاني للمستخدم' : `${govForm.shippingFee} ج.م تُضاف على الفاتورة`}
+                          </span>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '6px' }}>
+                            مدة التوصيل التقديرية
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="خلال 24-48 ساعة"
+                            value={govForm.deliveryTime}
+                            onChange={(e) => setGovForm({ ...govForm, deliveryTime: e.target.value })}
+                            className="admin-input"
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'center' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '6px' }}>
+                            ترتيب العرض في التطبيق
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={govForm.sortOrder}
+                            onChange={(e) => setGovForm({ ...govForm, sortOrder: parseInt(e.target.value) || 0 })}
+                            className="admin-input"
+                          />
+                        </div>
+
+                        <div style={{ paddingTop: '18px' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={govForm.isActive}
+                              onChange={(e) => setGovForm({ ...govForm, isActive: e.target.checked })}
+                              style={{ width: '18px', height: '18px', accentColor: 'var(--gold-primary)', cursor: 'pointer' }}
+                            />
+                            <span style={{ fontSize: '0.88rem', color: '#fff', fontWeight: 600 }}>
+                              تفعيل التوصيل للمحافظة فوراً
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '16px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setGovModalOpen(false)}
+                          className="btn-ghost"
+                          style={{ fontSize: '0.88rem' }}
+                        >
+                          إلغاء
+                        </button>
+
+                        <button
+                          type="submit"
+                          disabled={isSavingGov}
+                          className="btn-primary"
+                          style={{ fontSize: '0.88rem', minWidth: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                        >
+                          {isSavingGov ? (
+                            <>
+                              <RefreshCw size={15} className="spin" />
+                              <span>جارٍ الحفظ...</span>
+                            </>
+                          ) : (
+                            <span>{editingGov ? 'حفظ التعديلات' : 'إضافة المحافظة'}</span>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ════════════════ TAB 11: ERROR TRACKING ════════════════ */}
+          {currentTab === 'error_logs' && (
+            <div className="fade-in">
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '10px',
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <AlertTriangle size={22} color="#f87171" />
+                    </div>
+                    <div>
+                      <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
+                        سجل مراقبة الأخطاء والاستثناءات (Error Tracking)
+                      </h2>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        متابعة لحظية للأخطاء البرمجية (Exceptions) ومشاكل الاتصال بالسيرفر مع التفاصيل الفنية
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <button
+                    onClick={loadErrorLogs}
+                    disabled={isLoadingErrorLogs}
+                    className="btn-ghost"
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    <RefreshCw size={15} className={isLoadingErrorLogs ? 'spin-icon' : ''} />
+                    <span>تحديث السجل</span>
+                  </button>
+
+                  {errorLogsList.length > 0 && (
+                    <button
+                      onClick={handleClearAllErrors}
+                      className="btn-ghost"
+                      style={{
+                        fontSize: '0.85rem',
+                        color: '#f87171',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                      }}
+                    >
+                      <Trash2 size={15} />
+                      <span>مسح كافة السجلات</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Stat Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                <div className="card" style={{ padding: '18px' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px' }}>إجمالي الأخطاء المسجلة</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-primary)' }}>{errorLogsList.length}</div>
+                </div>
+                <div className="card" style={{ padding: '18px', borderLeft: '4px solid #ef4444' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#f87171', marginBottom: '6px' }}>أخطاء غير محلولة</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#ef4444' }}>{unresolvedErrorCount}</div>
+                </div>
+                <div className="card" style={{ padding: '18px', borderLeft: '4px solid #10b981' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#34d399', marginBottom: '6px' }}>أخطاء تمت معالجتها</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981' }}>
+                    {errorLogsList.filter(l => l.isResolved).length}
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                <button
+                  onClick={() => setErrorLevelFilter('ALL')}
+                  className={errorLevelFilter === 'ALL' ? 'btn-primary' : 'btn-ghost'}
+                  style={{ fontSize: '0.82rem', padding: '6px 14px' }}
+                >
+                  الكل ({errorLogsList.length})
+                </button>
+                <button
+                  onClick={() => setErrorLevelFilter('UNRESOLVED')}
+                  className={errorLevelFilter === 'UNRESOLVED' ? 'btn-primary' : 'btn-ghost'}
+                  style={{ fontSize: '0.82rem', padding: '6px 14px' }}
+                >
+                  غير المحلولة ({unresolvedErrorCount})
+                </button>
+                <button
+                  onClick={() => setErrorLevelFilter('RESOLVED')}
+                  className={errorLevelFilter === 'RESOLVED' ? 'btn-primary' : 'btn-ghost'}
+                  style={{ fontSize: '0.82rem', padding: '6px 14px' }}
+                >
+                  المحلولة ({errorLogsList.filter(l => l.isResolved).length})
+                </button>
+              </div>
+
+              {/* Logs List Table */}
+              <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
+                {isLoadingErrorLogs ? (
+                  <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <RefreshCw size={24} className="spin-icon" style={{ margin: '0 auto 12px' }} />
+                    <div>جاري تحميل سجل الأخطاء...</div>
+                  </div>
+                ) : errorLogsList.length === 0 ? (
+                  <div style={{ padding: '48px', textAlign: 'center' }}>
+                    <CheckCircle2 size={42} color="#10b981" style={{ margin: '0 auto 12px' }} />
+                    <h3 style={{ margin: '0 0 6px', color: 'var(--text-primary)' }}>النظام يعمل بكفاءة 100%</h3>
+                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+                      لا توجد أي أخطاء أو استثناءات مسجلة في السيرفر حالياً
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--bg-main)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                          <th style={{ padding: '14px 16px' }}>الحالة والنوع</th>
+                          <th style={{ padding: '14px 16px' }}>المسار والطلب (Route)</th>
+                          <th style={{ padding: '14px 16px' }}>رسالة الخطأ</th>
+                          <th style={{ padding: '14px 16px' }}>الوقت والتاريخ</th>
+                          <th style={{ padding: '14px 16px', textAlign: 'center' }}>إجراءات</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {errorLogsList
+                          .filter(log => {
+                            if (errorLevelFilter === 'UNRESOLVED') return !log.isResolved;
+                            if (errorLevelFilter === 'RESOLVED') return log.isResolved;
+                            return true;
+                          })
+                          .map((log) => {
+                            const isExpanded = expandedLogId === log.id;
+                            const isError = (log.statusCode && log.statusCode >= 500) || log.level === 'ERROR';
+
+                            return (
+                              <React.Fragment key={log.id}>
+                                <tr style={{
+                                  borderBottom: '1px solid var(--border-subtle)',
+                                  background: log.isResolved ? 'transparent' : 'rgba(239, 68, 68, 0.03)',
+                                  transition: 'background 0.2s',
+                                }}>
+                                  <td style={{ padding: '14px 16px' }}>
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '6px',
+                                      padding: '3px 8px',
+                                      borderRadius: '6px',
+                                      fontSize: '0.75rem',
+                                      fontWeight: 800,
+                                      background: isError ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                                      color: isError ? '#ef4444' : '#f59e0b',
+                                    }}>
+                                      {log.statusCode || 500} {log.level}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: '14px 16px', direction: 'ltr', textAlign: 'left', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                                    <span style={{ fontWeight: 800, color: 'var(--gold-primary)' }}>{log.method || 'GET'}</span>{' '}
+                                    <span style={{ color: 'var(--text-secondary)' }}>{log.path || '/'}</span>
+                                  </td>
+                                  <td style={{ padding: '14px 16px', maxWidth: '320px' }}>
+                                    <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                      {log.message}
+                                    </div>
+                                    {log.stack && (
+                                      <button
+                                        onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                                        style={{
+                                          background: 'transparent',
+                                          border: 'none',
+                                          color: 'var(--gold-primary)',
+                                          cursor: 'pointer',
+                                          fontSize: '0.75rem',
+                                          padding: '2px 0',
+                                          fontWeight: 700,
+                                        }}
+                                      >
+                                        {isExpanded ? 'إخفاء التفاصيل الفنية ▴' : 'عرض التفاصيل والـ Stacktrace ▾'}
+                                      </button>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: '14px 16px', fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                    {new Date(log.createdAt).toLocaleString('ar-EG', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </td>
+                                  <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                                    <div style={{ display: 'inline-flex', gap: '8px' }}>
+                                      <button
+                                        onClick={() => handleToggleResolveError(log.id)}
+                                        className="btn-ghost"
+                                        title={log.isResolved ? 'إعادة الفتح' : 'تعليم كمحلول'}
+                                        style={{
+                                          padding: '6px 10px',
+                                          fontSize: '0.75rem',
+                                          color: log.isResolved ? '#10b981' : 'var(--text-muted)',
+                                        }}
+                                      >
+                                        <CheckCircle2 size={16} color={log.isResolved ? '#10b981' : 'currentColor'} />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteErrorLog(log.id)}
+                                        className="btn-ghost"
+                                        title="حذف السجل"
+                                        style={{ padding: '6px 10px', fontSize: '0.75rem', color: '#f87171' }}
+                                      >
+                                        <Trash2 size={15} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+
+                                {isExpanded && (
+                                  <tr style={{ background: 'rgba(0,0,0,0.3)', borderBottom: '1px solid var(--border-subtle)' }}>
+                                    <td colSpan={5} style={{ padding: '16px' }}>
+                                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '8px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                                        {log.ip && <span><strong>IP:</strong> {log.ip}</span>}
+                                        {log.userAgent && <span><strong>User-Agent:</strong> {log.userAgent}</span>}
+                                      </div>
+                                      <pre style={{
+                                        margin: 0,
+                                        padding: '12px',
+                                        background: 'rgba(0, 0, 0, 0.6)',
+                                        borderRadius: '8px',
+                                        color: '#f87171',
+                                        fontSize: '0.75rem',
+                                        fontFamily: 'Consolas, monospace',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-all',
+                                        maxHeight: '200px',
+                                        overflowY: 'auto',
+                                        direction: 'ltr',
+                                        textAlign: 'left',
+                                      }}>
+                                        {log.stack || log.message}
+                                      </pre>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

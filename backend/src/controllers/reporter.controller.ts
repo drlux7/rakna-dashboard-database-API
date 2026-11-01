@@ -564,6 +564,7 @@ export class ReporterController {
       });
       res.json({
         success: true,
+        data: messages,
         messages,
       });
     } catch (error) {

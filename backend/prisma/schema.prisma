@@ -331,3 +331,33 @@ model StoreBanner {
   @@map("store_banners")
 }
 
+model Governorate {
+  id                String            @id @default(uuid())
+  nameAr            String            @unique
+  nameEn            String
+  shippingFee       Float             @default(0) // 0 = شحن مجاني
+  deliveryTime      String            @default("خلال 24-48 ساعة")
+  isActive          Boolean           @default(true)
+  sortOrder         Int               @default(0)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@map("governorates")
+}
+
+model ErrorLog {
+  id          String   @id @default(uuid())
+  level       String   @default("ERROR") // ERROR, WARN, CRITICAL
+  message     String
+  stack       String?
+  path        String?
+  method      String?
+  statusCode  Int?     @default(500)
+  ip          String?
+  userAgent   String?
+  isResolved  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("error_logs")
+}
+

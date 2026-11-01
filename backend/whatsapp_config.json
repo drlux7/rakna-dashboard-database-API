@@ -1,8 +1,8 @@
 {
-  "provider": "GREEN_API",
+  "provider": "BAILEYS",
   "isAutoSendEnabled": true,
-  "greenApiIdInstance": "710722777618",
-  "greenApiToken": "5f8886b3723e44ba92b69bd7b290b77920544f4b721f441796",
+  "greenApiIdInstance": "",
+  "greenApiToken": "",
   "greenApiHost": "https://api.green-api.com",
   "metaToken": "",
   "metaPhoneNumberId": "",

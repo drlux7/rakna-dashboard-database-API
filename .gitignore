@@ -21,6 +21,10 @@ build/
 *.db
 *.db-journal
 
+# WhatsApp Baileys Auth Session
+baileys_auth/
+backend/baileys_auth/
+
 # Uploads
 backend/uploads/*
 !backend/uploads/.gitkeep

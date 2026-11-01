@@ -33,6 +33,18 @@ export const authenticateOwner = (req: AuthRequest, res: Response, next: NextFun
   }
 };
 
+export const optionalOwner = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(token, getJwtSecret()) as AuthenticatedUser;
+      req.user = decoded;
+    } catch (_) {}
+  }
+  next();
+};
+
 export const authenticateAdmin = (req: AuthRequest, res: Response, next: NextFunction): void => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

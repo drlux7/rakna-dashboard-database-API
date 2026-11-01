@@ -34,6 +34,22 @@ export class StoreController {
   }
 
   /**
+   * جلب محافظات التوصيل المتاحة للتطبيق مع تكلفة الشحن ومدة التوصيل
+   */
+  static async getGovernorates(req: Request, res: Response): Promise<void> {
+    try {
+      const governorates = await prisma.governorate.findMany({
+        where: { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { nameAr: 'asc' }],
+      });
+      res.json({ success: true, governorates });
+    } catch (error) {
+      console.error('Error fetching governorates:', error);
+      res.status(500).json({ success: false, message: 'تعذر جلب محافظات التوصيل' });
+    }
+  }
+
+  /**
    * إنشاء طلب شراء جديد والدفع عند الاستلام نقداً (COD)
    */
   static async createOrder(req: AuthRequest, res: Response): Promise<void> {

@@ -383,9 +383,158 @@ export class AdminController {
         data: { status },
       });
 
-      res.json({ success: true, message: 'تم تحديث حالة الطلب بنجاح', order });
+      // ── إرسال إشعار فوري للعميل على التطبيق عند تحديث حالة طلبه ──
+      if (order.userId) {
+        try {
+          let notifTitle = `تحديث حالة طلبك (${order.orderNumber})`;
+          let notifMessage = `تم تحديث حالة طلب الشراء الخاص بك إلى: ${status}`;
+
+          switch (status) {
+            case 'PROCESSING':
+              notifTitle = `طلبك قيد التجهيز الآن 📦 (${order.orderNumber})`;
+              notifMessage = `تم تأكيد طلبك وجارٍ تجهيز ملصق Rakna Tag الخاص بك للشحن إلى ${order.governorate}.`;
+              break;
+            case 'SHIPPED':
+              notifTitle = `طلبك في الطريق إليك 🚚 (${order.orderNumber})`;
+              notifMessage = `تم تسليم شحنتك لمندوب التوصيل في محافظة ${order.governorate}، وسيتواصل معك قريباً للتسليم.`;
+              break;
+            case 'DELIVERED':
+              notifTitle = `تم توصيل واستلام طلبك بنجاح 🎉 (${order.orderNumber})`;
+              notifMessage = `شكراً لثقتك بركنة! يمكنك الآن مسح كود التفعيل المرفق داخل العلبة وتفعيل ملصقك فوراً.`;
+              break;
+            case 'CANCELLED':
+              notifTitle = `تم إلغاء الطلب (${order.orderNumber})`;
+              notifMessage = `تم إلغاء طلب الشراء الخاص بك. إذا كان لديك أي استفسار يرجى التواصل مع فريق الدعم الفني.`;
+              break;
+            case 'PENDING':
+              notifTitle = `طلبك قيد المراجعة (${order.orderNumber})`;
+              notifMessage = `تم تسجيل طلبك وهو الآن قيد المراجعة من فريق المبيعات.`;
+              break;
+          }
+
+          await prisma.notification.create({
+            data: {
+              userId: order.userId,
+              type: 'SYSTEM',
+              title: notifTitle,
+              message: notifMessage,
+              actionLabel: 'تفاصيل الطلب',
+            },
+          });
+        } catch (notifErr) {
+          console.error('Failed to create in-app notification for order:', notifErr);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'تم تحديث حالة الطلب بنجاح وإرسال إشعار فوري للعميل على التطبيق 🔔',
+        order,
+      });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر تحديث حالة الطلب' });
+    }
+  }
+
+  /**
+   * ─────────────────────────────────────────────────────────────────────────────
+   * إدارة محافظات ومناطق التوصيل (Shipping & Delivery Governorates)
+   * ─────────────────────────────────────────────────────────────────────────────
+   */
+  static async listGovernorates(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const governorates = await prisma.governorate.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { nameAr: 'asc' }],
+      });
+
+      // Get order count per governorate for analytics
+      const orderCounts = await prisma.order.groupBy({
+        by: ['governorate'],
+        _count: { id: true },
+      });
+
+      const countMap: Record<string, number> = {};
+      for (const oc of orderCounts) {
+        countMap[oc.governorate] = oc._count.id;
+      }
+
+      const enriched = governorates.map((g) => ({
+        ...g,
+        ordersCount: countMap[g.nameAr] || 0,
+      }));
+
+      res.json({ success: true, governorates: enriched });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر جلب محافظات التوصيل' });
+    }
+  }
+
+  static async createGovernorate(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { nameAr, nameEn, shippingFee, deliveryTime, isActive, sortOrder } = req.body;
+
+      if (!nameAr || !nameEn) {
+        res.status(400).json({ success: false, message: 'الاسم بالعربية والإنجليزية مطلوب' });
+        return;
+      }
+
+      const existing = await prisma.governorate.findUnique({
+        where: { nameAr: nameAr.trim() },
+      });
+
+      if (existing) {
+        res.status(409).json({ success: false, message: 'هذه المحافظة مسجلة مسبقاً' });
+        return;
+      }
+
+      const gov = await prisma.governorate.create({
+        data: {
+          nameAr: nameAr.trim(),
+          nameEn: nameEn.trim(),
+          shippingFee: parseFloat(shippingFee) || 0,
+          deliveryTime: (deliveryTime && deliveryTime.trim()) || 'خلال 24-48 ساعة',
+          isActive: isActive !== false,
+          sortOrder: parseInt(sortOrder) || 0,
+        },
+      });
+
+      res.status(201).json({ success: true, message: 'تمت إضافة المحافظة بنجاح', governorate: gov });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر إضافة المحافظة' });
+    }
+  }
+
+  static async updateGovernorate(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const { nameAr, nameEn, shippingFee, deliveryTime, isActive, sortOrder } = req.body;
+
+      const data: any = {};
+      if (nameAr !== undefined) data.nameAr = nameAr.trim();
+      if (nameEn !== undefined) data.nameEn = nameEn.trim();
+      if (shippingFee !== undefined) data.shippingFee = parseFloat(shippingFee) || 0;
+      if (deliveryTime !== undefined) data.deliveryTime = deliveryTime.trim();
+      if (isActive !== undefined) data.isActive = Boolean(isActive);
+      if (sortOrder !== undefined) data.sortOrder = parseInt(sortOrder) || 0;
+
+      const gov = await prisma.governorate.update({
+        where: { id },
+        data,
+      });
+
+      res.json({ success: true, message: 'تم تحديث بيانات المحافظة بنجاح', governorate: gov });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تحديث بيانات المحافظة' });
+    }
+  }
+
+  static async deleteGovernorate(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      await prisma.governorate.delete({ where: { id } });
+      res.json({ success: true, message: 'تم حذف المحافظة بنجاح' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر حذف المحافظة' });
     }
   }
 
@@ -1561,6 +1710,97 @@ export class AdminController {
     } catch (error) {
       console.error('Error deleting banner:', error);
       res.status(500).json({ success: false, message: 'تعذر حذف شريحة السلايدر' });
+    }
+  }
+
+  /**
+   * جلب سجلات الأخطاء المسجلة في السيرفر (Error Tracking)
+   */
+  static async getErrorLogs(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string || '50', 10)));
+      const skip = (page - 1) * limit;
+
+      const [logs, total] = await Promise.all([
+        prisma.errorLog.findMany({
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        prisma.errorLog.count(),
+      ]);
+
+      const unresolvedCount = await prisma.errorLog.count({
+        where: { isResolved: false },
+      });
+
+      res.json({
+        success: true,
+        data: logs,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+          unresolvedCount,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching error logs:', error);
+      res.status(500).json({ success: false, message: 'تعذر جلب سجلات الأخطاء' });
+    }
+  }
+
+  /**
+   * تعليم الخطأ كمحلول / غير محلول
+   */
+  static async toggleResolveErrorLog(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const existing = await prisma.errorLog.findUnique({ where: { id } });
+      if (!existing) {
+        res.status(404).json({ success: false, message: 'سجل الخطأ غير موجود' });
+        return;
+      }
+
+      const updated = await prisma.errorLog.update({
+        where: { id },
+        data: { isResolved: !existing.isResolved },
+      });
+
+      res.json({
+        success: true,
+        message: updated.isResolved ? 'تم تعليم الخطأ كمحلول ✅' : 'تمت إعادة فتح الخطأ',
+        log: updated,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تحديث حالة الخطأ' });
+    }
+  }
+
+  /**
+   * حذف سجل خطأ محدد
+   */
+  static async deleteErrorLog(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      await prisma.errorLog.delete({ where: { id } });
+      res.json({ success: true, message: 'تم حذف سجل الخطأ بنجاح 🗑️' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر حذف سجل الخطأ' });
+    }
+  }
+
+  /**
+   * مسح جميع سجلات الأخطاء
+   */
+  static async clearAllErrorLogs(_req: AuthRequest, res: Response): Promise<void> {
+    try {
+      await prisma.errorLog.deleteMany({});
+      res.json({ success: true, message: 'تم مسح كافة سجلات الأخطاء بنجاح 🧹' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر مسح سجلات الأخطاء' });
     }
   }
 }

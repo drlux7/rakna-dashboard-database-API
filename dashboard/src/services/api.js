@@ -314,6 +314,61 @@ class AdminApiService {
       method: 'DELETE',
     });
   }
+
+  // Delivery Governorates & Shipping Management
+  async getGovernorates() {
+    return this.request('/admin/governorates');
+  }
+
+  async createGovernorate(data) {
+    return this.request('/admin/governorates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateGovernorate(id, data) {
+    return this.request(`/admin/governorates/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async toggleGovernorate(id, isActive) {
+    return this.request(`/admin/governorates/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    });
+  }
+
+  async deleteGovernorate(id) {
+    return this.request(`/admin/governorates/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Error Tracking & System Logs
+  async getErrorLogs(page = 1, limit = 50) {
+    return this.request(`/admin/error-logs?page=${page}&limit=${limit}`);
+  }
+
+  async toggleResolveErrorLog(id) {
+    return this.request(`/admin/error-logs/${id}/toggle-resolve`, {
+      method: 'PATCH',
+    });
+  }
+
+  async deleteErrorLog(id) {
+    return this.request(`/admin/error-logs/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async clearAllErrorLogs() {
+    return this.request('/admin/error-logs/clear-all', {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const api = new AdminApiService();

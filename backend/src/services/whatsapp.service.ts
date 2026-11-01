@@ -1,8 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import QRCode from 'qrcode';
+
+// Baileys imports via require to support TSX/CommonJS interoperability with native wasm/rust bridge
+const baileys = require('@whiskeysockets/baileys');
+const makeWASocket = baileys.default || baileys;
+const { DisconnectReason, useMultiFileAuthState } = baileys;
+const pino = require('pino');
 
 export type WhatsAppProvider =
+  | 'BAILEYS'
   | 'GREEN_API'
   | 'META_CLOUD_API'
   | 'ULTRAMSG'
@@ -12,7 +20,7 @@ export type WhatsAppProvider =
 export interface WhatsAppConfig {
   provider: WhatsAppProvider;
   isAutoSendEnabled: boolean;
-  // Green-API (Free Developer Tier)
+  // Green-API (Legacy)
   greenApiIdInstance: string;
   greenApiToken: string;
   greenApiHost: string;
@@ -48,7 +56,7 @@ export interface WhatsAppMessage {
 }
 
 const DEFAULT_CONFIG: WhatsAppConfig = {
-  provider: 'GREEN_API',
+  provider: 'BAILEYS',
   isAutoSendEnabled: true,
   greenApiIdInstance: '',
   greenApiToken: '',
@@ -69,9 +77,105 @@ class WhatsAppService {
   private config: WhatsAppConfig;
   private readonly configFilePath: string;
 
+  // Baileys Engine Internal State
+  private baileysSocket: any = null;
+  private baileysQr: string | null = null;
+  private baileysState: 'authorized' | 'notAuthorized' | 'connecting' | 'error' = 'notAuthorized';
+  private baileysPhone: string | null = null;
+  private readonly baileysAuthDir: string;
+  private isBaileysInitializing = false;
+
   constructor() {
     this.configFilePath = path.join(process.cwd(), 'whatsapp_config.json');
+    this.baileysAuthDir = path.join(process.cwd(), 'baileys_auth');
     this.config = this.loadConfig();
+
+    // Start Baileys immediately if Baileys is active
+    if (this.config.provider === 'BAILEYS') {
+      this.initBaileys().catch((err) => {
+        console.error('[WHATSAPP-BAILEYS] Startup init error:', err);
+      });
+    }
+  }
+
+  /**
+   * تهيئة عميل Baileys المحلي المستقل
+   */
+  public async initBaileys(): Promise<void> {
+    if (this.isBaileysInitializing) return;
+    this.isBaileysInitializing = true;
+    this.baileysState = 'connecting';
+
+    try {
+      if (!fs.existsSync(this.baileysAuthDir)) {
+        fs.mkdirSync(this.baileysAuthDir, { recursive: true });
+      }
+
+      const { state, saveCreds } = await useMultiFileAuthState(this.baileysAuthDir);
+
+      this.baileysSocket = makeWASocket({
+        auth: state,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false,
+        browser: ['Rakna Admin Dashboard', 'Chrome', '1.0.0'],
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 25000,
+      });
+
+      this.baileysSocket.ev.on('creds.update', saveCreds);
+
+      this.baileysSocket.ev.on('connection.update', async (update: any) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+          try {
+            this.baileysQr = await QRCode.toDataURL(qr, { margin: 2, scale: 7 });
+            this.baileysState = 'notAuthorized';
+            console.log('[WHATSAPP-BAILEYS] New QR Code generated for pairing.');
+          } catch (qrErr) {
+            console.error('[WHATSAPP-BAILEYS] QR Generation error:', qrErr);
+          }
+        }
+
+        if (connection === 'open') {
+          this.baileysQr = null;
+          this.baileysState = 'authorized';
+          const rawId = this.baileysSocket?.user?.id || '';
+          this.baileysPhone = rawId.split(':')[0] || rawId.split('@')[0] || '';
+          console.log(`[WHATSAPP-BAILEYS] ✅ Connected successfully! Linked WhatsApp Phone: +${this.baileysPhone}`);
+        }
+
+        if (connection === 'close') {
+          const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
+          const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+          console.log(`[WHATSAPP-BAILEYS] Connection closed (code: ${statusCode}). Reconnect: ${shouldReconnect}`);
+
+          if (shouldReconnect) {
+            this.baileysState = 'connecting';
+            setTimeout(() => {
+              this.isBaileysInitializing = false;
+              this.initBaileys();
+            }, 4000);
+          } else {
+            this.baileysState = 'notAuthorized';
+            this.baileysPhone = null;
+            this.baileysQr = null;
+            try {
+              fs.rmSync(this.baileysAuthDir, { recursive: true, force: true });
+            } catch (_) {}
+            setTimeout(() => {
+              this.isBaileysInitializing = false;
+              this.initBaileys();
+            }, 2000);
+          }
+        }
+      });
+    } catch (err: any) {
+      console.error('[WHATSAPP-BAILEYS] Failed to initialize Baileys client:', err.message);
+      this.baileysState = 'error';
+    } finally {
+      this.isBaileysInitializing = false;
+    }
   }
 
   /**
@@ -88,30 +192,23 @@ class WhatsAppService {
       console.warn('[WHATSAPP] Could not read whatsapp_config.json, using defaults.');
     }
 
-    // Fallback to process.env if available
-    const envConfig: Partial<WhatsAppConfig> = {};
-    if (process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID) {
-      envConfig.provider = 'META_CLOUD_API';
-      envConfig.metaToken = process.env.WHATSAPP_TOKEN;
-      envConfig.metaPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-    }
-    if (process.env.GREEN_API_ID_INSTANCE && process.env.GREEN_API_TOKEN) {
-      envConfig.provider = 'GREEN_API';
-      envConfig.greenApiIdInstance = process.env.GREEN_API_ID_INSTANCE;
-      envConfig.greenApiToken = process.env.GREEN_API_TOKEN;
-    }
-
-    return { ...DEFAULT_CONFIG, ...envConfig };
+    return { ...DEFAULT_CONFIG };
   }
 
   /**
    * حفظ الإعدادات في الملف
    */
   public saveConfig(newConfig: Partial<WhatsAppConfig>): WhatsAppConfig {
+    const prevProvider = this.config.provider;
     this.config = { ...this.config, ...newConfig };
     try {
       fs.writeFileSync(this.configFilePath, JSON.stringify(this.config, null, 2), 'utf-8');
       console.log('[WHATSAPP] Configuration updated successfully.');
+
+      // If switched to Baileys, start it
+      if (this.config.provider === 'BAILEYS' && (!this.baileysSocket || prevProvider !== 'BAILEYS')) {
+        this.initBaileys();
+      }
     } catch (e) {
       console.error('[WHATSAPP] Failed to persist whatsapp_config.json:', e);
     }
@@ -191,11 +288,27 @@ class WhatsAppService {
    * إرسال رسالة باستخدام المزود النشط المحدد
    */
   public async dispatchViaActiveProvider(msg: WhatsAppMessage): Promise<{ success: boolean; error?: string }> {
-    const cleanPhone = msg.phone.replace(/\D/g, '');
+    let cleanPhone = msg.phone.replace(/\D/g, '');
+    if (cleanPhone.startsWith('0')) cleanPhone = '2' + cleanPhone;
     msg.providerUsed = this.config.provider;
 
     try {
       switch (this.config.provider) {
+        case 'BAILEYS': {
+          if (!this.baileysSocket || this.baileysState !== 'authorized') {
+            throw new Error('خدمة Baileys غير متصلة بحساب واتساب حالياً. يرجى مسح رمز الـ QR من الداشبورد.');
+          }
+
+          const jid = `${cleanPhone}@s.whatsapp.net`;
+          await this.baileysSocket.sendMessage(jid, { text: msg.message });
+
+          msg.status = 'SENT';
+          msg.sentAt = new Date().toISOString();
+          delete msg.errorMessage;
+          console.log(`[WHATSAPP-BAILEYS] Sent OTP successfully to ${cleanPhone}`);
+          return { success: true };
+        }
+
         case 'GREEN_API': {
           if (!this.config.greenApiIdInstance || !this.config.greenApiToken) {
             throw new Error('بيانات Green-API غير مكتملة (idInstance أو apiTokenInstance مفقود)');
@@ -213,10 +326,11 @@ class WhatsAppService {
             }),
           });
 
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            throw new Error(data.message || `Green-API HTTP ${res.status}`);
+          const data: any = await res.json().catch(() => ({}));
+          if (!res.ok || data.error) {
+            throw new Error(data.message || data.error || `Green-API HTTP ${res.status}`);
           }
+
           msg.status = 'SENT';
           msg.sentAt = new Date().toISOString();
           delete msg.errorMessage;
@@ -308,62 +422,64 @@ class WhatsAppService {
         case 'SIMULATED_LINK':
         default: {
           msg.status = 'SIMULATED';
+          console.log(`[WHATSAPP] Link simulated for ${cleanPhone}: ${msg.whatsappUrl}`);
           return { success: true };
         }
       }
     } catch (err: any) {
       msg.status = 'FAILED';
-      msg.errorMessage = err.message || 'فشل الاتصال بمزود الواتساب';
+      msg.errorMessage = err.message || 'خطأ غير معروف أثناء الإرسال';
       console.warn(`[WHATSAPP] Dispatch error for ${cleanPhone}:`, err.message);
       return { success: false, error: err.message };
     }
   }
 
   /**
-   * اختبار الاتصال وإرسال كود تجريبي
+   * إرسال رسالة تجريبية لاختبار عمل البوابة الحالية
    */
-  public async sendTestOtp(phone: string): Promise<{ success: boolean; message: string; details?: any }> {
+  public async sendTestOtp(phone: string): Promise<{ success: boolean; message: string }> {
     const testCode = Math.floor(100000 + Math.random() * 900000).toString();
     const msg = this.queueOtpMessage(phone, testCode);
 
     const result = await this.dispatchViaActiveProvider(msg);
-    this.config.lastTestAt = new Date().toISOString();
 
+    this.config.lastTestAt = new Date().toISOString();
     if (result.success) {
       this.config.lastTestStatus = 'SUCCESS';
-      this.config.lastTestMessage = `تم الإرسال بنجاح إلى ${phone} عبر ${this.config.provider}`;
-      this.saveConfig({});
-      return {
-        success: true,
-        message: `تم إرسال كود التحقق التجريبي (${testCode}) بنجاح إلى الرقم ${phone}!`,
-        details: { code: testCode, provider: this.config.provider, status: msg.status },
-      };
+      this.config.lastTestMessage = `تم الإرسال بنجاح إلى ${phone}`;
+      this.saveConfig({
+        lastTestStatus: 'SUCCESS',
+        lastTestMessage: this.config.lastTestMessage,
+        lastTestAt: this.config.lastTestAt,
+      });
+      return { success: true, message: `تم إرسال كود الاختبار (${testCode}) بنجاح إلى ${phone}` };
     } else {
       this.config.lastTestStatus = 'FAILED';
-      this.config.lastTestMessage = result.error || 'فشل الاتصال';
-      this.saveConfig({});
-      return {
-        success: false,
-        message: `تعذر الإرسال: ${result.error}`,
-        details: { provider: this.config.provider, error: result.error },
-      };
+      this.config.lastTestMessage = result.error;
+      this.saveConfig({
+        lastTestStatus: 'FAILED',
+        lastTestMessage: result.error,
+        lastTestAt: this.config.lastTestAt,
+      });
+      return { success: false, message: `فشل الاختبار: ${result.error}` };
     }
   }
 
   /**
-   * إعادة إرسال رسالة مسجلة في الصندوق
+   * إعادة إرسال رسالة سابقة
    */
   public async resendMessage(id: string): Promise<WhatsAppMessage | null> {
     const msg = this.outbox.find((m) => m.id === id);
     if (!msg) return null;
 
     msg.status = 'QUEUED';
+    delete msg.errorMessage;
     await this.dispatchViaActiveProvider(msg);
     return msg;
   }
 
   /**
-   * جلب رسائل الـ Outbox الخاصة بالداشبورد
+   * استعراض صندوق الصادر
    */
   public getOutbox(): WhatsAppMessage[] {
     return this.outbox;
@@ -401,14 +517,28 @@ class WhatsAppService {
       activeProvider: this.config.provider,
       isAutoSendEnabled: this.config.isAutoSendEnabled,
       lastTestStatus: this.config.lastTestStatus,
+      connectedPhone: this.baileysPhone,
     };
   }
 
   /**
-   * جلب رمز الـ QR Code الخاص بـ Green-API لمسحه بالهاتف
+   * جلب رمز الـ QR Code لمسحه بالهاتف (يدعم Baileys أو Green-API)
    */
-  public async getQrCode(): Promise<{ type: string; message?: string; error?: string }> {
+  public async getQrCode(): Promise<{ type: string; message?: string; status?: string; phone?: string | null; error?: string }> {
     try {
+      if (this.config.provider === 'BAILEYS') {
+        if (!this.baileysSocket) {
+          await this.initBaileys();
+        }
+        return {
+          type: 'qrCode',
+          message: this.baileysQr || undefined,
+          status: this.baileysState,
+          phone: this.baileysPhone,
+        };
+      }
+
+      // Legacy Green-API fallback
       if (!this.config.greenApiIdInstance || !this.config.greenApiToken) {
         throw new Error('يرجى حفظ معرّف النسخة idInstance والرمز apiTokenInstance أولاً');
       }
@@ -423,10 +553,18 @@ class WhatsAppService {
   }
 
   /**
-   * فحص حالة الحساب في Green-API (authorized, notAuthorized, etc.)
+   * فحص حالة الحساب (authorized, notAuthorized, connecting, etc.)
    */
-  public async getStateInstance(): Promise<{ stateInstance: string; error?: string }> {
+  public async getStateInstance(): Promise<{ stateInstance: string; phone?: string | null; error?: string }> {
     try {
+      if (this.config.provider === 'BAILEYS') {
+        return {
+          stateInstance: this.baileysState,
+          phone: this.baileysPhone,
+        };
+      }
+
+      // Legacy Green-API fallback
       if (!this.config.greenApiIdInstance || !this.config.greenApiToken) {
         return { stateInstance: 'notConfigured' };
       }
@@ -445,6 +583,26 @@ class WhatsAppService {
    */
   public async logoutInstance(): Promise<{ isLogout: boolean; error?: string }> {
     try {
+      if (this.config.provider === 'BAILEYS') {
+        if (this.baileysSocket) {
+          try {
+            await this.baileysSocket.logout();
+          } catch (_) {}
+          this.baileysSocket.end(undefined);
+          this.baileysSocket = null;
+        }
+        this.baileysState = 'notAuthorized';
+        this.baileysPhone = null;
+        this.baileysQr = null;
+
+        try {
+          fs.rmSync(this.baileysAuthDir, { recursive: true, force: true });
+        } catch (_) {}
+
+        setTimeout(() => this.initBaileys(), 1500);
+        return { isLogout: true };
+      }
+
       const host = this.config.greenApiHost || 'https://api.green-api.com';
       const url = `${host}/waInstance${this.config.greenApiIdInstance}/logout/${this.config.greenApiToken}`;
       const res = await fetch(url, { method: 'POST' });
@@ -460,6 +618,19 @@ class WhatsAppService {
    */
   public async rebootInstance(): Promise<{ isReboot: boolean; error?: string }> {
     try {
+      if (this.config.provider === 'BAILEYS') {
+        if (this.baileysSocket) {
+          try {
+            this.baileysSocket.end(undefined);
+          } catch (_) {}
+          this.baileysSocket = null;
+        }
+        this.baileysState = 'connecting';
+        this.isBaileysInitializing = false;
+        setTimeout(() => this.initBaileys(), 1500);
+        return { isReboot: true };
+      }
+
       const host = this.config.greenApiHost || 'https://api.green-api.com';
       const url = `${host}/waInstance${this.config.greenApiIdInstance}/reboot/${this.config.greenApiToken}`;
       const res = await fetch(url, { method: 'POST' });

@@ -33,7 +33,7 @@ const upload = multer({
 });
 
 import { errorHandler } from './middlewares/error.middleware';
-import { authenticateOwner, authenticateAdmin } from './middlewares/auth.middleware';
+import { authenticateOwner, authenticateAdmin, optionalOwner } from './middlewares/auth.middleware';
 import { AuthController } from './controllers/auth.controller';
 import { CarsController } from './controllers/cars.controller';
 import { TagsController } from './controllers/tags.controller';
@@ -115,10 +115,23 @@ apiRouter.get('/health', (req: Request, res: Response) => {
 
 // ──────────────── Auth Routes ────────────────
 const authRouter = express.Router();
-authRouter.post('/send-otp', AuthController.sendOtp);
-authRouter.post('/phone/send-otp', AuthController.sendOtp);
-authRouter.post('/verify-otp', AuthController.verifyOtp);
-authRouter.post('/phone/verify-otp', AuthController.verifyOtp);
+
+// Rate limiter to prevent OTP spamming and brute-force attacks on login
+const authLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes window
+  max: 10, // max 10 requests per 5 minutes per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'لقد تجاوزت الحد المسموح من محاولات تسجيل الدخول، يرجى الانتظار 5 دقائق قبل المحاولة مجدداً.',
+  },
+});
+
+authRouter.post('/send-otp', authLimiter, AuthController.sendOtp);
+authRouter.post('/phone/send-otp', authLimiter, AuthController.sendOtp);
+authRouter.post('/verify-otp', authLimiter, AuthController.verifyOtp);
+authRouter.post('/phone/verify-otp', authLimiter, AuthController.verifyOtp);
 authRouter.get('/me', authenticateOwner, AuthController.getMe);
 authRouter.patch('/me', authenticateOwner, AuthController.updateMe);
 authRouter.get('/privacy-settings', authenticateOwner, AuthController.getPrivacySettings);
@@ -185,7 +198,8 @@ apiRouter.use('/support', supportRouter);
 const storeRouter = express.Router();
 storeRouter.get('/products', StoreController.getProducts);
 storeRouter.get('/banners', StoreController.getBanners);
-storeRouter.post('/orders', StoreController.createOrder);
+storeRouter.get('/governorates', StoreController.getGovernorates);
+storeRouter.post('/orders', optionalOwner, StoreController.createOrder);
 storeRouter.get('/orders/my-orders', authenticateOwner, StoreController.getMyOrders);
 apiRouter.use('/store', storeRouter);
 
@@ -253,6 +267,19 @@ adminRouter.post('/banners', authenticateAdmin, AdminController.createBanner);
 adminRouter.put('/banners/:id', authenticateAdmin, AdminController.updateBanner);
 adminRouter.patch('/banners/:id/toggle', authenticateAdmin, AdminController.toggleBanner);
 adminRouter.delete('/banners/:id', authenticateAdmin, AdminController.deleteBanner);
+
+// Delivery Governorates & Shipping Management
+adminRouter.get('/governorates', authenticateAdmin, AdminController.listGovernorates);
+adminRouter.post('/governorates', authenticateAdmin, AdminController.createGovernorate);
+adminRouter.put('/governorates/:id', authenticateAdmin, AdminController.updateGovernorate);
+adminRouter.patch('/governorates/:id', authenticateAdmin, AdminController.updateGovernorate);
+adminRouter.delete('/governorates/:id', authenticateAdmin, AdminController.deleteGovernorate);
+
+// Error Tracking & System Logs
+adminRouter.get('/error-logs', authenticateAdmin, AdminController.getErrorLogs);
+adminRouter.patch('/error-logs/:id/toggle-resolve', authenticateAdmin, AdminController.toggleResolveErrorLog);
+adminRouter.delete('/error-logs/clear-all', authenticateAdmin, AdminController.clearAllErrorLogs);
+adminRouter.delete('/error-logs/:id', authenticateAdmin, AdminController.deleteErrorLog);
 
 apiRouter.use('/admin', adminRouter);
 

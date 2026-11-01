@@ -87,13 +87,9 @@ export class TagsController {
         res.status(400).json({ success: false, message: 'معرف الملصق (tagCode) مطلوب' });
         return;
       }
-      if (!activationCode) {
-        res.status(400).json({ success: false, message: 'كود التفعيل (activation code) المرفق في الكرت مطلوب' });
-        return;
-      }
 
       const cleanTagCode = tagCode.trim().startsWith('#') ? tagCode.trim() : `#${tagCode.trim()}`;
-      const cleanCode = activationCode.trim().toUpperCase();
+      const cleanCode = activationCode ? activationCode.trim().toUpperCase() : '';
 
       // ── 2. Verify the car belongs to the authenticated user ────────────────
       const car = await prisma.car.findFirst({
@@ -104,7 +100,7 @@ export class TagsController {
         return;
       }
 
-      // ── 3. Validate tag_id ─────────────────────────────────────────────────
+      // ── 3. Validate tag ownership & linking rules ─────────────────────────
       const tag = await prisma.tag.findUnique({ where: { tagCode: cleanTagCode } });
 
       if (!tag) {
@@ -115,33 +111,33 @@ export class TagsController {
         return;
       }
 
-      // Tag must not already be active
-      if (tag.status === 'ACTIVE') {
-        res.status(409).json({
-          success: false,
-          message: `الملصق (${cleanTagCode}) مفعّل بالفعل ومربوط بسيارة أخرى. لا يمكن إعادة تفعيله.`,
-        });
-        return;
-      }
-
       // Tag must not already be linked to a different car
       if (tag.carId && tag.carId !== carId) {
         res.status(409).json({
           success: false,
-          message: 'قاعدة ركنة (1 Tag = 1 Car): هذا الملصق مربوط بسيارة أخرى ولا يمكن إعادة تفعيله.',
+          message: 'قاعدة ركنة (1 Tag = 1 Car): هذا الملصق مربوط بسيارة أخرى حالياً.',
         });
         return;
       }
 
-      // ── 3b. If tag is already owned by this user in unassigned status (re-linking) ──
-      if (tag.userId === req.user!.id && tag.status === 'UNASSIGNED') {
+      // Tag must not belong to another user
+      if (tag.userId && tag.userId !== req.user!.id) {
+        res.status(409).json({
+          success: false,
+          message: `الملصق (${cleanTagCode}) مسجل ومفعّل بحساب مستخدم آخر.`,
+        });
+        return;
+      }
+
+      // ── 3b. If tag is already owned by this user (linking or re-activating available tag) ──
+      if (tag.userId === req.user!.id && (!tag.carId || tag.carId === carId || tag.status === 'UNASSIGNED' || tag.status === 'PAUSED')) {
         await prisma.$transaction([
           prisma.tag.update({
             where: { id: tag.id },
             data: {
               carId: car.id,
               status: 'ACTIVE',
-              activatedAt: new Date(),
+              activatedAt: tag.activatedAt || new Date(),
             },
           }),
           prisma.car.update({
@@ -160,7 +156,21 @@ export class TagsController {
             tagType: tag.tagType,
             status: 'ACTIVE',
           },
-          message: `تم إعادة ربط الملصق (${tag.tagCode}) بسيارتك (${car.brand} ${car.model}) بنجاح! 🚗✨`,
+          message: `تم ربط وتفعيل الملصق (${tag.tagCode}) بسيارتك (${car.brand} ${car.model}) بنجاح! 🚗✨`,
+        });
+        return;
+      }
+
+      // If tag is already active and linked to this car
+      if (tag.status === 'ACTIVE' && tag.carId === carId) {
+        res.json({
+          success: true,
+          tag: {
+            tagCode: tag.tagCode,
+            tagType: tag.tagType,
+            status: 'ACTIVE',
+          },
+          message: `الملصق (${tag.tagCode}) مفعّل بالفعل لهذه السيارة! 🚗✨`,
         });
         return;
       }
@@ -265,7 +275,10 @@ export class TagsController {
           ? [
               prisma.car.update({
                 where: { id: tag.carId },
-                data: { isTagActive: isNowActive },
+                data: {
+                  isTagActive: isNowActive,
+                  isActivated: true,
+                },
               }),
             ]
           : []),
