@@ -3,10 +3,10 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import QRCode from 'qrcode';
 
-// Baileys imports via require to support TSX/CommonJS interoperability with native wasm/rust bridge
-const baileys = require('@whiskeysockets/baileys');
-const makeWASocket = baileys.default || baileys;
-const { DisconnectReason, useMultiFileAuthState } = baileys;
+// Dynamic import helper to support ESM package (@whiskeysockets/baileys) in Node CommonJS target
+const importDynamic = (modulePath: string): Promise<any> => {
+  return (Function('m', 'return import(m)'))(modulePath);
+};
 const pino = require('pino');
 
 export type WhatsAppProvider =
@@ -110,6 +110,10 @@ class WhatsAppService {
       if (!fs.existsSync(this.baileysAuthDir)) {
         fs.mkdirSync(this.baileysAuthDir, { recursive: true });
       }
+
+      const baileysMod = await importDynamic('@whiskeysockets/baileys');
+      const makeWASocket = baileysMod.default || baileysMod;
+      const { DisconnectReason, useMultiFileAuthState } = baileysMod;
 
       const { state, saveCreds } = await useMultiFileAuthState(this.baileysAuthDir);
 

@@ -5,8 +5,8 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "node ./node_modules/tsx/dist/cli.mjs watch src/server.ts",
-    "build": "npx prisma generate && node ./node_modules/typescript/bin/tsc",
-    "start": "npx prisma db push --skip-generate && node dist/server.js",
+    "build": "node ./node_modules/prisma/build/index.js generate && node ./node_modules/typescript/bin/tsc",
+    "start": "node ./node_modules/prisma/build/index.js db push --skip-generate && node dist/server.js",
     "postinstall": "node scripts/patch-bridge.js && npx prisma generate",
     "prisma:generate": "node ./node_modules/prisma/build/index.js generate",
     "prisma:migrate": "node ./node_modules/prisma/build/index.js migrate dev",
