@@ -1,8 +1,32 @@
+import fs from 'fs';
+import path from 'path';
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
 import { webRateLimitService } from '../services/webRateLimit.service';
+
+function saveBase64Image(base64Str: string): string {
+  if (!base64Str || !base64Str.startsWith('data:image')) return base64Str;
+  try {
+    const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+    const uploadDir = path.join(dataDir, 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      try { fs.mkdirSync(uploadDir, { recursive: true }); } catch (_) {}
+    }
+    const matches = base64Str.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) return base64Str;
+    const ext = matches[1].replace('jpeg', 'jpg');
+    const buffer = Buffer.from(matches[2], 'base64');
+    const filename = `camera_${Date.now()}_${uuidv4().substring(0, 8)}.${ext}`;
+    const filePath = path.join(uploadDir, filename);
+    fs.writeFileSync(filePath, buffer);
+    return `/uploads/${filename}`;
+  } catch (err) {
+    console.warn('[UPLOAD-BASE64] Failed to save base64 to file:', err);
+    return base64Str;
+  }
+}
 
 export class ReporterController {
   /**
@@ -240,14 +264,15 @@ export class ReporterController {
         }
 
         // Append initial message to existing chat
+        const finalExistingImg = imageUrl ? saveBase64Image(imageUrl) : null;
         let existingMsgObj = null;
-        if (initialMessage && initialMessage.trim().length > 0) {
+        if ((initialMessage && initialMessage.trim().length > 0) || finalExistingImg) {
           existingMsgObj = await prisma.message.create({
             data: {
               chatId: existingChat.id,
               senderType: 'REPORTER',
-              content: initialMessage.trim().substring(0, 500),
-              imageUrl: imageUrl || null,
+              content: (initialMessage && initialMessage.trim()) ? initialMessage.trim().substring(0, 500) : '📷 صورة ملتقطة من الكاميرا',
+              imageUrl: finalExistingImg || null,
               isViewOnce: Boolean(isViewOnce),
             },
           });
@@ -320,15 +345,16 @@ export class ReporterController {
 
       const reasonArabic = reasonMap[contactReason] || 'تنبيه بخصوص سيارتك';
 
-      // Insert Initial Message if present
+      // Insert Initial Message if present or photo attached
+      const finalImg = imageUrl ? saveBase64Image(imageUrl) : null;
       let initialMsgObj = null;
-      if (initialMessage && initialMessage.trim().length > 0) {
+      if ((initialMessage && initialMessage.trim().length > 0) || finalImg) {
         initialMsgObj = await prisma.message.create({
           data: {
             chatId: chat.id,
             senderType: 'REPORTER',
-            content: initialMessage.trim().substring(0, 500),
-            imageUrl: imageUrl || null,
+            content: (initialMessage && initialMessage.trim()) ? initialMessage.trim().substring(0, 500) : '📷 صورة ملتقطة من الكاميرا',
+            imageUrl: finalImg || null,
             isViewOnce: Boolean(isViewOnce),
           },
         });
@@ -465,12 +491,13 @@ export class ReporterController {
         return;
       }
 
+      const finalMsgImg = imageUrl ? saveBase64Image(imageUrl) : null;
       const message = await prisma.message.create({
         data: {
           chatId: chat.id,
           senderType: 'REPORTER',
-          content: content.trim().substring(0, 500),
-          imageUrl: imageUrl || null,
+          content: (content && content.trim()) ? content.trim().substring(0, 500) : '📷 صورة ملتقطة من الكاميرا',
+          imageUrl: finalMsgImg || null,
           isViewOnce: Boolean(isViewOnce),
         },
       });
