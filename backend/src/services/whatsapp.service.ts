@@ -86,8 +86,12 @@ class WhatsAppService {
   private isBaileysInitializing = false;
 
   constructor() {
-    this.configFilePath = path.join(process.cwd(), 'whatsapp_config.json');
-    this.baileysAuthDir = path.join(process.cwd(), 'baileys_auth');
+    const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      try { fs.mkdirSync(dataDir, { recursive: true }); } catch (_) {}
+    }
+    this.configFilePath = path.join(dataDir, 'whatsapp_config.json');
+    this.baileysAuthDir = path.join(dataDir, 'baileys_auth');
     this.config = this.loadConfig();
 
     // Start Baileys immediately if Baileys is active

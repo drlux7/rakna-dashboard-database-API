@@ -10,9 +10,14 @@ import multer from 'multer';
 
 dotenv.config();
 
-const uploadsDir = path.join(process.cwd(), 'uploads');
+const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+if (!fs.existsSync(dataDir)) {
+  try { fs.mkdirSync(dataDir, { recursive: true }); } catch (_) {}
+}
+
+const uploadsDir = path.join(dataDir, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (_) {}
 }
 
 const storage = multer.diskStorage({
@@ -95,7 +100,8 @@ app.options('*', cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Static uploads directory
+// Static uploads directories (persistent data/uploads first, bundled uploads fallback)
+app.use('/uploads', express.static(uploadsDir));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Static landing and public assets
