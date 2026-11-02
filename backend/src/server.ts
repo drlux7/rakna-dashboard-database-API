@@ -213,6 +213,8 @@ reporterRouter.post('/chats', reporterSpamLimiter, ReporterController.createChat
 reporterRouter.get('/chats/:chatId/messages', ReporterController.getReporterChatMessages);
 reporterRouter.post('/chats/:chatId/messages', reporterSpamLimiter, ReporterController.sendReporterMessage);
 reporterRouter.post('/chats/:chatId/report', ReporterController.reportChat);
+reporterRouter.post('/chats/:chatId/close', ReporterController.closeChat);
+reporterRouter.patch('/chats/:chatId/messages/:messageId/view', ReporterController.markMessageViewed);
 reporterRouter.get('/quick-messages', ReporterController.getQuickMessages);
 apiRouter.use('/reporter', reporterRouter);
 
@@ -221,6 +223,8 @@ const chatsRouter = express.Router();
 chatsRouter.get('/', authenticateOwner, ChatsController.getChats);
 chatsRouter.get('/:id/messages', authenticateOwner, ChatsController.getMessages);
 chatsRouter.post('/:id/reply', authenticateOwner, ChatsController.reply);
+chatsRouter.post('/:id/action', authenticateOwner, ChatsController.handleAction);
+chatsRouter.patch('/:id/messages/:messageId/view', authenticateOwner, ChatsController.markMessageViewed);
 chatsRouter.post('/:id/block', authenticateOwner, ChatsController.block);
 chatsRouter.post('/:id/report', authenticateOwner, ChatsController.reportChat);
 apiRouter.use('/chats', chatsRouter);

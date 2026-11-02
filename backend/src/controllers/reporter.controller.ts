@@ -304,6 +304,7 @@ export class ReporterController {
           carId: tag.car.id,
           reporterSessionToken: reporterToken,
           contactReason: contactReason || 'OTHER',
+          status: 'PENDING_ACCEPT',
           expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days expiration
         },
       });
@@ -635,6 +636,50 @@ export class ReporterController {
       });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر جلب الرسائل السريعة' });
+    }
+  }
+
+  /**
+   * إغلاق المحادثة من قبل المُبلّغ
+   */
+  static async closeChat(req: Request, res: Response): Promise<void> {
+    try {
+      const chatId = req.params.chatId as string;
+      const chat = await prisma.chat.findUnique({ where: { id: chatId } });
+      if (!chat) {
+        res.status(404).json({ success: false, message: 'المحادثة غير موجودة' });
+        return;
+      }
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: { status: 'CLOSED', lastMessageAt: new Date() },
+      });
+      await prisma.message.create({
+        data: {
+          chatId,
+          senderType: 'SYSTEM',
+          content: 'تم إنهاء المحادثة من قبل المُبلّغ.',
+        },
+      });
+      res.json({ success: true, message: 'تم إغلاق المحادثة' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر إغلاق المحادثة' });
+    }
+  }
+
+  /**
+   * تحديد الصورة المعروضة لمرة واحدة كمشاهدة (احترقت الصورة)
+   */
+  static async markMessageViewed(req: Request, res: Response): Promise<void> {
+    try {
+      const messageId = req.params.messageId as string;
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { isViewed: true },
+      });
+      res.json({ success: true, message: 'تمت المشاهدة' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تحديث المشاهدة' });
     }
   }
 }

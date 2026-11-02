@@ -232,5 +232,138 @@ export class ChatsController {
       res.status(500).json({ success: false, message: 'تعذر تقديم البلاغ' });
     }
   }
+
+  /**
+   * اتخاذ إجراء على المحادثة من قبل صاحب السيارة (فتح المحادثة، تجاهل، إبلاغ، إغلاق)
+   */
+  static async handleAction(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      const { action, reportReason, reportDetails } = req.body; // 'OPEN', 'IGNORE', 'REPORT', 'CLOSE'
+
+      const chat = await prisma.chat.findUnique({
+        where: { id },
+        include: { car: true },
+      });
+
+      if (!chat || chat.car.userId !== req.user!.id) {
+        res.status(404).json({ success: false, message: 'المحادثة غير موجودة أو ليست في حسابك' });
+        return;
+      }
+
+      if (action === 'OPEN') {
+        const updated = await prisma.chat.update({
+          where: { id },
+          data: { status: 'ACTIVE', lastMessageAt: new Date() },
+        });
+
+        await prisma.message.create({
+          data: {
+            chatId: id,
+            senderType: 'SYSTEM',
+            content: 'قام صاحب السيارة بفتح المحادثة، يمكنكما التحدث الآن.',
+          },
+        });
+
+        res.json({ success: true, message: 'تم فتح المحادثة بنجاح ✨', chat: updated });
+        return;
+      }
+
+      if (action === 'IGNORE') {
+        const updated = await prisma.chat.update({
+          where: { id },
+          data: { status: 'IGNORED', lastMessageAt: new Date() },
+        });
+
+        await prisma.message.create({
+          data: {
+            chatId: id,
+            senderType: 'SYSTEM',
+            content: 'صاحب السيارة مشغول الآن ولا يمكنه الرد في الوقت الحالي.',
+          },
+        });
+
+        res.json({ success: true, message: 'تم تجاهل الطلب وإرسال إشعار للمُبلّغ بأنك مشغول', chat: updated });
+        return;
+      }
+
+      if (action === 'REPORT') {
+        const updated = await prisma.chat.update({
+          where: { id },
+          data: { status: 'BLOCKED', lastMessageAt: new Date() },
+        });
+
+        await prisma.chatReport.create({
+          data: {
+            chatId: id,
+            reporterType: 'OWNER',
+            reason: reportReason || 'HARASSMENT',
+            details: reportDetails || 'تم الإبلاغ والحظر المباشر من شاشة القرار',
+            status: 'PENDING',
+          },
+        });
+
+        await prisma.message.create({
+          data: {
+            chatId: id,
+            senderType: 'SYSTEM',
+            content: 'تم حظر هذه المحادثة وإرسال بلاغ عاجل للإدارة والرقابة 🛡️.',
+          },
+        });
+
+        res.json({ success: true, message: 'تم حظر المحادثة وإرسال البلاغ للإدارة بنجاح', chat: updated });
+        return;
+      }
+
+      if (action === 'CLOSE') {
+        const updated = await prisma.chat.update({
+          where: { id },
+          data: { status: 'CLOSED', lastMessageAt: new Date() },
+        });
+
+        await prisma.message.create({
+          data: {
+            chatId: id,
+            senderType: 'SYSTEM',
+            content: 'تم إغلاق المحادثة بنجاح من قبل صاحب السيارة.',
+          },
+        });
+
+        res.json({ success: true, message: 'تم إغلاق المحادثة', chat: updated });
+        return;
+      }
+
+      res.status(400).json({ success: false, message: 'إجراء غير مدعوم' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تنفيذ الإجراء' });
+    }
+  }
+
+  /**
+   * تحديد الصورة المعروضة لمرة واحدة كمشاهدة (احترقت الصورة)
+   */
+  static async markMessageViewed(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const messageId = req.params.messageId as string;
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        include: { chat: { include: { car: true } } },
+      });
+
+      if (!message) {
+        res.status(404).json({ success: false, message: 'الرسالة غير موجودة' });
+        return;
+      }
+
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { isViewed: true },
+      });
+
+      res.json({ success: true, message: 'تمت مشاهدة الصورة' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تحديث حالة المشاهدة' });
+    }
+  }
 }
 
