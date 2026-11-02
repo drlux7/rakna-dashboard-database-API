@@ -12,6 +12,53 @@ dotenv.config();
 
 const getJwtSecret = () => process.env.JWT_SECRET || 'rakna_super_secret_jwt_key_2026_veritag';
 
+export const getPublicScanBaseUrl = (req?: any): string => {
+  if (process.env.PUBLIC_WEB_URL && process.env.PUBLIC_WEB_URL.trim()) {
+    return process.env.PUBLIC_WEB_URL.trim().replace(/\/+$/, '');
+  }
+  if (process.env.API_BASE_URL && process.env.API_BASE_URL.trim()) {
+    return process.env.API_BASE_URL.trim().replace(/\/+$/, '');
+  }
+  if (req) {
+    const host = (req.get && (req.get('x-forwarded-host') || req.get('host'))) || '';
+    if (host.includes('rakna.tech')) {
+      return 'https://rakna.tech';
+    }
+  }
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:5000';
+  }
+  return 'https://rakna.tech';
+};
+
+export const syncTagsQrCodesToProduction = async (): Promise<void> => {
+  try {
+    const serverBaseUrl = getPublicScanBaseUrl();
+    const tags = await prisma.tag.findMany({
+      select: { id: true, tagCode: true },
+    });
+    for (const tag of tags) {
+      const cleanCode = tag.tagCode.replace(/^#/, '');
+      const scanUrl = `${serverBaseUrl}/t/${encodeURIComponent(cleanCode)}`;
+      const qrSvg = await QRCode.toString(scanUrl, {
+        type: 'svg',
+        width: 140,
+        margin: 1,
+        color: { dark: '#000000', light: '#FFFFFF' },
+      });
+      await prisma.tag.update({
+        where: { id: tag.id },
+        data: { qrCodeSvg: qrSvg },
+      });
+    }
+    if (tags.length > 0) {
+      console.log(`[TAGS-SYNC] Synced ${tags.length} tag QR codes to production URL: ${serverBaseUrl}`);
+    }
+  } catch (err: any) {
+    console.error('[TAGS-SYNC] Error updating tags QR codes:', err?.message || err);
+  }
+};
+
 export class AdminController {
   /**
    * تسجيل دخول مشرفي لوحة التحكم
@@ -182,7 +229,7 @@ export class AdminController {
         const secretToken = `sec_${uuidv4().replace(/-/g, '')}`;
         // Generate printable QR Code SVG pointing to the Web Chat Page
         const cleanCodeWithoutHash = tagCode.replace(/^#/, '');
-        const serverBaseUrl = process.env.PUBLIC_WEB_URL || process.env.API_BASE_URL || 'http://localhost:5000';
+        const serverBaseUrl = getPublicScanBaseUrl(req);
         const scanUrl = `${serverBaseUrl}/t/${encodeURIComponent(cleanCodeWithoutHash)}`;
         const qrSvg = await QRCode.toString(scanUrl, {
           type: 'svg',
@@ -304,12 +351,32 @@ export class AdminController {
         take: 100,
       });
 
-      const formattedTags = tags.map((t: any) => ({
-        ...t,
-        activationCode: t.activationCode?.code || null,
-        isRedeemed: t.activationCode?.isRedeemed || false,
-        redeemedAt: t.activationCode?.redeemedAt || null,
-      }));
+      const serverBaseUrl = getPublicScanBaseUrl(req);
+      const formattedTags = await Promise.all(
+        tags.map(async (t: any) => {
+          const cleanCodeWithoutHash = (t.tagCode || '').replace(/^#/, '');
+          const scanUrl = `${serverBaseUrl}/t/${encodeURIComponent(cleanCodeWithoutHash)}`;
+          let qrCodeSvg = t.qrCodeSvg;
+          if (!qrCodeSvg) {
+            qrCodeSvg = await QRCode.toString(scanUrl, {
+              type: 'svg',
+              width: 140,
+              margin: 1,
+              color: { dark: '#000000', light: '#FFFFFF' },
+            });
+            prisma.tag.update({ where: { id: t.id }, data: { qrCodeSvg } }).catch(() => {});
+          }
+
+          return {
+            ...t,
+            scanUrl,
+            qrCodeSvg,
+            activationCode: t.activationCode?.code || null,
+            isRedeemed: t.activationCode?.isRedeemed || false,
+            redeemedAt: t.activationCode?.redeemedAt || null,
+          };
+        })
+      );
 
       res.json({ success: true, count: formattedTags.length, tags: formattedTags });
     } catch (error) {

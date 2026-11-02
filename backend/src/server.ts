@@ -38,6 +38,7 @@ import { AuthController } from './controllers/auth.controller';
 import { CarsController } from './controllers/cars.controller';
 import { TagsController } from './controllers/tags.controller';
 import { ReporterController } from './controllers/reporter.controller';
+import { syncTagsQrCodesToProduction } from './controllers/admin.controller';
 import { ChatsController } from './controllers/chats.controller';
 import { StoreController } from './controllers/store.controller';
 import { NotificationsController } from './controllers/notifications.controller';
@@ -329,6 +330,11 @@ server.listen(PORT, () => {
   🛡️  Environment: ${process.env.NODE_ENV || 'development'}
   ======================================================
   `);
+
+  // Auto-sync all tags QR codes to production domain https://rakna.tech
+  syncTagsQrCodesToProduction().catch((err) => {
+    console.error('[TAGS-SYNC-STARTUP] Warning:', err?.message || err);
+  });
 });
 
 export default app;

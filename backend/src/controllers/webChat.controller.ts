@@ -646,7 +646,7 @@ export class WebChatController {
         <p>حمّل التطبيق لتجربة تنبيهات وإشعارات أسرع</p>
       </div>
     </div>
-    <a href="https://rakna.app/download" target="_blank" class="btn-download" id="downloadAppBtn">
+    <a href="https://rakna.tech" target="_blank" class="btn-download" id="downloadAppBtn">
       <span>تحميل التطبيق</span>
       <span>⬇️</span>
     </a>
@@ -663,7 +663,7 @@ export class WebChatController {
           لا يوجد ملصق ركنة مسجّل بهذا الرمز في نظامنا.<br>
           إذا اشتريت المنتج حديثاً، تأكد من صحة المسح أو تواصل مع الدعم.
         </p>
-        <a href="https://rakna.app" class="state-cta">🌐 موقع ركنة</a>
+        <a href="https://rakna.tech" class="state-cta">🌐 موقع ركنة</a>
       </div>
 
     ` : pageState === 'NOT_ACTIVATED' ? `
@@ -676,7 +676,7 @@ export class WebChatController {
           الملصق موجود في النظام ولكن المالك لم يقم بتفعيله بعد.<br><br>
           <b>إذا كنت المالك:</b> افتح تطبيق ركنة وادخل كود التفعيل المرفق في الكرت داخل العلبة.
         </p>
-        <a href="https://rakna.app/download" class="state-cta">📲 تحميل تطبيق ركنة للتفعيل</a>
+        <a href="https://rakna.tech" class="state-cta">📲 تحميل تطبيق ركنة للتفعيل</a>
       </div>
 
     ` : pageState === 'PAUSED' ? `
@@ -690,7 +690,7 @@ export class WebChatController {
           لا يمكن إرسال أي تنبيه في الوقت الحالي.<br><br>
           <b>إذا كانت هناك حالة طارئة</b> يُرجى التواصل مع إدارة المبنى أو الجهات المختصة.
         </p>
-        <a href="https://rakna.app" class="state-cta">🏠 الرئيسية</a>
+        <a href="https://rakna.tech" class="state-cta">🏠 الرئيسية</a>
       </div>
 
     ` : `
@@ -755,7 +755,7 @@ export class WebChatController {
             <div class="limit-reached-text">
               لقد أرسلت الحد الأقصى المسموح به اليوم عبر المتصفح. إذا أردت المزيد من التواصل المباشر مع أصحاب السيارات والمتابعة، حمّل تطبيق <strong>ركنة Rakna</strong> الآن مجاناً!
             </div>
-            <a href="https://rakna.app" target="_blank" class="btn-download-app">
+            <a href="https://rakna.tech" target="_blank" class="btn-download-app">
               <span>📲</span>
               <span>تحميل تطبيق ركنة للمزيد</span>
             </a>
