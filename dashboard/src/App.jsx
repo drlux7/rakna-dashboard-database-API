@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   LayoutDashboard,
   QrCode,
@@ -401,9 +402,9 @@ export default function App() {
     if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
     const backendHost = (typeof window !== 'undefined' && window.location.hostname !== 'localhost') ? 'https://api.rakna.tech' : 'http://localhost:5000';
     if (clean.startsWith('/uploads/')) return `${backendHost}${clean}`;
-    if (clean.includes('tag_trunk')) return '/uploads/tag_trunk.jpg';
-    if (clean.includes('tag_glass')) return '/uploads/tag_glass.jpg';
-    if (clean.includes('tag_scan')) return '/uploads/tag_scan.jpg';
+    if (clean.includes('tag_trunk')) return `${backendHost}/uploads/tag_trunk.jpg`;
+    if (clean.includes('tag_glass')) return `${backendHost}/uploads/tag_glass.jpg`;
+    if (clean.includes('tag_scan')) return `${backendHost}/uploads/tag_scan.jpg`;
     return clean;
   };
 
@@ -1302,7 +1303,8 @@ export default function App() {
     }
   };
 
-  const handleOpenAddProduct = () => {
+  const handleOpenAddProduct = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
     setEditingProduct(null);
     setProductForm({
       name: '',
@@ -1315,7 +1317,7 @@ export default function App() {
       description: '',
       featuresText: 'شريحة NFC مدمجة فائقة السرعة\nرمز QR محمي بطبقة مضادة للخدش\nمقاوم للماء وحرارة الشمس\nلاصق 3M قوي لا يترك أثر',
       inStock: true,
-      sortOrder: productsList.length + 1,
+      sortOrder: (productsList && productsList.length > 0 ? productsList.length + 1 : 1),
     });
     setProductModalOpen(true);
   };
@@ -5638,7 +5640,7 @@ export default function App() {
               )}
 
               {/* Add / Edit Modal */}
-              {quickModalOpen && (
+              {quickModalOpen && createPortal(
                 <div style={{
                   position: 'fixed',
                   top: 0,
@@ -5650,7 +5652,7 @@ export default function App() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  zIndex: 9999,
+                  zIndex: 99999,
                   padding: '16px',
                 }}>
                   <div className="kpi-card gold-glow-border fade-in" style={{
@@ -5784,7 +5786,8 @@ export default function App() {
                       </div>
                     </form>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
           )}
@@ -5832,6 +5835,7 @@ export default function App() {
 
                   {storeSubTab === 'products' ? (
                     <button
+                      type="button"
                       onClick={handleOpenAddProduct}
                       className="btn-primary"
                       style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontWeight: 800 }}
@@ -5841,6 +5845,7 @@ export default function App() {
                     </button>
                   ) : (
                     <button
+                      type="button"
                       onClick={handleOpenAddBanner}
                       className="btn-primary"
                       style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontWeight: 800 }}
@@ -5977,7 +5982,32 @@ export default function App() {
                 gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
                 gap: '20px',
               }}>
-                {productsList.map((prod, index) => {
+                {productsList.length === 0 ? (
+                  <div style={{
+                    gridColumn: '1 / -1',
+                    textAlign: 'center',
+                    padding: '60px 20px',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    borderRadius: '16px',
+                    border: '1px dashed var(--border-subtle)',
+                  }}>
+                    <ShoppingBag size={48} color="var(--gold-primary)" style={{ margin: '0 auto 16px', opacity: 0.7 }} />
+                    <h3 style={{ color: '#fff', fontSize: '1.15rem', marginBottom: '8px', fontWeight: 800 }}>لا توجد أي منتجات معروضة في المتجر حالياً</h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '20px', maxWidth: '420px', margin: '0 auto 20px' }}>
+                      ابدأ بإضافة أول منتج لمتجر ركنة (مثل ملصق الشنطة الذكي أو ملصق الزجاج) وحدد سعره والعروض ليظهر فوراً في التطبيق.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleOpenAddProduct}
+                      className="btn-primary"
+                      style={{ padding: '10px 24px', fontSize: '0.92rem', fontWeight: 800, margin: '0 auto', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <PlusCircle size={18} />
+                      <span>إضافة أول منتج للمتجر الآن</span>
+                    </button>
+                  </div>
+                ) : (
+                  productsList.map((prod, index) => {
                   let featList = [];
                   try {
                     if (typeof prod.features === 'string') {
@@ -6268,7 +6298,8 @@ export default function App() {
                       </div>
                     </div>
                   );
-                })}
+                })
+              )}
               </div>
             </>
           )}
@@ -6594,21 +6625,21 @@ export default function App() {
           )}
 
           {/* Add / Edit Product Modal */}
-              {productModalOpen && (
-                <div style={{
-                  position: 'fixed',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  background: 'rgba(0, 0, 0, 0.78)',
-                  backdropFilter: 'blur(6px)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 9999,
-                  padding: '20px',
-                }}>
+          {productModalOpen && createPortal(
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.78)',
+              backdropFilter: 'blur(6px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 99999,
+              padding: '20px',
+            }}>
                   <div style={{
                     background: 'var(--bg-surface)',
                     border: '1px solid var(--border-subtle)',
@@ -7010,11 +7041,12 @@ export default function App() {
                       </div>
                     </form>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
 
               {/* Add / Edit Banner Modal */}
-              {bannerModalOpen && (
+              {bannerModalOpen && createPortal(
                 <div style={{
                   position: 'fixed',
                   top: 0,
@@ -7026,7 +7058,7 @@ export default function App() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  zIndex: 9999,
+                  zIndex: 99999,
                   padding: '20px',
                 }}>
                   <div style={{
@@ -7366,7 +7398,8 @@ export default function App() {
                       </div>
                     </form>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
           )}
@@ -7716,7 +7749,7 @@ export default function App() {
               </div>
 
               {/* Add / Edit Governorate Modal */}
-              {govModalOpen && (
+              {govModalOpen && createPortal(
                 <div style={{
                   position: 'fixed',
                   top: 0,
@@ -7728,7 +7761,7 @@ export default function App() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  zIndex: 9999,
+                  zIndex: 99999,
                   padding: '20px',
                 }}>
                   <div className="glass-panel" style={{ width: '100%', maxWidth: '520px', padding: '28px', border: '1px solid rgba(245, 190, 24, 0.3)' }}>
@@ -7869,7 +7902,8 @@ export default function App() {
                       </div>
                     </form>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
           )}
