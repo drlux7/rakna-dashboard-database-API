@@ -1904,7 +1904,7 @@ export default function App() {
             }}
           >
             <MessageCircle size={20} color={currentTab === 'quick_messages' ? 'var(--gold-primary)' : 'currentColor'} />
-            <span>الرسائل السريعة المعتمدة</span>
+            <span>أسباب التواصل والرسائل السريعة</span>
             {quickMessagesList.length > 0 && (
               <span style={{
                 marginRight: 'auto',
@@ -2056,7 +2056,7 @@ export default function App() {
               {currentTab === 'whatsapp' && 'بوابة الواتساب وصندوق صادر رسائل الـ OTP اللحظية'}
               {currentTab === 'support' && 'مركز خدمة العملاء والدعم الفني المباشر'}
               {currentTab === 'abuse' && 'إشراف ومراقبة البلاغات والمحادثات المسيئة'}
-              {currentTab === 'quick_messages' && 'إدارة الرسائل السريعة المعتمدة للمُبلّغين (Quick Messages)'}
+              {currentTab === 'quick_messages' && 'إدارة أسباب التواصل والرسائل السريعة للمُبلّغين'}
               {currentTab === 'store' && 'إدارة متجر ركنة والمنتجات والعروض'}
               {currentTab === 'shipping_govs' && 'إدارة محافظات التوصيل وأسعار الشحن ومدد التسليم'}
               {currentTab === 'error_logs' && 'مركز مراقبة وتتبع أخطاء النظام (System Error Tracking)'}
@@ -5382,10 +5382,10 @@ export default function App() {
                     </div>
                     <div>
                       <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', margin: 0 }}>
-                        الرسائل السريعة المعتمدة للمُبلّغين
+                        إدارة أسباب التواصل والرسائل السريعة
                       </h3>
                       <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-                        الرسائل التي يُلزم المُبلّغ بالاختيار منها عندما يفعّل صاحب السيارة وضع الخصوصية (قفل الدردشة الحرة)، وهو الوضع الافتراضي لجميع المستخدمين.
+                        التحكم الكامل في شاشة أسباب التواصل والرسائل المعروضة للمُبلّغ عند مسح الـ Tag في التطبيق والويب (إضافة، تعديل، حذف، تغيير الترتيب، وتفعيل/تعطيل لحظي).
                       </p>
                     </div>
                   </div>
@@ -5406,7 +5406,7 @@ export default function App() {
                       }}
                     >
                       <PlusCircle size={18} />
-                      <span>إضافة رسالة سريعة جديدة</span>
+                      <span>إضافة سبب تواصل جديد</span>
                     </button>
                     <button
                       type="button"
@@ -5675,7 +5675,7 @@ export default function App() {
                           <MessageCircle color="var(--gold-primary)" size={20} />
                         </div>
                         <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', margin: 0 }}>
-                          {editingQuickMsg ? 'تعديل الرسالة السريعة' : 'إضافة رسالة سريعة جديدة'}
+                          {editingQuickMsg ? 'تعديل سبب التواصل / الرسالة السريعة' : 'إضافة سبب تواصل ورسالة جديدة'}
                         </h3>
                       </div>
                       <button
@@ -5691,12 +5691,12 @@ export default function App() {
                     <form onSubmit={handleSaveQuickMsg} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                          عنوان الرسالة (مختصر ويظهر كزر أو وسام):
+                          عنوان سبب التواصل (يظهر كخيار للمُبلّغ):
                         </label>
                         <input
                           type="text"
                           className="input-field"
-                          placeholder="مثال: سيارتك قافلة عليا"
+                          placeholder="مثال: السيارة تعيقني، الأنوار تعمل، حدث شيء..."
                           value={quickForm.title}
                           onChange={(e) => setQuickForm({ ...quickForm, title: e.target.value })}
                           required
@@ -5706,12 +5706,12 @@ export default function App() {
 
                       <div>
                         <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                          نص الرسالة الكامل (الذي سيتم إرساله في الشات):
+                          النص الافتراضي للرسالة (يتم إدراجه في المحادثة):
                         </label>
                         <textarea
                           className="input-field"
                           rows={4}
-                          placeholder="مثال: السلام عليكم، سيارتك متوقفة خلفي وتمنعني من الخروج. برجاء الحضور لتحريكها."
+                          placeholder="مثال: مرحباً! سيارتك تعيق حركتي في الوقت الحالي، أرجو تحريكها لطفاً."
                           value={quickForm.text}
                           onChange={(e) => setQuickForm({ ...quickForm, text: e.target.value })}
                           required
@@ -5719,7 +5719,28 @@ export default function App() {
                         />
                       </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            الأيقونة والرمز:
+                          </label>
+                          <select
+                            className="input-field"
+                            value={quickForm.icon || 'car'}
+                            onChange={(e) => setQuickForm({ ...quickForm, icon: e.target.value })}
+                            style={{ width: '100%' }}
+                          >
+                            <option value="car">🚗 سيارة (Car)</option>
+                            <option value="light">💡 إضاءة / فوانيس (Light)</option>
+                            <option value="warning">⚠️ تحذير / طارئ (Warning)</option>
+                            <option value="construction">🚧 أعمال وإنشاءات (Roadwork)</option>
+                            <option value="parking">🅿️ موقف وركنة (Parking)</option>
+                            <option value="shield">🛡️ أمان وحماية (Security)</option>
+                            <option value="wrench">🔧 صيانة وعطل (Repair)</option>
+                            <option value="more">⋯ سبب آخر (More / Other)</option>
+                          </select>
+                        </div>
+
                         <div>
                           <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
                             التصنيف:

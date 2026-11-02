@@ -37,6 +37,7 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
+import { prisma } from './config/prisma';
 import { errorHandler } from './middlewares/error.middleware';
 import { authenticateOwner, authenticateAdmin, optionalOwner } from './middlewares/auth.middleware';
 import { AuthController } from './controllers/auth.controller';
@@ -341,6 +342,69 @@ server.listen(PORT, () => {
   syncTagsQrCodesToProduction().catch((err) => {
     console.error('[TAGS-SYNC-STARTUP] Warning:', err?.message || err);
   });
+
+  // Auto-seed default contact reasons / quick messages if database table is empty
+  seedDefaultContactReasonsIfEmpty().catch((err) => {
+    console.error('[REASONS-SYNC-STARTUP] Warning:', err?.message || err);
+  });
 });
+
+async function seedDefaultContactReasonsIfEmpty() {
+  try {
+    const count = await prisma.quickMessage.count();
+    if (count === 0) {
+      console.log('[QUICK-MESSAGES] Seeding default contact reasons into database...');
+      const defaultReasons = [
+        {
+          title: 'السيارة تعيقني',
+          text: 'مرحباً! سيارتك تعيق حركتي في الوقت الحالي، أرجو تحريكها لطفاً.',
+          icon: 'car',
+          category: 'BLOCKING',
+          displayOrder: 1,
+          isActive: true,
+        },
+        {
+          title: 'الأنوار تعمل',
+          text: 'مرحباً! أردت فقط تنبيهك بأن مصابيح سيارتك الأمامية لا تزال مضاءة؛ أردت إعلامك بذلك قبل أن تنفد طاقة البطارية.',
+          icon: 'light',
+          category: 'LIGHTS',
+          displayOrder: 2,
+          isActive: true,
+        },
+        {
+          title: 'حدث شيء للسيارة',
+          text: 'مرحباً! لاحظت أمراً يستدعي انتباهك بخصوص سيارتك، أردت إبلاغك للتحقق منها.',
+          icon: 'warning',
+          category: 'EMERGENCY',
+          displayOrder: 3,
+          isActive: true,
+        },
+        {
+          title: 'أعمال أو إنشاءات',
+          text: 'تنبيه: ستبدأ أعمال الطريق هنا غداً في الساعة السابعة صباحاً، وقد يتم سحب السيارات المتوقفة.',
+          icon: 'construction',
+          category: 'GENERAL',
+          displayOrder: 4,
+          isActive: true,
+        },
+        {
+          title: 'سبب آخر',
+          text: 'مرحباً! أتواصل معك بخصوص سيارتك المتوقفة.',
+          icon: 'more',
+          category: 'GENERAL',
+          displayOrder: 5,
+          isActive: true,
+        },
+      ];
+
+      for (const r of defaultReasons) {
+        await prisma.quickMessage.create({ data: r });
+      }
+      console.log('✅ Default contact reasons seeded successfully!');
+    }
+  } catch (err: any) {
+    console.warn('[QUICK-MESSAGES] Seeding error:', err?.message || err);
+  }
+}
 
 export default app;
