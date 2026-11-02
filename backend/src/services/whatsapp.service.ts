@@ -293,6 +293,44 @@ class WhatsAppService {
   }
 
   /**
+   * إرسال تنبيه أو إشعار فوري إلى رقم الهاتف مباشرة عبر واتساب (لإشعار المالك حتى والتطبيق مغلق)
+   */
+  public async sendDirectAlert(phone: string, text: string): Promise<boolean> {
+    if (!phone) return false;
+    const cleanPhone = phone.replace(/\D/g, '');
+    const encodedText = encodeURIComponent(text);
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedText}`;
+    const whatsappWebUrl = `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`;
+
+    const msg: WhatsAppMessage = {
+      id: uuidv4(),
+      phone,
+      code: 'ALERT',
+      message: text,
+      whatsappUrl,
+      whatsappWebUrl,
+      status: 'QUEUED',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.outbox.unshift(msg);
+    if (this.outbox.length > this.maxHistory) {
+      this.outbox.pop();
+    }
+
+    if (this.config.isAutoSendEnabled && this.config.provider !== 'SIMULATED_LINK') {
+      try {
+        const res = await this.dispatchViaActiveProvider(msg);
+        return res.success;
+      } catch (err: any) {
+        console.warn(`[WHATSAPP] Failed to send direct alert to ${phone}:`, err?.message || err);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * إرسال رسالة باستخدام المزود النشط المحدد
    */
   public async dispatchViaActiveProvider(msg: WhatsAppMessage): Promise<{ success: boolean; error?: string }> {
