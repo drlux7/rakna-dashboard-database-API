@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
 import { webRateLimitService } from '../services/webRateLimit.service';
-import { whatsAppService } from '../services/whatsapp.service';
 
 export class ReporterController {
   /**
@@ -270,12 +269,6 @@ export class ReporterController {
                 actionLabel: 'فتح المحادثة',
               },
             });
-
-            if (tag.car.user?.phone) {
-              const carDesc = `${tag.car.brand} ${tag.car.model} (${tag.car.plateNumber || 'بدون لوحة'})`;
-              const alertText = `🚗 *ركنة | تنبيه عاجل لسيارتك*\n\nتلقيت رسالة جديدة بخصوص سيارتك (*${carDesc}*):\n💬 "${initialMessage.trim().substring(0, 150)}"\n\n📱 يُرجى فتح تطبيق ركنة للرد الفوري ومتابعة المحادثة بأمان.`;
-              whatsAppService.sendDirectAlert(tag.car.user.phone, alertText).catch(() => {});
-            }
           } catch (_) {}
         }
 
@@ -352,15 +345,6 @@ export class ReporterController {
           actionLabel: 'فتح المحادثة',
         },
       });
-
-      if (tag.car.user?.phone) {
-        const carDesc = `${tag.car.brand} ${tag.car.model} (${tag.car.plateNumber || 'بدون لوحة'})`;
-        const alertBody = initialMessage?.trim() 
-          ? `\n💬 *الرسالة:* "${initialMessage.trim().substring(0, 150)}"`
-          : '';
-        const alertText = `🚗 *ركنة | تنبيه عاجل لسيارتك*\n\nقام شخص بمسح ملصق سيارتك (*${carDesc}*) والإبلاغ عن:\n⚠️ *السبب:* ${reasonArabic}${alertBody}\n\n📱 يُرجى فتح تطبيق ركنة للرد الفوري على المُبلّغ وحل المشكلة.`;
-        whatsAppService.sendDirectAlert(tag.car.user.phone, alertText).catch(() => {});
-      }
 
       const ipUsage = webRateLimitService.incrementUsage(clientIp);
       const remaining = Math.min(MAX_UNANSWERED_MESSAGES - 1, ipUsage.remaining);
@@ -508,12 +492,6 @@ export class ReporterController {
             actionLabel: 'فتح المحادثة',
           },
         });
-
-        if (chat.car.user?.phone) {
-          const carDesc = `${chat.car.brand} ${chat.car.model} (${chat.car.plateNumber || 'بدون لوحة'})`;
-          const alertText = `🚗 *ركنة | رسالة جديدة بخصوص سيارتك*\n\nأرسل المُبلّغ رسالة جديدة لسيارتك (*${carDesc}*):\n💬 "${content.trim().substring(0, 150)}"\n\n📱 افتح تطبيق ركنة لمتابعة المحادثة والرد.`;
-          whatsAppService.sendDirectAlert(chat.car.user.phone, alertText).catch(() => {});
-        }
       } catch (notifErr) {
         console.error('Failed to create notification for reporter message:', notifErr);
       }
