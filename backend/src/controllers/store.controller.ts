@@ -83,8 +83,8 @@ export class StoreController {
             create: Array.isArray(items) && items.length > 0
               ? items.map((it: any) => ({
                   productId: it.productId || null,
-                  productName: it.name || 'ملصق Rakna Tag الذكي',
-                  unitPrice: parseFloat(it.price) || 149.0,
+                  productName: it.productName || it.name || 'ملصق Rakna Tag الذكي',
+                  unitPrice: parseFloat(it.unitPrice || it.price) || 149.0,
                   quantity: it.quantity || 1,
                 }))
               : [
