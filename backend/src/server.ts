@@ -261,6 +261,8 @@ adminRouter.get('/tags', authenticateAdmin, AdminController.listTags);
 adminRouter.post('/activation-codes/batch', authenticateAdmin, AdminController.generateActivationCodesBatch);
 adminRouter.get('/activation-codes', authenticateAdmin, AdminController.listActivationCodes);
 adminRouter.get('/orders', authenticateAdmin, AdminController.listOrders);
+adminRouter.delete('/orders/clear-all', authenticateAdmin, AdminController.clearAllOrders);
+adminRouter.delete('/orders/:id', authenticateAdmin, AdminController.deleteOrder);
 adminRouter.patch('/orders/:id/status', authenticateAdmin, AdminController.updateOrderStatus);
 adminRouter.get('/users', authenticateAdmin, AdminController.listUsers);
 adminRouter.patch('/users/:id/toggle-block', authenticateAdmin, AdminController.toggleUserBlock);

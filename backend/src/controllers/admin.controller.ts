@@ -150,11 +150,11 @@ export class AdminController {
         prisma.tag.count(),
         prisma.tag.count({ where: { status: 'ACTIVE' } }),
         prisma.tag.count({ where: { status: 'IN_STOCK' } }),
-        prisma.order.count(),
+        prisma.order.count({ where: { status: { not: 'CANCELLED' } } }),
         prisma.order.count({ where: { status: 'PENDING' } }),
         prisma.tagScanLog.count(),
         prisma.order.aggregate({
-          where: { status: { in: ['DELIVERED', 'SHIPPED', 'PROCESSING', 'PENDING'] } },
+          where: { status: { not: 'CANCELLED' } },
           _sum: { totalPrice: true },
         }),
       ]);
@@ -519,6 +519,35 @@ export class AdminController {
       });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر تحديث حالة الطلب' });
+    }
+  }
+
+  /**
+   * حذف طلب محدد نهائياً
+   */
+  static async deleteOrder(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+      await prisma.orderItem.deleteMany({ where: { orderId: id } });
+      await prisma.order.delete({ where: { id } });
+      res.json({ success: true, message: 'تم حذف الطلب بنجاح 🗑️' });
+    } catch (error) {
+      console.error('Failed to delete order:', error);
+      res.status(500).json({ success: false, message: 'تعذر حذف الطلب' });
+    }
+  }
+
+  /**
+   * مسح وتصفير كافة طلبات وإيرادات المتجر
+   */
+  static async clearAllOrders(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      await prisma.orderItem.deleteMany({});
+      await prisma.order.deleteMany({});
+      res.json({ success: true, message: 'تم تصفير الإيرادات ومسح كافة الطلبات بنجاح 🗑️' });
+    } catch (error) {
+      console.error('Failed to clear all orders:', error);
+      res.status(500).json({ success: false, message: 'تعذر مسح طلبات وإيرادات المتجر' });
     }
   }
 

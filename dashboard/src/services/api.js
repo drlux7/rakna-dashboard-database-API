@@ -104,6 +104,18 @@ class AdminApiService {
     });
   }
 
+  async deleteOrder(orderId) {
+    return this.request(`/admin/orders/${orderId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async clearAllOrders() {
+    return this.request('/admin/orders/clear-all', {
+      method: 'DELETE',
+    });
+  }
+
   // Users management
   async listUsers() {
     return this.request('/admin/users');

@@ -719,9 +719,42 @@ export default function App() {
         setOrders((prev) =>
           prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
         );
+        api.getStats().then((sRes) => sRes?.stats && setStats(sRes.stats));
       }
     } catch (err) {
       alert(err.message || 'تعذر تحديث الطلب');
+    }
+  };
+
+  const handleDeleteOrder = async (orderId, orderNumber) => {
+    if (!window.confirm(`هل أنت متأكد من حذف الطلب (${orderNumber}) نهائياً؟`)) {
+      return;
+    }
+    try {
+      const res = await api.deleteOrder(orderId);
+      if (res.success) {
+        showToast(res.message || 'تم حذف الطلب بنجاح 🗑️');
+        setOrders((prev) => prev.filter((o) => o.id !== orderId));
+        api.getStats().then((sRes) => sRes?.stats && setStats(sRes.stats));
+      }
+    } catch (err) {
+      alert(err.message || 'تعذر حذف الطلب');
+    }
+  };
+
+  const handleClearAllOrders = async () => {
+    if (!window.confirm('هل أنت متأكد من مسح وتصفير إيرادات وطلبات المتجر بالكامل؟ لا يمكن التراجع عن هذا الإجراء.')) {
+      return;
+    }
+    try {
+      const res = await api.clearAllOrders();
+      if (res.success) {
+        showToast('تم تصفير الإيرادات ومسح كافة الطلبات بنجاح 🗑️');
+        setOrders([]);
+        api.getStats().then((sRes) => sRes?.stats && setStats(sRes.stats));
+      }
+    } catch (err) {
+      alert(err.message || 'تعذر مسح طلبات وإيرادات المتجر');
     }
   };
 
@@ -2171,12 +2204,38 @@ export default function App() {
                 <div className="glass-panel" style={{ padding: '24px', borderTop: '3px solid #10b981' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>إيرادات المتجر (ج.م)</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>إيرادات المتجر (ج.م)</span>
+                        <button
+                          onClick={handleClearAllOrders}
+                          title="مسح وتصفير الإيرادات"
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.12)',
+                            color: '#ef4444',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            borderRadius: '6px',
+                            padding: '2px 8px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          <Trash2 size={12} />
+                          تصفير
+                        </button>
+                      </div>
                       <div style={{ fontSize: '2.1rem', fontWeight: 900, color: '#34d399', marginTop: '6px' }} className="number-latin">
-                        {stats?.orders.totalRevenue ? `${stats.orders.totalRevenue} EGP` : '0 EGP'}
+                        {orders.length > 0
+                          ? `${orders.filter((o) => o.status !== 'CANCELLED').reduce((sum, o) => sum + (parseFloat(o.totalPrice) || 0), 0)} EGP`
+                          : (stats?.orders?.totalRevenue ? `${stats.orders.totalRevenue} EGP` : '0 EGP')}
                       </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                        {stats?.orders.total ?? 0} طلبات شحن COD
+                        {orders.length > 0
+                          ? `${orders.filter((o) => o.status !== 'CANCELLED').length} طلبات شحن COD (باستثناء الملغي)`
+                          : `${stats?.orders?.total ?? 0} طلبات شحن COD`}
                       </div>
                     </div>
                     <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2270,28 +2329,49 @@ export default function App() {
                           <td style={{ padding: '14px 12px' }}>
                             {order.status === 'SHIPPED' && <span className="badge badge-instock">جاري الشحن 🚚</span>}
                             {order.status === 'PENDING' && <span className="badge badge-paused">قيد المراجعة ⏳</span>}
+                            {order.status === 'PROCESSING' && <span className="badge badge-paused">جاري التجهيز 📦</span>}
                             {order.status === 'DELIVERED' && <span className="badge badge-active">تم التسليم ✅</span>}
+                            {order.status === 'CANCELLED' && <span className="badge badge-blocked">ملغي ❌</span>}
                           </td>
                           <td style={{ padding: '14px 12px' }}>
-                            <select
-                              value={order.status}
-                              onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
-                              style={{
-                                background: 'var(--bg-input)',
-                                color: '#fff',
-                                border: '1px solid var(--border-subtle)',
-                                padding: '6px 10px',
-                                borderRadius: '8px',
-                                fontFamily: 'var(--font-arabic)',
-                                fontSize: '0.8rem',
-                              }}
-                            >
-                              <option value="PENDING">قيد المراجعة</option>
-                              <option value="PROCESSING">جاري التجهيز</option>
-                              <option value="SHIPPED">تم الشحن</option>
-                              <option value="DELIVERED">تم التسليم</option>
-                              <option value="CANCELLED">إلغاء الطلب</option>
-                            </select>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <select
+                                value={order.status}
+                                onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                                style={{
+                                  background: 'var(--bg-input)',
+                                  color: '#fff',
+                                  border: '1px solid var(--border-subtle)',
+                                  padding: '6px 10px',
+                                  borderRadius: '8px',
+                                  fontFamily: 'var(--font-arabic)',
+                                  fontSize: '0.8rem',
+                                }}
+                              >
+                                <option value="PENDING">قيد المراجعة</option>
+                                <option value="PROCESSING">جاري التجهيز</option>
+                                <option value="SHIPPED">تم الشحن</option>
+                                <option value="DELIVERED">تم التسليم</option>
+                                <option value="CANCELLED">إلغاء الطلب</option>
+                              </select>
+                              <button
+                                onClick={() => handleDeleteOrder(order.id, order.orderNumber)}
+                                title="حذف الطلب نهائياً"
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.1)',
+                                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                                  color: '#ef4444',
+                                  borderRadius: '8px',
+                                  padding: '6px 8px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -3158,7 +3238,7 @@ export default function App() {
               <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
                 <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                    {['ALL', 'PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED'].map((st) => (
+                    {['ALL', 'PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map((st) => (
                       <button
                         key={st}
                         onClick={() => setOrderFilter(st)}
@@ -3178,11 +3258,32 @@ export default function App() {
                         {st === 'PROCESSING' && 'جاري التجهيز'}
                         {st === 'SHIPPED' && 'تم الشحن'}
                         {st === 'DELIVERED' && 'تم التسليم'}
+                        {st === 'CANCELLED' && 'الملغية ❌'}
                       </button>
                     ))}
                   </div>
 
-                  <div>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={handleClearAllOrders}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.12)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Trash2 size={15} />
+                      تصفير الإيرادات ومسح الطلبات
+                    </button>
+
                     <select
                       value={govFilter}
                       onChange={(e) => setGovFilter(e.target.value)}
@@ -3262,25 +3363,44 @@ export default function App() {
                               {order.status === 'CANCELLED' && <span className="badge badge-blocked">ملغي ❌</span>}
                             </td>
                             <td style={{ padding: '16px 12px' }}>
-                              <select
-                                value={order.status}
-                                onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
-                                style={{
-                                  background: 'var(--bg-input)',
-                                  color: '#fff',
-                                  border: '1px solid var(--border-subtle)',
-                                  padding: '6px 10px',
-                                  borderRadius: '8px',
-                                  fontFamily: 'var(--font-arabic)',
-                                  fontSize: '0.8rem',
-                                }}
-                              >
-                                <option value="PENDING">قيد المراجعة</option>
-                                <option value="PROCESSING">جاري التجهيز</option>
-                                <option value="SHIPPED">تم الشحن</option>
-                                <option value="DELIVERED">تم التسليم</option>
-                                <option value="CANCELLED">إلغاء الطلب</option>
-                              </select>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <select
+                                  value={order.status}
+                                  onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                                  style={{
+                                    background: 'var(--bg-input)',
+                                    color: '#fff',
+                                    border: '1px solid var(--border-subtle)',
+                                    padding: '6px 10px',
+                                    borderRadius: '8px',
+                                    fontFamily: 'var(--font-arabic)',
+                                    fontSize: '0.8rem',
+                                  }}
+                                >
+                                  <option value="PENDING">قيد المراجعة</option>
+                                  <option value="PROCESSING">جاري التجهيز</option>
+                                  <option value="SHIPPED">تم الشحن</option>
+                                  <option value="DELIVERED">تم التسليم</option>
+                                  <option value="CANCELLED">إلغاء الطلب</option>
+                                </select>
+                                <button
+                                  onClick={() => handleDeleteOrder(order.id, order.orderNumber)}
+                                  title="حذف الطلب نهائياً"
+                                  style={{
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                                    color: '#ef4444',
+                                    borderRadius: '8px',
+                                    padding: '6px 8px',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))
