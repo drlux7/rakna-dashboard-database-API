@@ -1208,7 +1208,7 @@ export class WebChatController {
           const canvas = document.createElement('canvas');
           let w = img.width;
           let h = img.height;
-          const MAX_DIM = 1200;
+          const MAX_DIM = 1000;
           if (w > MAX_DIM || h > MAX_DIM) {
             if (w > h) {
               h = Math.round((h * MAX_DIM) / w);
@@ -1222,7 +1222,7 @@ export class WebChatController {
           canvas.height = h;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, w, h);
-          capturedPhotoBase64 = canvas.toDataURL('image/jpeg', 0.82);
+          capturedPhotoBase64 = canvas.toDataURL('image/jpeg', 0.78);
 
           const previewImg = document.getElementById('photoPreviewImg');
           if (previewImg) previewImg.src = capturedPhotoBase64;
