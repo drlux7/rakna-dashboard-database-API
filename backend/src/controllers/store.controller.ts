@@ -68,6 +68,51 @@ export class StoreController {
       const randomDigits = Math.floor(10000 + Math.random() * 90000);
       const orderNumber = `#RK-${randomDigits}`;
 
+      // Calculate items total and normalize items payload
+      let itemsSum = 0;
+      const formattedItems = (Array.isArray(items) && items.length > 0)
+        ? items.map((it: any) => {
+            const rawPrice = parseFloat(it.unitPrice ?? it.price);
+            const price = (!isNaN(rawPrice) && rawPrice > 0) ? rawPrice : 150.0;
+            const qty = parseInt(it.quantity ?? 1, 10) || 1;
+            itemsSum += (price * qty);
+            return {
+              productId: it.productId || null,
+              productName: it.productName || it.name || 'ملصق Rakna Tag الذكي',
+              unitPrice: price,
+              quantity: qty,
+            };
+          })
+        : [
+            {
+              productId: null,
+              productName: 'ملصق Rakna Tag الذكي',
+              unitPrice: 150.0,
+              quantity: 1,
+            },
+          ];
+
+      if (itemsSum === 0 && formattedItems.length > 0) {
+        itemsSum = formattedItems.reduce((acc, it) => acc + (it.unitPrice * it.quantity), 0);
+      }
+
+      // Check governorate shipping fee
+      let govShippingFee = 0;
+      try {
+        const gov = await prisma.governorate.findFirst({
+          where: { nameAr: governorate.trim() }
+        });
+        if (gov && typeof gov.shippingFee === 'number') {
+          govShippingFee = gov.shippingFee;
+        }
+      } catch (_) {}
+
+      // Calculate final total price (prioritize valid client totalPrice, or fallback to itemsSum + shippingFee)
+      let computedTotal = parseFloat(totalPrice);
+      if (isNaN(computedTotal) || computedTotal <= 0) {
+        computedTotal = itemsSum + govShippingFee;
+      }
+
       const order = await prisma.order.create({
         data: {
           orderNumber,
@@ -76,24 +121,11 @@ export class StoreController {
           phone: phone.trim(),
           governorate: governorate.trim(),
           addressDetails: addressDetails.trim(),
-          totalPrice: parseFloat(totalPrice) || 149.0,
+          totalPrice: computedTotal,
           paymentMethod: 'COD',
           status: 'PENDING',
           items: {
-            create: Array.isArray(items) && items.length > 0
-              ? items.map((it: any) => ({
-                  productId: it.productId || null,
-                  productName: it.productName || it.name || 'ملصق Rakna Tag الذكي',
-                  unitPrice: parseFloat(it.unitPrice || it.price) || 149.0,
-                  quantity: it.quantity || 1,
-                }))
-              : [
-                  {
-                    productName: 'ملصق Rakna Tag الذكي',
-                    unitPrice: 149.0,
-                    quantity: 1,
-                  },
-                ],
+            create: formattedItems,
           },
         },
         include: { items: true },

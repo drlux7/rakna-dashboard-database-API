@@ -3239,8 +3239,15 @@ export default function App() {
                               <div style={{ fontWeight: 600 }}>{order.governorate}</div>
                               <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{order.addressDetails}</div>
                             </td>
-                            <td style={{ padding: '16px 12px', fontWeight: 800, color: 'var(--gold-primary)' }} className="number-latin">
-                              {order.totalPrice} EGP
+                            <td style={{ padding: '16px 12px' }}>
+                              <div style={{ fontWeight: 800, color: 'var(--gold-primary)' }} className="number-latin">
+                                {order.totalPrice} EGP
+                              </div>
+                              {order.items && order.items.length > 0 && (
+                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '200px', lineHeight: 1.3 }}>
+                                  {order.items.map((it) => `${it.productName || 'ملصق'} (x${it.quantity})`).join('، ')}
+                                </div>
+                              )}
                             </td>
                             <td style={{ padding: '16px 12px' }}>
                               <span style={{ fontSize: '0.78rem', background: 'rgba(255,255,255,0.06)', padding: '4px 8px', borderRadius: '6px' }}>
