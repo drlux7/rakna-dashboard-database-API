@@ -78,7 +78,7 @@ export class SupportController {
   static async sendMessage(req: AuthRequest, res: Response): Promise<void> {
     try {
       const userId = req.user!.id;
-      const { content, imageUrl } = req.body;
+      const { content, imageUrl, phone, email, problemType } = req.body;
 
       if (!content || typeof content !== 'string' || content.trim().length === 0) {
         res.status(400).json({ success: false, message: 'نص الرسالة مطلوب' });
@@ -100,12 +100,27 @@ export class SupportController {
         });
       }
 
+      let formattedContent = content.trim();
+      const meta: string[] = [];
+      if (problemType && typeof problemType === 'string' && problemType.trim().length > 0) {
+        meta.push(`📌 نوع المشكلة: ${problemType.trim()}`);
+      }
+      if (phone && typeof phone === 'string' && phone.trim().length > 0) {
+        meta.push(`📱 هاتف العميل (واتساب): ${phone.trim()}`);
+      }
+      if (email && typeof email === 'string' && email.trim().length > 0) {
+        meta.push(`✉️ البريد الإلكتروني: ${email.trim()}`);
+      }
+      if (meta.length > 0) {
+        formattedContent = `${meta.join('\n')}\n\n📝 تفاصيل المشكلة:\n${formattedContent}`;
+      }
+
       const msg = await prisma.supportMessage.create({
         data: {
           userId,
           ticketId: activeTicket.id,
           senderType: 'USER',
-          content: content.trim(),
+          content: formattedContent,
           imageUrl: imageUrl || null,
         },
       });
