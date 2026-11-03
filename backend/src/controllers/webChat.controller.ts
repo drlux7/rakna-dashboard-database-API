@@ -971,11 +971,11 @@ export class WebChatController {
           <div class="quick-title">
             <span>1️⃣</span>
             <span>اختر سبب التواصل:</span>
-            <div id="quotaBadge" class="quota-badge">المتبقي اليوم: <b id="remainingCount">${ipUsage.remaining}</b> من 5</div>
+            <div id="quotaBadge" class="quota-badge" style="display:none;"></div>
             <div id="cooldownBadge" class="cooldown-badge" style="display:none;">⏳ انتظر <b id="countdownSec">15</b>ث</div>
           </div>
 
-          <div id="limitReachedBanner" class="limit-reached-banner" style="display:${ipUsage.isLimitReached ? 'block' : 'none'};">
+          <div id="limitReachedBanner" class="limit-reached-banner" style="display:none;">
             <div class="limit-reached-title">
               <span>⚠️</span>
               <span>استنفدت الحد اليومي (5 رسائل سريعة)</span>
@@ -1092,7 +1092,7 @@ export class WebChatController {
     let pollTimer = null;
     let cooldownTimer = null;
     let inCooldown = false;
-    let remainingQuota = ${ipUsage.remaining};
+    let remainingQuota = 999999;
     const knownMessageIds = new Set();
 
     // DOM Elements

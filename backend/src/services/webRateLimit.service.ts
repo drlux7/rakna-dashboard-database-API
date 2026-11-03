@@ -15,7 +15,7 @@ interface CarBlockRecord {
 
 export class WebRateLimitService {
   private static instance: WebRateLimitService;
-  public static readonly DAILY_LIMIT = 5;
+  public static readonly DAILY_LIMIT = 999999;
 
   private storeFile: string;
   private cache: Record<string, IpUsageRecord> = {};
@@ -208,14 +208,11 @@ export class WebRateLimitService {
       count = record.count;
     }
 
-    const remaining = Math.max(0, WebRateLimitService.DAILY_LIMIT - count);
-    const isLimitReached = remaining <= 0;
-
     return {
       count,
       maxAllowed: WebRateLimitService.DAILY_LIMIT,
-      remaining,
-      isLimitReached,
+      remaining: 999999,
+      isLimitReached: false,
       date: today,
     };
   }
@@ -223,9 +220,8 @@ export class WebRateLimitService {
   /**
    * التحقق مما إذا كان مسموحاً لهذا الـ IP بإرسال رسالة سريعة
    */
-  public canSendMessage(rawIp?: string | null): boolean {
-    const usage = this.getUsage(rawIp);
-    return !usage.isLimitReached;
+  public canSendMessage(_rawIp?: string | null): boolean {
+    return true; // تم تعطيل الحد اليومي مؤقتاً
   }
 
   /**
@@ -253,15 +249,11 @@ export class WebRateLimitService {
 
     this.saveStore();
 
-    const count = this.cache[ip].count;
-    const remaining = Math.max(0, WebRateLimitService.DAILY_LIMIT - count);
-    const isLimitReached = remaining <= 0;
-
     return {
-      count,
+      count: this.cache[ip].count,
       maxAllowed: WebRateLimitService.DAILY_LIMIT,
-      remaining,
-      isLimitReached,
+      remaining: 999999,
+      isLimitReached: false,
     };
   }
 

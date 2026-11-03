@@ -197,20 +197,9 @@ export class ReporterController {
       const COOLDOWN_SECONDS = 15;
       const MAX_UNANSWERED_MESSAGES = 5;
 
-      // ──────────────── 0. Daily Web IP Rate Limit (Max 5 quick messages per day) ────────────────
+      // ──────────────── 0. Daily Web IP Rate Limit (Bypassed temporarily per user request) ────────────────
       const clientIp = webRateLimitService.extractIp(req);
       webRateLimitService.mapSessionToIp(reporterToken, clientIp);
-
-      if (!webRateLimitService.canSendMessage(clientIp)) {
-        res.status(429).json({
-          success: false,
-          message: 'لقد استنفدت الحد اليومي (5 رسائل سريعة عبر الويب). يُرجى تحميل تطبيق ركنة للمزيد والتواصل بدون أي حدود.',
-          limitReached: true,
-          remainingMessages: 0,
-          requireAppDownload: true,
-        });
-        return;
-      }
 
       // ──────────────── 0.1 Check Mandatory Camera Photo ────────────────
       if (!imageUrl || !imageUrl.trim()) {
@@ -523,17 +512,7 @@ export class ReporterController {
       const COOLDOWN_SECONDS = 15;
       const MAX_UNANSWERED_MESSAGES = 5;
 
-      // ──────────────── 0. Daily Web IP Rate Limit (Max 5 quick messages per day) ────────────────
-      if (!webRateLimitService.canSendMessage(clientIp)) {
-        res.status(429).json({
-          success: false,
-          message: 'لقد استنفدت الحد اليومي (5 رسائل سريعة عبر الويب). يُرجى تحميل تطبيق ركنة للمزيد والتواصل بدون أي حدود.',
-          limitReached: true,
-          remainingMessages: 0,
-          requireAppDownload: true,
-        });
-        return;
-      }
+      // ──────────────── 0. Daily Web IP Rate Limit (Bypassed temporarily) ────────────────
 
       // ──────────────── 1. Anti-Spam Check: Cooldown between consecutive reporter messages ────────────────
       const lastReporterMessage = await prisma.message.findFirst({
