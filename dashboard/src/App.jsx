@@ -57,8 +57,48 @@ import {
   Flame,
   Upload,
   Image as ImageIcon,
+  Mail,
 } from 'lucide-react';
 import { api } from './services/api';
+
+// Helper to parse structured support ticket content
+const parseTicketContent = (content) => {
+  if (!content || typeof content !== 'string') {
+    return { problemType: '', phone: '', email: '', description: '', isStructured: false };
+  }
+
+  let problemType = '';
+  let phone = '';
+  let email = '';
+  let description = content;
+  let isStructured = false;
+
+  const typeMatch = content.match(/📌 نوع المشكلة:\s*([^\n\r]+)/);
+  if (typeMatch) {
+    problemType = typeMatch[1].trim();
+    isStructured = true;
+  }
+
+  const phoneMatch = content.match(/📱 هاتف العميل \(واتساب\):\s*([^\n\r]+)/) || content.match(/📱 رقم الهاتف.*?:\s*([^\n\r]+)/);
+  if (phoneMatch) {
+    phone = phoneMatch[1].trim();
+    isStructured = true;
+  }
+
+  const emailMatch = content.match(/✉️ البريد الإلكتروني:\s*([^\n\r]+)/) || content.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  if (emailMatch) {
+    email = (emailMatch[1] || emailMatch[0]).trim();
+    isStructured = true;
+  }
+
+  const descMatch = content.match(/📝 تفاصيل المشكلة:\s*([\s\S]+)/);
+  if (descMatch) {
+    description = descMatch[1].trim();
+    isStructured = true;
+  }
+
+  return { problemType, phone, email, description, isStructured };
+};
 
 export default function App() {
   const [admin, setAdmin] = useState(api.admin);
@@ -1095,10 +1135,9 @@ export default function App() {
     if (!targetId) return;
 
     const isConfirmed = window.confirm(
-      'هل أنت متأكد من رغبتك في إغلاق هذه المحادثة؟\n\n' +
-      '• ستظل المحادثة محفوظة ومؤرشفة في الداشبورد للرجوع إليها في أي وقت.\n' +
-      '• لن يتمكن أحد من الكتابة أو إرسال ردود جديدة في هذه المحادثة نهائياً.\n' +
-      '• ستتم إزالة المحادثة من شاشة العميل في التطبيق، وعندما يضغط العميل على "تواصل مع الدعم" مرة أخرى سيفتح محادثة جديدة نظيفة.'
+      'هل أنت متأكد من رغبتك في حل وإغلاق هذه التذكرة؟\n\n' +
+      '• ستظل التذكرة محفوظة ومؤرشفة في سجل التذاكر للرجوع إليها في أي وقت.\n' +
+      '• تُحدد التذكرة كمحلولة ومغلقة في لوحة التحكم.'
     );
     if (!isConfirmed) return;
 
@@ -1106,7 +1145,7 @@ export default function App() {
     try {
       const res = await api.closeSupportThread(targetId);
       if (res && res.success) {
-        showToast('تم إغلاق المحادثة بنجاح وأرشفتها 🔒');
+        showToast('تم حل وإغلاق التذكرة بنجاح وأرشفتها 🔒');
         setSelectedSupportTicket(prev => prev ? { ...prev, ticketStatus: 'CLOSED', status: 'CLOSED' } : null);
         await loadSupportMessages(targetId, true);
         await loadSupportThreads(true);
@@ -4402,10 +4441,10 @@ export default function App() {
                     </div>
                     <div>
                       <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', margin: 0 }}>
-                        مركز محادثات خدمة العملاء والدعم الفني المباشر
+                        مركز تذاكر الدعم الفني وخدمة العملاء
                       </h3>
                       <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px', margin: 0 }}>
-                        تواصل لحظي حي مع مستخدمي تطبيق ركنة عند ضغطهم على زر "تواصل مع الدعم".
+                        متابعة ومراجعة تذاكر واستفسارات المستخدمين والتواصل المباشر معهم عبر الواتساب والبريد الإلكتروني.
                       </p>
                     </div>
                   </div>
@@ -4504,6 +4543,8 @@ export default function App() {
                             : (selectedSupportUserId === thread.userId);
                           const isThreadClosed = thread.ticketStatus === 'CLOSED';
 
+                          const parsed = parseTicketContent(thread.lastMessage);
+
                           return (
                             <div
                               key={thread.ticketId || thread.userId}
@@ -4565,15 +4606,28 @@ export default function App() {
                               <div style={{ fontSize: '0.78rem', color: 'var(--gold-primary)', direction: 'ltr', textAlign: 'right', fontWeight: 600 }}>
                                 {thread.phone}
                               </div>
+                              {parsed.problemType && (
+                                <div style={{
+                                  fontSize: '0.72rem',
+                                  color: '#38bdf8',
+                                  fontWeight: 700,
+                                  marginTop: '4px',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}>
+                                  📌 {parsed.problemType}
+                                </div>
+                              )}
                               <div style={{
-                                fontSize: '0.75rem',
+                                fontSize: '0.74rem',
                                 color: 'var(--text-secondary)',
                                 marginTop: '4px',
                                 whiteSpace: 'nowrap',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                               }}>
-                                {thread.lastMessage}
+                                {parsed.description || thread.lastMessage}
                               </div>
                               <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'left' }}>
                                 {new Date(thread.lastMessageTime).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
@@ -4589,9 +4643,53 @@ export default function App() {
                 <div className="kpi-card" style={{ padding: '0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                   {selectedSupportUser ? (
                     <>
-                      {/* Chat Header Bar */}
+                      {/* Ticket Header Bar */}
                       {(() => {
                         const isClosed = selectedSupportTicket?.ticketStatus === 'CLOSED' || selectedSupportTicket?.status === 'CLOSED';
+                        const firstUserMsg = supportMessages.find(m => m.senderType === 'USER');
+                        const ticketData = parseTicketContent(firstUserMsg?.content || selectedSupportTicket?.lastMessage || '');
+                        const targetPhone = ticketData.phone || selectedSupportUser.phone || '';
+                        const targetEmail = ticketData.email || selectedSupportUser.email || '';
+                        const cleanPhone = targetPhone.replace(/\D/g, '');
+
+                        const handleOpenWhatsApp = () => {
+                          if (!cleanPhone) {
+                            showToast('⚠️ لا يوجد رقم هاتف صالح للواتساب');
+                            return;
+                          }
+                          const greeting = encodeURIComponent(
+                            `مرحباً بك أ/ ${selectedSupportUser.name || 'العميل'}، معك فريق خدمة العملاء والدعم الفني لتطبيق ركنة بخصوص طلبك (${ticketData.problemType || 'الدعم الفني'}). كيف يمكننا مساعدتك؟`
+                          );
+                          window.open(`https://wa.me/${cleanPhone}?text=${greeting}`, '_blank');
+                        };
+
+                        const handleOpenEmail = () => {
+                          if (!targetEmail) {
+                            showToast('⚠️ لا يوجد بريد إلكتروني مسجل لهذه التذكرة');
+                            return;
+                          }
+                          const subject = encodeURIComponent(`فريق الدعم الفني - تطبيق ركنة [تذكرة: ${ticketData.problemType || 'استفسار'}]`);
+                          const body = encodeURIComponent(
+                            `مرحباً أ/ ${selectedSupportUser.name || 'العميل'}،\n\nتواصل معك فريق الدعم الفني لتطبيق ركنة بخصوص طلبك:\n"${ticketData.description || ''}"\n\n`
+                          );
+                          window.open(`mailto:${targetEmail}?subject=${subject}&body=${body}`, '_blank');
+                        };
+
+                        const handleCopyTicketInfo = () => {
+                          const text = [
+                            `👤 العميل: ${selectedSupportUser.name || 'غير محدد'}`,
+                            `📱 الهاتف (واتساب): ${targetPhone}`,
+                            targetEmail ? `✉️ البريد: ${targetEmail}` : '',
+                            ticketData.problemType ? `📌 نوع المشكلة: ${ticketData.problemType}` : '',
+                            ticketData.description ? `📝 تفاصيل المشكلة:\n${ticketData.description}` : '',
+                          ].filter(Boolean).join('\n');
+
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(text);
+                            showToast('تم نسخ كافة بيانات العميل والتذكرة بنجاح 📋');
+                          }
+                        };
+
                         return (
                           <div style={{
                             padding: '16px 20px',
@@ -4632,20 +4730,92 @@ export default function App() {
                                       borderRadius: '10px',
                                       fontWeight: 800,
                                     }}>
-                                      🔒 محادثة مغلقة ومؤرشفة
+                                      🔒 تذكرة مغلقة ومؤرشفة
                                     </span>
                                   ) : (
-                                    <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 700 }}>🟢 متصل بالتطبيق</span>
+                                    <span style={{
+                                      fontSize: '0.72rem',
+                                      color: '#34d399',
+                                      background: 'rgba(16, 185, 129, 0.15)',
+                                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                                      padding: '2px 8px',
+                                      borderRadius: '10px',
+                                      fontWeight: 800,
+                                    }}>
+                                      🟢 تذكرة نشطة قيد المتابعة
+                                    </span>
                                   )}
                                 </div>
                                 <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', direction: 'ltr', textAlign: 'right' }}>
-                                  {selectedSupportUser.phone} {selectedSupportUser.cars && selectedSupportUser.cars.length > 0 && `• ${selectedSupportUser.cars.map(c => `${c.brand} ${c.model}`).join(', ')}`}
+                                  {targetPhone} {selectedSupportUser.cars && selectedSupportUser.cars.length > 0 && `• ${selectedSupportUser.cars.map(c => `${c.brand} ${c.model}`).join(', ')}`}
                                 </div>
                               </div>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {/* زر إغلاق المحادثة المطلوب من المستخدم */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              {/* زر واتساب */}
+                              <button
+                                type="button"
+                                onClick={handleOpenWhatsApp}
+                                style={{
+                                  fontSize: '0.78rem',
+                                  gap: '6px',
+                                  color: '#25D366',
+                                  background: 'rgba(37, 211, 102, 0.12)',
+                                  border: '1px solid rgba(37, 211, 102, 0.35)',
+                                  padding: '7px 12px',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  fontWeight: 700,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  transition: 'all 0.15s ease',
+                                }}
+                                title="فتح محادثة واتساب مع العميل"
+                              >
+                                <MessageSquare size={14} />
+                                <span>محادثة واتساب</span>
+                              </button>
+
+                              {/* زر البريد الإلكتروني */}
+                              {targetEmail && (
+                                <button
+                                  type="button"
+                                  onClick={handleOpenEmail}
+                                  style={{
+                                    fontSize: '0.78rem',
+                                    gap: '6px',
+                                    color: '#38bdf8',
+                                    background: 'rgba(56, 189, 248, 0.12)',
+                                    border: '1px solid rgba(56, 189, 248, 0.35)',
+                                    padding: '7px 12px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontWeight: 700,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                  title="إرسال بريد إلكتروني للعميل"
+                                >
+                                  <Mail size={14} />
+                                  <span>إرسال إيميل</span>
+                                </button>
+                              )}
+
+                              {/* زر نسخ البيانات */}
+                              <button
+                                type="button"
+                                onClick={handleCopyTicketInfo}
+                                className="btn-ghost"
+                                style={{ fontSize: '0.78rem', gap: '6px', color: 'var(--text-secondary)', padding: '7px 10px' }}
+                                title="نسخ بيانات التواصل والتذكرة"
+                              >
+                                <Copy size={14} />
+                                <span>نسخ البيانات</span>
+                              </button>
+
+                              {/* زر حل وإغلاق التذكرة */}
                               {!isClosed ? (
                                 <button
                                   type="button"
@@ -4666,10 +4836,10 @@ export default function App() {
                                     transition: 'all 0.2s',
                                     boxShadow: '0 2px 8px rgba(239, 68, 68, 0.2)',
                                   }}
-                                  title="إغلاق وأرشفة هذه المحادثة (تُمسح من شاشة التطبيق ويتمكن العميل من فتح محادثة جديدة لاحقاً)"
+                                  title="حل وأرشفة هذه التذكرة"
                                 >
                                   <Lock size={14} />
-                                  <span>{isClosingThread ? 'جاري الإغلاق...' : 'إغلاق المحادثة 🔒'}</span>
+                                  <span>{isClosingThread ? 'جاري الإغلاق...' : 'حل وإغلاق التذكرة 🔒'}</span>
                                 </button>
                               ) : (
                                 <div style={{
@@ -4685,20 +4855,13 @@ export default function App() {
                                   fontWeight: 700,
                                 }}>
                                   <Lock size={13} />
-                                  <span>مغلقة بواسطة {selectedSupportTicket?.closedBy || 'الدعم'}</span>
+                                  <span>مغلقة ومحلولة بواسطة {selectedSupportTicket?.closedBy || 'الدعم'}</span>
                                 </div>
                               )}
 
+                              {/* زر حظر الحساب */}
                               <button
-                                onClick={() => window.open(`https://wa.me/${selectedSupportUser.phone.replace(/\D/g, '')}`, '_blank')}
-                                className="btn-ghost"
-                                style={{ fontSize: '0.78rem', gap: '6px', color: '#25D366' }}
-                                title="فتح محادثة واتساب خارجية"
-                              >
-                                <MessageSquare size={14} />
-                                <span>محادثة واتساب</span>
-                              </button>
-                              <button
+                                type="button"
                                 onClick={() => handleToggleUserBlock(selectedSupportUser.id)}
                                 style={{
                                   background: selectedSupportUser.isBlocked ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
@@ -4723,31 +4886,190 @@ export default function App() {
                         flex: 1,
                         padding: '20px',
                         overflowY: 'auto',
-                        maxHeight: '420px',
+                        maxHeight: '440px',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '12px',
+                        gap: '14px',
                         background: 'radial-gradient(circle, rgba(14, 19, 29, 0.95) 0%, rgba(7, 9, 14, 0.98) 100%)',
                       }}>
                         {supportMessages.length === 0 ? (
                           <div style={{ textAlign: 'center', color: 'var(--text-muted)', margin: 'auto' }}>
-                            لا توجد رسائل سابقة في هذه المحادثة
+                            لا توجد رسائل سابقة في هذه التذكرة
                           </div>
                         ) : (
                           supportMessages.map((msg) => {
                             const isSupport = msg.senderType === 'SUPPORT';
+                            const parsed = parseTicketContent(msg.content);
+
+                            // إذا كانت رسالة من العميل وبصيغة تذكرة منظمة، نعرض بطاقة التذكرة المتكاملة
+                            if (!isSupport && parsed.isStructured) {
+                              return (
+                                <div
+                                  key={msg.id}
+                                  style={{
+                                    background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%)',
+                                    border: '1px solid rgba(56, 189, 248, 0.35)',
+                                    borderRadius: '16px',
+                                    padding: '18px 22px',
+                                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+                                    color: '#fff',
+                                    maxWidth: '94%',
+                                    alignSelf: 'center',
+                                    width: '100%',
+                                  }}
+                                >
+                                  {/* Card Header */}
+                                  <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    flexWrap: 'wrap',
+                                    gap: '8px',
+                                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                    paddingBottom: '12px',
+                                    marginBottom: '14px',
+                                  }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <span style={{
+                                        background: 'linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)',
+                                        color: '#000',
+                                        fontWeight: 800,
+                                        fontSize: '0.78rem',
+                                        padding: '3px 10px',
+                                        borderRadius: '8px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                      }}>
+                                        <span>📌 نوع المشكلة:</span>
+                                        <span>{parsed.problemType || 'طلب دعم فني'}</span>
+                                      </span>
+                                      <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                                        مقدم الطلب: <strong style={{ color: '#fff' }}>{selectedSupportUser.name || 'مستخدم ركنة'}</strong>
+                                      </span>
+                                    </div>
+                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                      {new Date(msg.createdAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+                                    </span>
+                                  </div>
+
+                                  {/* Contact Info Quick Badges */}
+                                  <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    gap: '12px',
+                                    background: 'rgba(0,0,0,0.25)',
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    marginBottom: '16px',
+                                    border: '1px solid rgba(255,255,255,0.05)',
+                                  }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem' }}>
+                                      <span style={{ color: 'var(--text-muted)' }}>📱 هاتف واتساب:</span>
+                                      <span style={{ color: '#25D366', fontWeight: 700, direction: 'ltr' }}>
+                                        {parsed.phone || selectedSupportUser.phone}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => window.open(`https://wa.me/${(parsed.phone || selectedSupportUser.phone || '').replace(/\D/g, '')}`, '_blank')}
+                                        style={{
+                                          background: 'rgba(37, 211, 102, 0.2)',
+                                          color: '#25D366',
+                                          border: 'none',
+                                          padding: '2px 8px',
+                                          borderRadius: '6px',
+                                          cursor: 'pointer',
+                                          fontSize: '0.72rem',
+                                          fontWeight: 700,
+                                        }}
+                                      >
+                                        مراسلة واتساب
+                                      </button>
+                                    </div>
+
+                                    {(parsed.email || selectedSupportUser.email) && (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem' }}>
+                                        <span style={{ color: 'var(--text-muted)' }}>✉️ البريد:</span>
+                                        <span style={{ color: '#38bdf8', fontWeight: 600 }}>
+                                          {parsed.email || selectedSupportUser.email}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => window.open(`mailto:${parsed.email || selectedSupportUser.email}`, '_blank')}
+                                          style={{
+                                            background: 'rgba(56, 189, 248, 0.2)',
+                                            color: '#38bdf8',
+                                            border: 'none',
+                                            padding: '2px 8px',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            fontSize: '0.72rem',
+                                            fontWeight: 700,
+                                          }}
+                                        >
+                                          إرسال إيميل
+                                        </button>
+                                      </div>
+                                    )}
+
+                                    {selectedSupportUser.cars && selectedSupportUser.cars.length > 0 && (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem' }}>
+                                        <span style={{ color: 'var(--text-muted)' }}>🚗 المركبة:</span>
+                                        <span style={{ color: 'var(--gold-primary)', fontWeight: 600 }}>
+                                          {selectedSupportUser.cars.map(c => `${c.brand} ${c.model}`).join(', ')}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Description Body */}
+                                  <div>
+                                    <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--gold-primary)', marginBottom: '8px' }}>
+                                      📝 تفاصيل وشرح المشكلة:
+                                    </div>
+                                    <div style={{
+                                      background: 'rgba(0, 0, 0, 0.35)',
+                                      padding: '14px 16px',
+                                      borderRadius: '10px',
+                                      fontSize: '0.92rem',
+                                      lineHeight: 1.7,
+                                      color: '#f8fafc',
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-word',
+                                      border: '1px solid rgba(255,255,255,0.06)',
+                                    }}>
+                                      {parsed.description || msg.content}
+                                    </div>
+                                  </div>
+
+                                  {msg.imageUrl && (
+                                    <div style={{ marginTop: '14px' }}>
+                                      <img
+                                        src={msg.imageUrl}
+                                        alt="Ticket attachment"
+                                        style={{ maxWidth: '300px', maxHeight: '200px', borderRadius: '8px', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}
+                                        onClick={() => window.open(msg.imageUrl, '_blank')}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            // رسائل الدعم الفني / الملاحظات
                             return (
                               <div
                                 key={msg.id}
                                 style={{
                                   alignSelf: isSupport ? 'flex-start' : 'flex-end',
-                                  maxWidth: '75%',
+                                  maxWidth: isSupport ? '85%' : '75%',
                                   background: isSupport
                                     ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.18) 0%, rgba(2, 132, 199, 0.18) 100%)'
                                     : 'rgba(255, 255, 255, 0.08)',
                                   border: isSupport ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid rgba(255, 255, 255, 0.1)',
                                   color: '#fff',
-                                  padding: '10px 14px',
+                                  padding: '12px 16px',
                                   borderRadius: isSupport ? '14px 14px 14px 2px' : '14px 14px 2px 14px',
                                   fontSize: '0.88rem',
                                   lineHeight: 1.6,
@@ -4755,26 +5077,28 @@ export default function App() {
                                 }}
                               >
                                 <div style={{
-                                  fontSize: '0.7rem',
+                                  fontSize: '0.72rem',
                                   fontWeight: 800,
                                   color: isSupport ? '#38bdf8' : 'var(--gold-primary)',
-                                  marginBottom: '4px',
+                                  marginBottom: '6px',
                                   display: 'flex',
                                   alignItems: 'center',
-                                  gap: '4px',
+                                  gap: '6px',
                                 }}>
-                                  {isSupport ? '🎧 فريق الدعم الفني (ركنة)' : '👤 العميل'}
+                                  {isSupport ? (
+                                    <>
+                                      <Headphones size={13} />
+                                      <span>ملاحظة / رد الدعم الفني (ركنة)</span>
+                                    </>
+                                  ) : (
+                                    <span>👤 العميل</span>
+                                  )}
+                                  <span style={{ marginRight: 'auto', color: 'var(--text-muted)', fontWeight: 500, fontSize: '0.68rem' }}>
+                                    {new Date(msg.createdAt).toLocaleString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
                                 </div>
                                 <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                                   {msg.content}
-                                </div>
-                                <div style={{
-                                  fontSize: '0.65rem',
-                                  color: 'var(--text-muted)',
-                                  textAlign: 'left',
-                                  marginTop: '4px',
-                                }}>
-                                  {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                                 </div>
                               </div>
                             );
@@ -4782,7 +5106,7 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Bottom Reply Area: Locked Banner when closed, or Reply Form when open */}
+                      {/* Bottom Reply Area: Locked Banner when closed, or Actions Bar when open */}
                       {(selectedSupportTicket?.ticketStatus === 'CLOSED' || selectedSupportTicket?.status === 'CLOSED') ? (
                         <div style={{
                           padding: '18px 24px',
@@ -4809,103 +5133,174 @@ export default function App() {
                             </div>
                             <div>
                               <div style={{ fontWeight: 800, color: '#fca5a5', fontSize: '0.9rem' }}>
-                                هذه المحادثة مغلقة ومؤرشفة للقراءة فقط 🔒
+                                هذه التذكرة مغلقة ومؤرشفة للقراءة فقط 🔒
                               </div>
                               <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '3px', lineHeight: 1.5 }}>
-                                تم إغلاق هذه المحادثة وحفظها في الأرشيف ولا يمكن لأي طرف الكتابة فيها مجدداً. تم مسحها تلقائياً من شاشة تطبيق العميل، وعندما يضغط العميل على "تواصل مع الدعم" مرة أخرى سيفتح محادثة جديدة نظيفة.
+                                تم حل وإغلاق هذه التذكرة وحفظها في الأرشيف للرجوع إليها في أي وقت.
                               </div>
                             </div>
                           </div>
                         </div>
                       ) : (
                         <>
-                          {/* Quick Canned Replies */}
-                          <div style={{
-                            padding: '8px 16px',
-                            background: 'rgba(0,0,0,0.2)',
-                            borderTop: '1px solid var(--border-subtle)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            overflowX: 'auto',
-                          }}>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>ردود سريعة:</span>
-                            {[
-                              'أهلاً بك يا فندم 👋 كيف يمكننا مساعدتك اليوم؟',
-                              'مدة توصيل الملصق من 24 إلى 48 ساعة كحد أقصى مع المندوب 🚚',
-                              'الملصق مصنوع بمواد نانو كربونية مقاومة للماء والحرارة 100% 🛡️',
-                              'تم حل المشكلة وتحديث بيانات سيارتك بنجاح ✨',
-                            ].map((canned, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => setSupportReplyText(canned)}
-                                style={{
-                                  background: 'rgba(255,255,255,0.05)',
-                                  border: '1px solid var(--border-subtle)',
-                                  color: 'var(--text-secondary)',
-                                  padding: '3px 10px',
-                                  borderRadius: '12px',
-                                  fontSize: '0.72rem',
-                                  cursor: 'pointer',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {canned.substring(0, 32)}...
-                              </button>
-                            ))}
-                          </div>
+                          {/* Dedicated Quick Action Banner */}
+                          {(() => {
+                            const firstUserMsg = supportMessages.find(m => m.senderType === 'USER');
+                            const ticketData = parseTicketContent(firstUserMsg?.content || selectedSupportTicket?.lastMessage || '');
+                            const targetPhone = ticketData.phone || selectedSupportUser.phone || '';
+                            const targetEmail = ticketData.email || selectedSupportUser.email || '';
+                            const cleanPhone = targetPhone.replace(/\D/g, '');
 
-                          {/* Reply Input Bar */}
+                            const handleOpenWhatsApp = () => {
+                              if (!cleanPhone) {
+                                showToast('⚠️ لا يوجد رقم هاتف صالح للواتساب');
+                                return;
+                              }
+                              const greeting = encodeURIComponent(
+                                `مرحباً بك أ/ ${selectedSupportUser.name || 'العميل'}، معك فريق خدمة العملاء والدعم الفني لتطبيق ركنة بخصوص طلبك (${ticketData.problemType || 'الدعم الفني'}). كيف يمكننا مساعدتك؟`
+                              );
+                              window.open(`https://wa.me/${cleanPhone}?text=${greeting}`, '_blank');
+                            };
+
+                            const handleOpenEmail = () => {
+                              if (!targetEmail) {
+                                showToast('⚠️ لا يوجد بريد إلكتروني مسجل لهذه التذكرة');
+                                return;
+                              }
+                              const subject = encodeURIComponent(`فريق الدعم الفني - تطبيق ركنة [تذكرة: ${ticketData.problemType || 'استفسار'}]`);
+                              const body = encodeURIComponent(
+                                `مرحباً أ/ ${selectedSupportUser.name || 'العميل'}،\n\nتواصل معك فريق الدعم الفني لتطبيق ركنة بخصوص طلبك:\n"${ticketData.description || ''}"\n\n`
+                              );
+                              window.open(`mailto:${targetEmail}?subject=${subject}&body=${body}`, '_blank');
+                            };
+
+                            return (
+                              <div style={{
+                                padding: '12px 20px',
+                                background: 'rgba(255, 255, 255, 0.02)',
+                                borderTop: '1px solid var(--border-subtle)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                flexWrap: 'wrap',
+                                gap: '12px',
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                  <button
+                                    type="button"
+                                    onClick={handleOpenWhatsApp}
+                                    style={{
+                                      background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                                      color: '#fff',
+                                      fontWeight: 800,
+                                      border: 'none',
+                                      padding: '9px 18px',
+                                      borderRadius: '10px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.84rem',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      boxShadow: '0 2px 10px rgba(37, 211, 102, 0.3)',
+                                    }}
+                                  >
+                                    <MessageSquare size={15} />
+                                    <span>الرد والتواصل عبر واتساب</span>
+                                  </button>
+
+                                  {targetEmail && (
+                                    <button
+                                      type="button"
+                                      onClick={handleOpenEmail}
+                                      style={{
+                                        background: 'linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)',
+                                        color: '#000',
+                                        fontWeight: 800,
+                                        border: 'none',
+                                        padding: '9px 18px',
+                                        borderRadius: '10px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.84rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        boxShadow: '0 2px 10px rgba(56, 189, 248, 0.3)',
+                                      }}
+                                    >
+                                      <Mail size={15} />
+                                      <span>الرد عبر البريد الإلكتروني</span>
+                                    </button>
+                                  )}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={handleCloseSupportThread}
+                                  disabled={isClosingThread}
+                                  style={{
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    color: '#fca5a5',
+                                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                                    padding: '8px 14px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                  }}
+                                >
+                                  <Lock size={13} />
+                                  <span>{isClosingThread ? 'جاري الإغلاق...' : 'تم الحل وإغلاق التذكرة 🔒'}</span>
+                                </button>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Record Internal Note / History Form */}
                           <form
                             onSubmit={handleSendSupportReply}
                             style={{
-                              padding: '12px 16px',
-                              background: 'rgba(255, 255, 255, 0.02)',
+                              padding: '10px 16px',
+                              background: 'rgba(0, 0, 0, 0.25)',
                               borderTop: '1px solid var(--border-subtle)',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '12px',
+                              gap: '10px',
                             }}
                           >
                             <input
                               type="text"
                               value={supportReplyText}
                               onChange={(e) => setSupportReplyText(e.target.value)}
-                              placeholder="اكتب ردك للعميل هنا واضغط Enter للإرسال الفوري..."
+                              placeholder="سجّل ملاحظة أو تحديث في سجل التذكرة (مثل: تم التواصل مع العميل وحل المشكلة)..."
                               className="admin-input"
-                              style={{ flex: 1, padding: '12px 14px', fontSize: '0.88rem' }}
-                              required
+                              style={{ flex: 1, padding: '10px 14px', fontSize: '0.82rem' }}
                             />
                             <button
                               type="submit"
                               disabled={isSendingReply || !supportReplyText.trim()}
                               style={{
-                                background: 'linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)',
-                                color: '#000',
-                                fontWeight: 800,
-                                border: 'none',
-                                padding: '11px 22px',
-                                borderRadius: '10px',
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                color: '#fff',
+                                fontWeight: 700,
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
+                                padding: '9px 16px',
+                                borderRadius: '8px',
                                 cursor: 'pointer',
-                                fontSize: '0.88rem',
+                                fontSize: '0.8rem',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '8px',
-                                boxShadow: '0 2px 10px rgba(56, 189, 248, 0.3)',
+                                gap: '6px',
                               }}
                             >
                               {isSendingReply ? (
-                                <>
-                                  <RefreshCw size={16} className="animate-spin" />
-                                  <span>جاري الإرسال...</span>
-                                </>
+                                <RefreshCw size={14} className="animate-spin" />
                               ) : (
-                                <>
-                                  <Send size={16} />
-                                  <span>إرسال الرد</span>
-                                </>
+                                <Send size={14} />
                               )}
+                              <span>تسجيل في السجل</span>
                             </button>
                           </form>
                         </>
