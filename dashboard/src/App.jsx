@@ -2354,23 +2354,29 @@ export default function App() {
                                 <option value="DELIVERED">تم التسليم</option>
                                 <option value="CANCELLED">إلغاء الطلب</option>
                               </select>
-                              <button
-                                onClick={() => handleDeleteOrder(order.id, order.orderNumber)}
-                                title="حذف الطلب نهائياً"
-                                style={{
-                                  background: 'rgba(239, 68, 68, 0.1)',
-                                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                                  color: '#ef4444',
-                                  borderRadius: '8px',
-                                  padding: '6px 8px',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              {order.status === 'CANCELLED' && (
+                                <button
+                                  onClick={() => handleDeleteOrder(order.id, order.orderNumber)}
+                                  title="حذف الطلب نهائياً من قاعدة البيانات"
+                                  style={{
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    border: '1px solid #ef4444',
+                                    color: '#ef4444',
+                                    borderRadius: '8px',
+                                    padding: '5px 10px',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  <Trash2 size={13} />
+                                  حذف
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -3383,23 +3389,29 @@ export default function App() {
                                   <option value="DELIVERED">تم التسليم</option>
                                   <option value="CANCELLED">إلغاء الطلب</option>
                                 </select>
-                                <button
-                                  onClick={() => handleDeleteOrder(order.id, order.orderNumber)}
-                                  title="حذف الطلب نهائياً"
-                                  style={{
-                                    background: 'rgba(239, 68, 68, 0.1)',
-                                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                                    color: '#ef4444',
-                                    borderRadius: '8px',
-                                    padding: '6px 8px',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                  }}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
+                                {order.status === 'CANCELLED' && (
+                                  <button
+                                    onClick={() => handleDeleteOrder(order.id, order.orderNumber)}
+                                    title="حذف الطلب نهائياً من قاعدة البيانات"
+                                    style={{
+                                      background: 'rgba(239, 68, 68, 0.15)',
+                                      border: '1px solid #ef4444',
+                                      color: '#ef4444',
+                                      borderRadius: '8px',
+                                      padding: '5px 10px',
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      fontSize: '0.78rem',
+                                      fontWeight: 700,
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    <Trash2 size={13} />
+                                    حذف الطلب
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
