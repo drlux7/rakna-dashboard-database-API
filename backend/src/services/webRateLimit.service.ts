@@ -7,12 +7,20 @@ interface IpUsageRecord {
   lastUsedAt: string;
 }
 
+interface CarBlockRecord {
+  status: 'BLOCKED' | 'IGNORED';
+  blockedAt: string;
+  until?: string;
+}
+
 export class WebRateLimitService {
   private static instance: WebRateLimitService;
   public static readonly DAILY_LIMIT = 5;
 
   private storeFile: string;
   private cache: Record<string, IpUsageRecord> = {};
+  private carBlocks: Record<string, CarBlockRecord> = {}; // key: `${carId}:${ip}`
+  private sessionToIp: Record<string, string> = {}; // key: sessionToken -> ip
 
   private constructor() {
     const dataDir = path.join(process.cwd(), 'data');
@@ -82,11 +90,14 @@ export class WebRateLimitService {
     try {
       if (fs.existsSync(this.storeFile)) {
         const content = fs.readFileSync(this.storeFile, 'utf8');
-        this.cache = JSON.parse(content) || {};
+        const parsed = JSON.parse(content) || {};
+        this.cache = parsed.cache || parsed;
+        this.carBlocks = parsed.carBlocks || {};
         this.cleanOldRecords();
       }
     } catch (err) {
       this.cache = {};
+      this.carBlocks = {};
     }
   }
 
@@ -95,7 +106,11 @@ export class WebRateLimitService {
    */
   private saveStore(): void {
     try {
-      fs.writeFileSync(this.storeFile, JSON.stringify(this.cache, null, 2), 'utf8');
+      const dataToSave = {
+        cache: this.cache,
+        carBlocks: this.carBlocks,
+      };
+      fs.writeFileSync(this.storeFile, JSON.stringify(dataToSave, null, 2), 'utf8');
     } catch (err) {
       console.error('[WebRateLimit] Error saving store file:', err);
     }
@@ -113,9 +128,65 @@ export class WebRateLimitService {
         changed = true;
       }
     }
+
+    // Clean expired car blocks
+    const now = Date.now();
+    for (const key of Object.keys(this.carBlocks)) {
+      if (this.carBlocks[key].until && new Date(this.carBlocks[key].until!).getTime() < now) {
+        delete this.carBlocks[key];
+        changed = true;
+      }
+    }
+
     if (changed) {
       this.saveStore();
     }
+  }
+
+  /**
+   * ربط جلسة المُبلّغ بعنوان الـ IP لحظر أي محاولات تلاعب
+   */
+  public mapSessionToIp(sessionToken: string, rawIp?: string | null): void {
+    if (!sessionToken) return;
+    this.sessionToIp[sessionToken] = this.normalizeIp(rawIp);
+  }
+
+  public getIpBySession(sessionToken: string): string | null {
+    return this.sessionToIp[sessionToken] || null;
+  }
+
+  /**
+   * حظر أو تجاهل IP لسيارة معينة لمنعه من المراسلة ثانية
+   */
+  public blockIpForCar(rawIp: string | null | undefined, carId: string, status: 'BLOCKED' | 'IGNORED'): void {
+    const ip = this.normalizeIp(rawIp);
+    const key = `${carId}:${ip}`;
+    const durationHours = status === 'BLOCKED' ? 30 * 24 : 24; // 30 days for BLOCKED, 24 hours for IGNORED
+    const until = new Date(Date.now() + durationHours * 3600 * 1000).toISOString();
+
+    this.carBlocks[key] = {
+      status,
+      blockedAt: new Date().toISOString(),
+      until,
+    };
+    this.saveStore();
+  }
+
+  /**
+   * التحقق مما إذا كان الـ IP محظوراً أو متجاهلاً لسيارة معينة
+   */
+  public getCarBlockStatus(rawIp: string | null | undefined, carId: string): 'BLOCKED' | 'IGNORED' | null {
+    const ip = this.normalizeIp(rawIp);
+    const key = `${carId}:${ip}`;
+    const rec = this.carBlocks[key];
+    if (!rec) return null;
+
+    if (rec.until && new Date(rec.until).getTime() < Date.now()) {
+      delete this.carBlocks[key];
+      this.saveStore();
+      return null;
+    }
+    return rec.status;
   }
 
   /**

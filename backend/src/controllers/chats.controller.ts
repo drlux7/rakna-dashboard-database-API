@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../config/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import { webRateLimitService } from '../services/webRateLimit.service';
 
 export class ChatsController {
   /**
@@ -275,6 +276,11 @@ export class ChatsController {
           data: { status: 'IGNORED', lastMessageAt: new Date() },
         });
 
+        const reporterIp = webRateLimitService.getIpBySession(chat.reporterSessionToken);
+        if (reporterIp) {
+          webRateLimitService.blockIpForCar(reporterIp, chat.carId, 'IGNORED');
+        }
+
         await prisma.message.create({
           data: {
             chatId: id,
@@ -292,6 +298,11 @@ export class ChatsController {
           where: { id },
           data: { status: 'BLOCKED', lastMessageAt: new Date() },
         });
+
+        const reporterIp = webRateLimitService.getIpBySession(chat.reporterSessionToken);
+        if (reporterIp) {
+          webRateLimitService.blockIpForCar(reporterIp, chat.carId, 'BLOCKED');
+        }
 
         await prisma.chatReport.create({
           data: {

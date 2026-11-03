@@ -512,6 +512,231 @@ export class WebChatController {
       font-size: 16px;
       flex-shrink: 0;
     }
+    .btn-quick.selected {
+      background: rgba(212, 175, 55, 0.28) !important;
+      border-color: var(--primary) !important;
+      box-shadow: 0 0 14px rgba(212, 175, 55, 0.45) !important;
+      outline: 2px solid var(--primary);
+    }
+
+    /* Camera Capture Box */
+    .camera-card {
+      margin-top: 14px;
+      margin-bottom: 12px;
+      background: rgba(20, 27, 45, 0.9);
+      border: 1.5px dashed rgba(212, 175, 55, 0.45);
+      border-radius: 16px;
+      padding: 16px;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+    .camera-card.has-photo {
+      border-style: solid;
+      border-color: rgba(34, 197, 94, 0.6);
+      background: rgba(15, 23, 42, 0.95);
+    }
+    .camera-icon-wrapper {
+      font-size: 32px;
+      margin-bottom: 6px;
+    }
+    .camera-prompt-title {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #F8FAFC;
+      margin-bottom: 4px;
+    }
+    .camera-prompt-desc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    .btn-camera-trigger {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0.08) 100%);
+      border: 1.5px solid var(--primary);
+      color: var(--primary-light);
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 12.5px;
+      cursor: pointer;
+      width: 100%;
+      max-width: 260px;
+      transition: all 0.2s ease;
+    }
+    .btn-camera-trigger:hover {
+      background: rgba(212, 175, 55, 0.28);
+      transform: translateY(-1px);
+    }
+    .camera-preview-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .camera-preview-box img {
+      width: 100%;
+      max-width: 280px;
+      height: 170px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .camera-preview-overlay {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 280px;
+      gap: 8px;
+    }
+    .preview-badge {
+      font-size: 11px;
+      font-weight: 800;
+      color: #10B981;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 4px 8px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn-retake {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #F87171;
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Big Submit Report Button */
+    .btn-submit-report {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: linear-gradient(135deg, #F5BE18 0%, #D49B00 100%);
+      color: #000;
+      font-size: 14px;
+      font-weight: 900;
+      padding: 13px 20px;
+      border-radius: 14px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(245, 190, 24, 0.3);
+      transition: all 0.25s ease;
+      margin-top: 10px;
+    }
+    .btn-submit-report:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(245, 190, 24, 0.5);
+    }
+    .btn-submit-report:disabled {
+      background: rgba(51, 65, 85, 0.6);
+      color: #94A3B8;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: none;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Status Banners */
+    .status-banner {
+      padding: 12px 14px;
+      border-radius: 14px;
+      margin: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12.5px;
+      font-weight: 700;
+      line-height: 1.4;
+      animation: fadeIn 0.3s ease;
+    }
+    .status-banner.pending {
+      background: rgba(245, 158, 11, 0.14);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #FBBF24;
+    }
+    .status-banner.active {
+      background: rgba(34, 197, 94, 0.14);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: #4ADE80;
+    }
+    .status-banner.ignored {
+      background: rgba(245, 158, 11, 0.18);
+      border: 1px solid rgba(245, 158, 11, 0.5);
+      color: #FCD34D;
+    }
+    .status-banner.blocked {
+      background: rgba(239, 68, 68, 0.18);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      color: #FCA5A5;
+    }
+    .status-banner.closed {
+      background: rgba(100, 116, 139, 0.2);
+      border: 1px solid rgba(100, 116, 139, 0.4);
+      color: #CBD5E1;
+    }
+
+    /* Live Reply Bar */
+    .live-reply-bar {
+      display: flex;
+      gap: 8px;
+      padding: 12px 14px;
+      background: rgba(15, 23, 42, 0.95);
+      border-top: 1px solid rgba(212, 175, 55, 0.2);
+    }
+    .live-reply-input {
+      flex: 1;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 10px 14px;
+      color: #FFF;
+      font-size: 13px;
+      outline: none;
+    }
+    .live-reply-input:focus {
+      border-color: var(--primary);
+    }
+    .btn-send-reply {
+      background: var(--primary);
+      color: #000;
+      border: none;
+      padding: 0 16px;
+      border-radius: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .view-once-bubble {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 6px 12px;
+      border-radius: 10px;
+      font-size: 11.5px;
+      font-weight: 800;
+      color: #FBBF24;
+      margin-top: 6px;
+    }
 
     /* Anti-Spam Badges & Limits */
     .quota-badge {
@@ -722,27 +947,30 @@ export class WebChatController {
         <div class="chat-header">
           <div class="chat-header-title">
             <span>💬</span>
-            <span>محادثة فورية مباشرة</span>
+            <span>محادثة وتنبيه فوري مباشر</span>
           </div>
-          <div class="chat-lock-tag">
-            🔒 الرسائل السريعة المعتمدة فقط
+          <div class="chat-lock-tag" id="chatHeaderTag">
+            🔒 توثيق بالكاميرا لمرة واحدة
           </div>
         </div>
 
         <!-- Messages Box -->
         <div class="messages-box" id="messagesBox">
           <div class="empty-state" id="emptyState">
-            <div class="empty-icon">⚡</div>
-            <h5 style="color: #FFF; font-size: 14px; margin-bottom: 4px;">اختر رسالة سريعة من الأسفل</h5>
-            <p style="font-size: 12px;">سيتم إشعار صاحب السيارة فوراً على هاتفه برسالتك.</p>
+            <div class="empty-icon">📸</div>
+            <h5 style="color: #FFF; font-size: 14px; margin-bottom: 4px;">اختر سبب التواصل والتقط صورة بالكاميرا</h5>
+            <p style="font-size: 12px;">سيتم إشعار صاحب السيارة فوراً وتأكيد البلاغ مع حفظ خصوصيتك.</p>
           </div>
         </div>
 
-        <!-- Quick Canned Messages Buttons -->
-        <div class="quick-panel">
+        <!-- Status Banner Area -->
+        <div id="statusBannerBox" style="display: none;"></div>
+
+        <!-- Compose Panel (Shown before chat is submitted) -->
+        <div class="quick-panel" id="composePanel">
           <div class="quick-title">
-            <span>⚡</span>
-            <span>اضغط لإرسال تنبيه فوري لصاحب السيارة:</span>
+            <span>1️⃣</span>
+            <span>اختر سبب التواصل:</span>
             <div id="quotaBadge" class="quota-badge">المتبقي اليوم: <b id="remainingCount">${ipUsage.remaining}</b> من 5</div>
             <div id="cooldownBadge" class="cooldown-badge" style="display:none;">⏳ انتظر <b id="countdownSec">15</b>ث</div>
           </div>
@@ -770,7 +998,7 @@ export class WebChatController {
                 class="btn-quick" 
                 data-title="${item.title}" 
                 data-text="${item.text || item.title}"
-                onclick="sendQuickMessage(this)"
+                onclick="selectQuickReason(this)"
               >
                 <span class="btn-quick-icon">${['🚗', '🪟', '💡', '⚠️', '⏳', '🙏', '🚨', '📢'][idx % 8]}</span>
                 <span>${item.title}</span>
@@ -780,10 +1008,51 @@ export class WebChatController {
               .join('')}
           </div>
 
+          <!-- Camera Section (Mandatory) -->
+          <div class="camera-card" id="cameraCard">
+            <input type="file" id="cameraFileInput" accept="image/*" capture="environment" style="display:none;" onchange="onCameraPhotoTaken(event)">
+            
+            <div id="cameraPrompt">
+              <div class="camera-icon-wrapper">📸</div>
+              <div class="camera-prompt-title">2️⃣ التقاط صورة بالكاميرا فقط (إلزامي للتوثيق)</div>
+              <div class="camera-prompt-desc">يجب التقاط صورة حية للمركبة أو الموقف أمامك لمنع البلاغات الكاذبة ولحماية خصوصية الجميع.</div>
+              <button type="button" class="btn-camera-trigger" onclick="document.getElementById('cameraFileInput').click()">
+                <span>📷</span>
+                <span>تشغيل الكاميرا والتقاط الصورة</span>
+              </button>
+            </div>
+
+            <div id="cameraPreviewBox" class="camera-preview-box" style="display:none;">
+              <img id="photoPreviewImg" src="" alt="صورة الكاميرا">
+              <div class="camera-preview-overlay">
+                <span class="preview-badge">🔒 صورة لمرة واحدة (View Once)</span>
+                <button type="button" class="btn-retake" onclick="document.getElementById('cameraFileInput').click()">
+                  <span>🔄</span>
+                  <span>إعادة الالتقاط</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="button" id="btnSubmitReport" class="btn-submit-report" disabled onclick="submitReportWithPhoto()">
+            <span>🚀</span>
+            <span id="submitReportText">يرجى اختيار السبب والتقاط صورة بالكاميرا</span>
+          </button>
+
           <div class="input-locked-banner">
             <span>🔒</span>
-            <span>الكتابة الحرة مقفلة لحمايتك وحماية خصوصية صاحب السيارة.</span>
+            <span>الصورة تُعرض لصاحب السيارة مرة واحدة فقط ثم تُحرق لحماية الخصوصية.</span>
           </div>
+        </div>
+
+        <!-- Live Chat Input Bar (Shown ONLY when chat status is ACTIVE) -->
+        <div id="activeChatInputBar" class="live-reply-bar" style="display:none;">
+          <input type="text" id="liveMessageInput" class="live-reply-input" placeholder="اكتب ردك لصاحب السيارة..." onkeydown="if(event.key==='Enter') sendLiveReply()">
+          <button type="button" id="btnSendReply" class="btn-send-reply" onclick="sendLiveReply()">
+            <span>إرسال</span>
+            <span>➤</span>
+          </button>
         </div>
       </section>
       `}
@@ -815,11 +1084,15 @@ export class WebChatController {
     // 2. Chat Session & Anti-Spam State
     let sessionToken = localStorage.getItem('rakna_stranger_token') || null;
     let currentChatId = localStorage.getItem('rakna_chat_' + TAG_CODE) || null;
-    let isSending = false;
+    let chatStatus = localStorage.getItem('rakna_status_' + TAG_CODE) || null;
+    let selectedReasonText = '';
+    let capturedPhotoBase64 = null;
+    let isSubmitting = false;
+    let isSendingLive = false;
     let pollTimer = null;
     let cooldownTimer = null;
-    let remainingQuota = ${ipUsage.remaining};
     let inCooldown = false;
+    let remainingQuota = ${ipUsage.remaining};
     const knownMessageIds = new Set();
 
     // DOM Elements
@@ -830,14 +1103,6 @@ export class WebChatController {
     const cooldownBadge = document.getElementById('cooldownBadge');
     const countdownSec = document.getElementById('countdownSec');
     const limitReachedBanner = document.getElementById('limitReachedBanner');
-
-    // Initial check for daily limit
-    if (remainingQuota <= 0) {
-      setTimeout(() => {
-        disableButtons(true);
-        if (limitReachedBanner) limitReachedBanner.style.display = 'block';
-      }, 50);
-    }
 
     // Toast Notification System
     function showToast(text, isError = false) {
@@ -856,65 +1121,157 @@ export class WebChatController {
       setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 4000);
     }
 
-    // Anti-Spam Quota Manager
-    function updateQuota(count) {
-      remainingQuota = Math.max(0, count);
-      if (remainingCount) {
-        remainingCount.innerText = remainingQuota;
-      }
-      if (remainingQuota <= 0) {
-        if (limitReachedBanner) limitReachedBanner.style.display = 'block';
-        disableButtons(true);
-      } else {
-        if (limitReachedBanner) limitReachedBanner.style.display = 'none';
-        if (!inCooldown && !isSending) {
-          disableButtons(false);
-        }
+    // Status Banner Management
+    function renderStatusBanner(status) {
+      const box = document.getElementById('statusBannerBox');
+      const activeBar = document.getElementById('activeChatInputBar');
+      if (!box) return;
+      box.style.display = 'block';
+
+      if (status === 'PENDING_ACCEPT') {
+        box.innerHTML = '<div class="status-banner pending">' +
+          '<span style="font-size:20px;">⏳</span>' +
+          '<div>' +
+            '<div style="font-weight:800; font-size:13px;">بانتظار رد صاحب السيارة...</div>' +
+            '<div style="font-size:11.5px; opacity:0.9;">تم إرسال بلاغك وتوثيق الكاميرا بنجاح. سيتم فتح المحادثة فور قبول المالك.</div>' +
+          '</div>' +
+        '</div>';
+        if (activeBar) activeBar.style.display = 'none';
+      } else if (status === 'ACTIVE') {
+        box.innerHTML = '<div class="status-banner active">' +
+          '<span style="font-size:20px;">✅</span>' +
+          '<div>' +
+            '<div style="font-weight:800; font-size:13px;">المحادثة نشطة الآن مع صاحب السيارة</div>' +
+            '<div style="font-size:11.5px; opacity:0.9;">يمكنك كتابة رسائل إضافية مباشرة لصاحب السيارة بالأسفل.</div>' +
+          '</div>' +
+        '</div>';
+        if (activeBar) activeBar.style.display = 'flex';
+      } else if (status === 'IGNORED') {
+        box.innerHTML = '<div class="status-banner ignored">' +
+          '<span style="font-size:20px;">⏳</span>' +
+          '<div>' +
+            '<div style="font-weight:800; font-size:13px;">صاحب السيارة مشغول حالياً</div>' +
+            '<div style="font-size:11.5px; opacity:0.9;">اعتذر صاحب السيارة عن عدم إمكانية الرد في الوقت الحالي، وتم إغلاق التواصل.</div>' +
+          '</div>' +
+        '</div>';
+        if (activeBar) activeBar.style.display = 'none';
+        hideCompose();
+        if (pollTimer) clearInterval(pollTimer);
+      } else if (status === 'BLOCKED') {
+        box.innerHTML = '<div class="status-banner blocked">' +
+          '<span style="font-size:20px;">🛡️</span>' +
+          '<div>' +
+            '<div style="font-weight:800; font-size:13px;">تم حظر وإغلاق هذه المحادثة</div>' +
+            '<div style="font-size:11.5px; opacity:0.9;">قام الطرف الآخر بحظر المحادثة وإحالتها للإدارة والرقابة.</div>' +
+          '</div>' +
+        '</div>';
+        if (activeBar) activeBar.style.display = 'none';
+        hideCompose();
+        if (pollTimer) clearInterval(pollTimer);
+      } else if (status === 'CLOSED') {
+        box.innerHTML = '<div class="status-banner closed">' +
+          '<span style="font-size:20px;">🔒</span>' +
+          '<div>' +
+            '<div style="font-weight:800; font-size:13px;">تم إغلاق المحادثة</div>' +
+            '<div style="font-size:11.5px; opacity:0.9;">تم إنهاء وإغلاق هذا التواصل بنجاح.</div>' +
+          '</div>' +
+        '</div>';
+        if (activeBar) activeBar.style.display = 'none';
+        hideCompose();
+        if (pollTimer) clearInterval(pollTimer);
       }
     }
 
-    // Anti-Spam Cooldown Timer
-    function startCooldown(seconds = 15) {
-      if (cooldownTimer) clearInterval(cooldownTimer);
-      inCooldown = true;
-      disableButtons(true);
+    function hideCompose() {
+      const panel = document.getElementById('composePanel');
+      if (panel) panel.style.display = 'none';
+    }
 
-      let currentSec = seconds;
-      if (cooldownBadge && countdownSec) {
-        cooldownBadge.style.display = 'inline-flex';
-        countdownSec.innerText = currentSec;
-      }
+    // Step 1: Select Quick Reason
+    function selectQuickReason(button) {
+      if (isSubmitting || inCooldown) return;
+      document.querySelectorAll('.btn-quick').forEach(b => b.classList.remove('selected'));
+      button.classList.add('selected');
+      selectedReasonText = button.getAttribute('data-text') || button.getAttribute('data-title');
+      checkCanSubmit();
+    }
 
-      cooldownTimer = setInterval(() => {
-        currentSec--;
-        if (countdownSec) countdownSec.innerText = currentSec;
+    // Step 2: Camera Photo Capture (Camera only via capture="environment")
+    function onCameraPhotoTaken(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
 
-        if (currentSec <= 0) {
-          clearInterval(cooldownTimer);
-          cooldownTimer = null;
-          inCooldown = false;
-          if (cooldownBadge) cooldownBadge.style.display = 'none';
-          if (remainingQuota > 0 && !isSending) {
-            disableButtons(false);
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          let w = img.width;
+          let h = img.height;
+          const MAX_DIM = 1200;
+          if (w > MAX_DIM || h > MAX_DIM) {
+            if (w > h) {
+              h = Math.round((h * MAX_DIM) / w);
+              w = MAX_DIM;
+            } else {
+              w = Math.round((w * MAX_DIM) / h);
+              h = MAX_DIM;
+            }
           }
-        }
-      }, 1000);
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          capturedPhotoBase64 = canvas.toDataURL('image/jpeg', 0.82);
+
+          const previewImg = document.getElementById('photoPreviewImg');
+          if (previewImg) previewImg.src = capturedPhotoBase64;
+          const promptBox = document.getElementById('cameraPrompt');
+          if (promptBox) promptBox.style.display = 'none';
+          const previewBox = document.getElementById('cameraPreviewBox');
+          if (previewBox) previewBox.style.display = 'flex';
+          const card = document.getElementById('cameraCard');
+          if (card) card.classList.add('has-photo');
+
+          checkCanSubmit();
+          showToast('تم التقاط الصورة بنجاح 📸');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
     }
 
-    // 3. Send Quick Message with Anti-Spam Protection
-    async function sendQuickMessage(button) {
-      if (isSending || inCooldown || remainingQuota <= 0) return;
-      const text = button.getAttribute('data-text');
-      const title = button.getAttribute('data-title');
-      if (!text) return;
+    // Form Validator
+    function checkCanSubmit() {
+      const btn = document.getElementById('btnSubmitReport');
+      const txt = document.getElementById('submitReportText');
+      if (!btn || !txt) return;
 
-      isSending = true;
-      disableButtons(true);
-      const originalHtml = button.innerHTML;
-      button.innerHTML = '<span class="btn-quick-icon">⏳</span><span>جاري الإرسال...</span>';
+      if (!selectedReasonText && !capturedPhotoBase64) {
+        btn.disabled = true;
+        txt.innerText = 'يرجى اختيار سبب التواصل والتقاط صورة بالكاميرا';
+      } else if (!selectedReasonText) {
+        btn.disabled = true;
+        txt.innerText = 'يرجى اختيار سبب التواصل من الخيارات أعلاه';
+      } else if (!capturedPhotoBase64) {
+        btn.disabled = true;
+        txt.innerText = 'يرجى التقاط صورة بالكاميرا أولاً لتفعيل الإرسال 📷';
+      } else {
+        btn.disabled = false;
+        txt.innerText = '🚀 إرسال التنبيه وصورة الكاميرا لصاحب السيارة';
+      }
+    }
+
+    // Step 3: Submit Report with Photo
+    async function submitReportWithPhoto() {
+      if (isSubmitting || !selectedReasonText || !capturedPhotoBase64) return;
+      isSubmitting = true;
+      const btn = document.getElementById('btnSubmitReport');
+      const txt = document.getElementById('submitReportText');
+      if (btn) btn.disabled = true;
+      if (txt) txt.innerText = 'جاري إرسال البلاغ والصورة...';
 
       try {
-        // Ensure session token
         if (!sessionToken) {
           const initRes = await fetch('/api/v1/reporter/session/init', {
             method: 'POST',
@@ -928,97 +1285,111 @@ export class WebChatController {
           }
         }
 
-        // Helper to create a new chat
-        async function createNewChat() {
-          const res = await fetch('/api/v1/reporter/chats', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagCode: TAG_CODE,
-              contactReason: 'OTHER',
-              initialMessage: text,
-              sessionToken: sessionToken
-            })
-          });
-          const data = await res.json();
-          if (data.success && data.chat) {
-            currentChatId = data.chat.id;
-            localStorage.setItem('rakna_chat_' + TAG_CODE, currentChatId);
-            const initialMsgId = (data.initialMessage && data.initialMessage.id) ? data.initialMessage.id : null;
-            appendMessage(text, 'me', new Date().toISOString(), initialMsgId);
-            startPolling();
-            if (data.remainingMessages !== undefined) updateQuota(data.remainingMessages);
-            startCooldown(data.cooldownSeconds || 15);
-            showToast('تم إرسال تنبيهك لصاحب السيارة بنجاح');
-            return true;
+        const res = await fetch('/api/v1/reporter/chats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tagCode: TAG_CODE,
+            contactReason: 'OTHER',
+            initialMessage: selectedReasonText,
+            sessionToken: sessionToken,
+            imageUrl: capturedPhotoBase64,
+            isViewOnce: true
+          })
+        });
+        const data = await res.json();
+
+        if (res.status === 403 || data.isBlocked || data.isIgnored) {
+          if (data.isBlocked) {
+            localStorage.setItem('rakna_status_' + TAG_CODE, 'BLOCKED');
+            renderStatusBanner('BLOCKED');
           } else {
-            showToast(data.message || 'تعذر إرسال التنبيه لصاحب السيارة', true);
-            if (data.retryAfter) startCooldown(data.retryAfter);
-            if (data.limitReached || res.status === 429) updateQuota(0);
-            return false;
+            localStorage.setItem('rakna_status_' + TAG_CODE, 'IGNORED');
+            renderStatusBanner('IGNORED');
           }
+          hideCompose();
+          showToast(data.message, true);
+          return;
         }
 
-        // If no existing chat, create new
-        if (!currentChatId) {
-          await createNewChat();
+        if (data.success && data.chat) {
+          currentChatId = data.chat.id;
+          chatStatus = data.chat.status || 'PENDING_ACCEPT';
+          localStorage.setItem('rakna_chat_' + TAG_CODE, currentChatId);
+          localStorage.setItem('rakna_status_' + TAG_CODE, chatStatus);
+
+          appendMessage(selectedReasonText, 'me', new Date().toISOString(), null, true);
+          hideCompose();
+          renderStatusBanner(chatStatus);
+          startPolling();
+          showToast('تم إرسال بلاغك وتوثيق الكاميرا بنجاح لصاحب السيارة ⏳');
         } else {
-          // Send message to existing chat
-          const sendRes = await fetch('/api/v1/reporter/chats/' + currentChatId + '/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              content: text,
-              sessionToken: sessionToken
-            })
-          });
-          const sendData = await sendRes.json();
-          if (sendData.success) {
-            const sendMsgId = (sendData.message && sendData.message.id) ? sendData.message.id : null;
-            appendMessage(text, 'me', new Date().toISOString(), sendMsgId);
-            if (sendData.remainingMessages !== undefined) updateQuota(sendData.remainingMessages);
-            startCooldown(sendData.cooldownSeconds || 15);
-            showToast('تم إرسال الرسالة بنجاح');
-          } else if (sendRes.status === 429 || sendData.limitReached) {
-            showToast(sendData.message || 'استنفدت الحد اليومي (5 رسائل). حمّل التطبيق للمزيد', true);
-            if (sendData.retryAfter) startCooldown(sendData.retryAfter);
-            if (sendData.limitReached || sendRes.status === 429) updateQuota(0);
-          } else {
-            // Existing chat failed or expired -> clear and recreate automatically
-            localStorage.removeItem('rakna_chat_' + TAG_CODE);
-            currentChatId = null;
-            await createNewChat();
-          }
+          showToast(data.message || 'تعذر إرسال البلاغ', true);
+          if (btn) btn.disabled = false;
+          if (txt) txt.innerText = '🚀 إرسال التنبيه وصورة الكاميرا لصاحب السيارة';
         }
       } catch (err) {
-        console.error('Error sending message:', err);
         showToast('حدث خطأ في الاتصال بالخادم. يرجى المحاولة ثانية.', true);
+        if (btn) btn.disabled = false;
+        if (txt) txt.innerText = '🚀 إرسال التنبيه وصورة الكاميرا لصاحب السيارة';
       } finally {
-        button.innerHTML = originalHtml;
-        isSending = false;
-        if (!inCooldown && remainingQuota > 0) {
-          disableButtons(false);
-        }
+        isSubmitting = false;
       }
     }
 
-    function disableButtons(disabled) {
-      const btns = document.querySelectorAll('.btn-quick');
-      btns.forEach(b => b.disabled = disabled);
+    // Step 4: Send Live Reply (When ACTIVE)
+    async function sendLiveReply() {
+      const input = document.getElementById('liveMessageInput');
+      const text = input ? input.value.trim() : '';
+      if (!text || isSendingLive || !currentChatId || !sessionToken) return;
+
+      isSendingLive = true;
+      input.value = '';
+      appendMessage(text, 'me', new Date().toISOString(), null);
+
+      try {
+        const res = await fetch('/api/v1/reporter/chats/' + currentChatId + '/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: text,
+            sessionToken: sessionToken
+          })
+        });
+        const data = await res.json();
+
+        if (res.status === 403 || data.isBlocked || data.isIgnored) {
+          if (data.isBlocked) {
+            localStorage.setItem('rakna_status_' + TAG_CODE, 'BLOCKED');
+            renderStatusBanner('BLOCKED');
+          } else {
+            localStorage.setItem('rakna_status_' + TAG_CODE, 'IGNORED');
+            renderStatusBanner('IGNORED');
+          }
+          showToast(data.message, true);
+        } else if (!data.success) {
+          showToast(data.message || 'تعذر إرسال الرسالة', true);
+        } else {
+          pollMessages();
+        }
+      } catch (err) {
+        showToast('حدث خطأ في الاتصال بالخادم', true);
+      } finally {
+        isSendingLive = false;
+      }
     }
 
-    function appendMessage(text, sender, timeStr, msgId) {
+    function appendMessage(text, sender, timeStr, msgId, hasViewOnce = false) {
       if (msgId && knownMessageIds.has(msgId)) return;
       if (msgId) knownMessageIds.add(msgId);
 
-      // Prevent duplicate rendering of identical text from the same sender
       const cleanText = (text || '').trim();
       const existing = messagesBox.querySelectorAll('.message-item');
       if (existing.length > 0) {
         const lastItem = existing[existing.length - 1];
         const isSameSender = lastItem.classList.contains(sender === 'me' ? 'me' : 'owner');
         const bubble = lastItem.querySelector('.message-bubble');
-        if (isSameSender && bubble && bubble.innerText.trim() === cleanText) {
+        if (isSameSender && bubble && bubble.innerText.trim() === cleanText && !hasViewOnce) {
           if (msgId) knownMessageIds.add(msgId);
           return;
         }
@@ -1029,12 +1400,17 @@ export class WebChatController {
       }
 
       const item = document.createElement('div');
-      item.className = 'message-item ' + (sender === 'me' ? 'me' : 'owner');
-      const senderLabel = sender === 'me' ? 'أنت (المُبلّغ)' : 'صاحب المركبة';
+      item.className = 'message-item ' + (sender === 'me' ? 'me' : (sender === 'system' ? 'system' : 'owner'));
+      const senderLabel = sender === 'me' ? 'أنت (المُبلّغ)' : (sender === 'system' ? 'النظام' : 'صاحب المركبة');
 
       const time = timeStr ? new Date(timeStr).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '';
+      let photoBadgeHtml = '';
+      if (hasViewOnce) {
+        photoBadgeHtml = '<div class="view-once-bubble"><span>🔒</span><span>صورة توثيقية لمرة واحدة</span></div>';
+      }
+
       item.innerHTML =
-        '<div class="message-bubble">' + escapeHtml(text) + '</div>' +
+        '<div class="message-bubble">' + escapeHtml(text) + photoBadgeHtml + '</div>' +
         '<div class="message-info">' +
           '<span class="' + (sender === 'owner' ? 'owner-badge' : '') + '">' + senderLabel + '</span>' +
           '<span>•</span>' +
@@ -1047,44 +1423,61 @@ export class WebChatController {
 
     function escapeHtml(string) {
       const div = document.createElement('div');
-      div.innerText = string;
+      div.innerText = string || '';
       return div.innerHTML;
     }
 
-    // 4. Live Polling for Owner Replies
+    // Step 5: Live Polling for Owner Responses
     async function pollMessages() {
       if (!currentChatId || !sessionToken) return;
       try {
         const res = await fetch('/api/v1/reporter/chats/' + currentChatId + '/messages?sessionToken=' + encodeURIComponent(sessionToken));
-        if (res.status === 404) {
-          localStorage.removeItem('rakna_chat_' + TAG_CODE);
-          currentChatId = null;
-          if (pollTimer) clearInterval(pollTimer);
+        
+        if (res.status === 403 || res.status === 404) {
+          const data = await res.json().catch(() => ({}));
+          if (data.isBlocked) {
+            localStorage.setItem('rakna_status_' + TAG_CODE, 'BLOCKED');
+            renderStatusBanner('BLOCKED');
+          } else if (data.isIgnored) {
+            localStorage.setItem('rakna_status_' + TAG_CODE, 'IGNORED');
+            renderStatusBanner('IGNORED');
+          }
           return;
         }
+
         const data = await res.json();
-        if (data.success && Array.isArray(data.messages)) {
-          data.messages.forEach(msg => {
-            const isMe = msg.senderType === 'REPORTER';
-            appendMessage(msg.content, isMe ? 'me' : 'owner', msg.createdAt, msg.id);
-          });
-          if (data.remainingMessages !== undefined) {
-            updateQuota(data.remainingMessages);
+        if (data.success) {
+          if (data.chat && data.chat.status) {
+            chatStatus = data.chat.status;
+            localStorage.setItem('rakna_status_' + TAG_CODE, chatStatus);
+            renderStatusBanner(chatStatus);
+          }
+          if (Array.isArray(data.messages)) {
+            data.messages.forEach(msg => {
+              const isMe = msg.senderType === 'REPORTER';
+              const sType = isMe ? 'me' : (msg.senderType === 'SYSTEM' ? 'system' : 'owner');
+              appendMessage(msg.content, sType, msg.createdAt, msg.id, msg.isViewOnce);
+            });
           }
         }
       } catch (e) {
-        // silent fail on poll error
+        // silent fail on network jitter
       }
     }
 
     function startPolling() {
       if (pollTimer) clearInterval(pollTimer);
-      pollTimer = setInterval(pollMessages, 3000);
+      pollTimer = setInterval(pollMessages, 2500);
       pollMessages();
     }
 
-    // If chat was already opened previously in this browser session
-    if (currentChatId && sessionToken) {
+    // Startup Execution Check
+    if (chatStatus === 'IGNORED' || chatStatus === 'BLOCKED') {
+      hideCompose();
+      renderStatusBanner(chatStatus);
+    } else if (currentChatId && sessionToken) {
+      hideCompose();
+      renderStatusBanner(chatStatus || 'PENDING_ACCEPT');
       startPolling();
     }
   </script>

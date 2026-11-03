@@ -135,6 +135,8 @@ export class ReporterController {
   static async initSession(req: Request, res: Response): Promise<void> {
     try {
       const sessionToken = `rep_session_${uuidv4()}`;
+      const clientIp = webRateLimitService.extractIp(req);
+      webRateLimitService.mapSessionToIp(sessionToken, clientIp);
       res.json({
         success: true,
         sessionToken,
@@ -197,6 +199,8 @@ export class ReporterController {
 
       // ──────────────── 0. Daily Web IP Rate Limit (Max 5 quick messages per day) ────────────────
       const clientIp = webRateLimitService.extractIp(req);
+      webRateLimitService.mapSessionToIp(reporterToken, clientIp);
+
       if (!webRateLimitService.canSendMessage(clientIp)) {
         res.status(429).json({
           success: false,
@@ -204,6 +208,70 @@ export class ReporterController {
           limitReached: true,
           remainingMessages: 0,
           requireAppDownload: true,
+        });
+        return;
+      }
+
+      // ──────────────── 0.1 Check Mandatory Camera Photo ────────────────
+      if (!imageUrl || !imageUrl.trim()) {
+        res.status(400).json({
+          success: false,
+          message: 'التقاط صورة توثيقية حية بالكاميرا إلزامي لإرسال البلاغ 📷',
+        });
+        return;
+      }
+
+      // ──────────────── 0.2 Check if Blocked or Ignored by Owner ────────────────
+      const existingBlocked = await prisma.chat.findFirst({
+        where: {
+          carId: tag.car.id,
+          reporterSessionToken: reporterToken,
+          status: 'BLOCKED',
+        },
+      });
+      const ipBlockStatus = webRateLimitService.getCarBlockStatus(clientIp, tag.car.id);
+
+      if (existingBlocked || ipBlockStatus === 'BLOCKED') {
+        res.status(403).json({
+          success: false,
+          message: 'تم حظرك من التواصل مع صاحب هذه المركبة 🛡️.',
+          isBlocked: true,
+        });
+        return;
+      }
+
+      const existingIgnored = await prisma.chat.findFirst({
+        where: {
+          carId: tag.car.id,
+          reporterSessionToken: reporterToken,
+          status: 'IGNORED',
+          updatedAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
+      });
+
+      if (existingIgnored || ipBlockStatus === 'IGNORED') {
+        res.status(403).json({
+          success: false,
+          message: 'صاحب السيارة مشغول الآن واعتذر عن عدم إمكانية الرد في الوقت الحالي ⏳.',
+          isIgnored: true,
+        });
+        return;
+      }
+
+      // ──────────────── 0.3 Check if already Pending ────────────────
+      const pendingChat = await prisma.chat.findFirst({
+        where: {
+          carId: tag.car.id,
+          reporterSessionToken: reporterToken,
+          status: 'PENDING_ACCEPT',
+        },
+      });
+      if (pendingChat) {
+        res.status(400).json({
+          success: false,
+          message: 'بلاغك السابق قيد الانتظار لموافقة صاحب السيارة بالفعل ⏳',
+          isPending: true,
+          chatId: pendingChat.id,
         });
         return;
       }
@@ -427,8 +495,28 @@ export class ReporterController {
         return;
       }
 
+      const clientIp = webRateLimitService.extractIp(req);
+      if (sessionToken) {
+        webRateLimitService.mapSessionToIp(sessionToken, clientIp);
+      }
+
       if (chat.status === 'BLOCKED') {
-        res.status(403).json({ success: false, message: 'هذه المحادثة تم إغلاقها' });
+        res.status(403).json({ success: false, message: 'هذه المحادثة محظورة ومغلقة نهائياً 🛡️', isBlocked: true });
+        return;
+      }
+
+      if (chat.status === 'IGNORED') {
+        res.status(403).json({ success: false, message: 'صاحب السيارة مشغول حالياً ولا يمكن استقبال رسائل ⏳', isIgnored: true });
+        return;
+      }
+
+      if (chat.status === 'CLOSED') {
+        res.status(403).json({ success: false, message: 'تم إغلاق هذه المحادثة.', isClosed: true });
+        return;
+      }
+
+      if (chat.status === 'PENDING_ACCEPT') {
+        res.status(403).json({ success: false, message: 'في انتظار قبول صاحب السيارة لفتح المحادثة أولاً ⏳', isPending: true });
         return;
       }
 
@@ -436,7 +524,6 @@ export class ReporterController {
       const MAX_UNANSWERED_MESSAGES = 5;
 
       // ──────────────── 0. Daily Web IP Rate Limit (Max 5 quick messages per day) ────────────────
-      const clientIp = webRateLimitService.extractIp(req);
       if (!webRateLimitService.canSendMessage(clientIp)) {
         res.status(429).json({
           success: false,
