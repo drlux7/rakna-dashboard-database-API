@@ -7,6 +7,7 @@ import { prisma } from '../config/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { whatsAppService } from '../services/whatsapp.service';
 import { webRateLimitService } from '../services/webRateLimit.service';
+import { getChatIO } from '../sockets/chat.gateway';
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -1342,11 +1343,28 @@ export class AdminController {
         return;
       }
 
-      if (action === 'BLOCK_USER') {
-        const isOwnerReported = report.reporterType === 'REPORTER';
+      // تنسيق تاريخ ووقت بدء المحادثة بالعربية
+      const chatCreatedAt = report.chat.createdAt;
+      const chatDateFormatted = new Date(chatCreatedAt).toLocaleDateString('ar-EG', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const chatTimeFormatted = new Date(chatCreatedAt).toLocaleTimeString('ar-EG', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      const chatFullDateStr = `${chatDateFormatted} (${chatTimeFormatted})`;
 
-        if (isOwnerReported) {
-          // البلاغ مقدم من ماسح الـ Tag ضد صاحب السيارة -> حظر صاحب السيارة
+      const isOwnerComplainant = report.reporterType === 'OWNER';
+      let notifTitle = '';
+      let notifMessage = '';
+      let chatSystemContent = '';
+      let responseMessage = '';
+
+      if (action === 'BLOCK_USER') {
+        if (!isOwnerComplainant) {
+          // البلاغ مقدم من ماسح الـ Tag ضد صاحب السيارة -> حظر صاحب السيارة (المشتكى عليه)
           await prisma.user.update({
             where: { id: report.chat.car.userId },
             data: { isBlocked: true },
@@ -1355,19 +1373,16 @@ export class AdminController {
             where: { id: report.chatId },
             data: { status: 'BLOCKED' },
           });
-          await prisma.message.create({
-            data: {
-              chatId: report.chatId,
-              senderType: 'SYSTEM',
-              content: '🛡️ قرار الإدارة والرقابة: تم فحص البلاغ وحظر حساب مالك السيارة وإغلاق المحادثة.',
-            },
-          });
+
+          notifTitle = '⚠️ قرار إداري: تم حظر حسابك';
+          notifMessage = `تم اتخاذ إجراء رقابي من الإدارة بخصوص الشكوى المقدمة ضدك بشأن المحادثة بتاريخ ${chatFullDateStr}. تقرر حظر حسابك لمخالفة معايير الاستخدام والآداب العامة.`;
+          chatSystemContent = `🛡️ قرار الإدارة والرقابة: تم اتخاذ إجراء بخصوص الشكوى المقدمة للمحادثة بتاريخ ${chatFullDateStr}، وتقرر حظر حساب صاحب السيارة وإغلاق المحادثة.`;
+          responseMessage = 'تم حظر حساب صاحب السيارة وإغلاق المحادثة بنجاح 🚫';
+
           await prisma.chatReport.update({
             where: { id: reportId },
             data: { status: 'RESOLVED', adminNotes: notes || 'تم حظر حساب مالك السيارة وإغلاق المحادثة' },
           });
-
-          res.json({ success: true, message: 'تم حظر حساب صاحب السيارة وإغلاق المحادثة بنجاح 🚫' });
         } else {
           // البلاغ مقدم من صاحب السيارة ضد المُبلّغ (ماسح الـ Tag) -> حظر المُبلّغ المسيء وليس صاحب السيارة!
           await prisma.chat.update({
@@ -1382,56 +1397,110 @@ export class AdminController {
             webRateLimitService.banIpGlobally(reporterIp, 'حظر إداري بسبب سوء استخدام وبلاغ تحرش/إساءة');
           }
 
-          // التأكد من أن صاحب السيارة (الضحية مقدم البلاغ) غير محظور إطلاقاً
+          // التأكد من أن صاحب السيارة (مقدم الشكوى) غير محظور إطلاقاً
           await prisma.user.update({
             where: { id: report.chat.car.userId },
             data: { isBlocked: false },
           });
 
-          // إرسال رسالة نظام للمحادثة توضح القرار
-          await prisma.message.create({
-            data: {
-              chatId: report.chatId,
-              senderType: 'SYSTEM',
-              content: '🛡️ قرار الإدارة والرقابة: تم فحص البلاغ وحظر المُبلّغ المسيء نهائياً وإغلاق المحادثة.',
-            },
-          });
+          notifTitle = '🛡️ قرار الإدارة: حظر المُبلّغ المسيء';
+          notifMessage = `تم اتخاذ إجراء من قِبل الإدارة بخصوص الشكوى المقدمة بشأن المحادثة بتاريخ ${chatFullDateStr}. تم فحص البلاغ وحظر المُبلّغ المسيء نهائياً وإغلاق المحادثة لحمايتك.`;
+          chatSystemContent = `🛡️ قرار الإدارة والرقابة: تم اتخاذ إجراء بخصوص الشكوى المقدمة للمحادثة بتاريخ ${chatFullDateStr}، وتقرر حظر المُبلّغ المسيء نهائياً وإغلاق المحادثة لمخالفة معايير الاستخدام.`;
+          responseMessage = 'تم حظر المُبلّغ (ماسح الـ Tag) وإنهاء المحادثة بنجاح 🚫';
 
           await prisma.chatReport.update({
             where: { id: reportId },
             data: { status: 'RESOLVED', adminNotes: notes || 'تم حظر المُبلّغ (ماسح الـ Tag) عبر الـ IP والجلسة وإغلاق المحادثة' },
           });
-
-          res.json({ success: true, message: 'تم حظر المُبلّغ (ماسح الـ Tag) وإنهاء المحادثة بنجاح 🚫' });
         }
       } else if (action === 'TERMINATE_CHAT') {
         await prisma.chat.update({
           where: { id: report.chatId },
           data: { status: 'BLOCKED' },
         });
-        await prisma.message.create({
-          data: {
-            chatId: report.chatId,
-            senderType: 'SYSTEM',
-            content: '🔒 قامت الإدارة بإنهاء وإغلاق هذه المحادثة.',
-          },
-        });
+
+        notifTitle = '🔒 قرار الإدارة: إغلاق المحادثة';
+        notifMessage = `تم اتخاذ إجراء من قِبل الإدارة بخصوص الشكوى المقدمة بشأن المحادثة بتاريخ ${chatFullDateStr}. تم إنهاء وإغلاق المحادثة رسمياً لحسم النزاع.`;
+        chatSystemContent = `🔒 قرار الإدارة والرقابة: تم اتخاذ إجراء بخصوص الشكوى المقدمة للمحادثة بتاريخ ${chatFullDateStr}، وقامت الإدارة بإنهاء وإغلاق المحادثة.`;
+        responseMessage = 'تم إغلاق المحادثة المسيئة بنجاح 🔒';
+
         await prisma.chatReport.update({
           where: { id: reportId },
           data: { status: 'RESOLVED', adminNotes: notes || 'تم إنهاء وإغلاق المحادثة' },
         });
-
-        res.json({ success: true, message: 'تم إغلاق المحادثة المسيئة بنجاح 🔒' });
       } else if (action === 'DISMISS') {
+        notifTitle = '✓ مراجعة إدارية: نتيجة فحص الشكوى';
+        notifMessage = `تم اتخاذ إجراء ومراجعة الشكوى المقدمة بخصوص المحادثة بتاريخ ${chatFullDateStr} من قِبل فريق الرقابة، وتم حفظ البلاغ بعد التحقق من عدم وجود مخالفة تستدعي الحظر.`;
+        chatSystemContent = `🛡️ قرار الإدارة والرقابة: تم مراجعة وفحص الشكوى المقدمة بخصوص المحادثة بتاريخ ${chatFullDateStr} واكتمال التدقيق الإداري وحفظ البلاغ.`;
+        responseMessage = 'تم تجاهل وحفظ البلاغ بعد المراجعة ✓';
+
         await prisma.chatReport.update({
           where: { id: reportId },
           data: { status: 'DISMISSED', adminNotes: notes || 'تم مراجعة المحادثة ولم يتم رصد مخالفة' },
         });
-
-        res.json({ success: true, message: 'تم تجاهل البلاغ بعد المراجعة ✓' });
       } else {
         res.status(400).json({ success: false, message: 'إجراء غير معروف' });
+        return;
       }
+
+      // 1. تسجيل رسالة النظام في المحادثة لتوثيق القرار لكلا الطرفين (صاحب الشكوى والمشتكى عليه)
+      if (chatSystemContent) {
+        await prisma.message.create({
+          data: {
+            chatId: report.chatId,
+            senderType: 'SYSTEM',
+            content: chatSystemContent,
+          },
+        });
+      }
+
+      // 2. إرسال إشعار فوري داخل التطبيق لصاحب الشكوى / صاحب السيارة
+      if (notifTitle && notifMessage && report.chat?.car?.userId) {
+        try {
+          await prisma.notification.create({
+            data: {
+              userId: report.chat.car.userId,
+              carId: report.chat.car.id,
+              type: 'SECURITY',
+              title: notifTitle,
+              message: notifMessage,
+              actionLabel: 'تفاصيل البلاغ',
+            },
+          });
+        } catch (notifErr) {
+          console.error('Failed to create in-app notification for report action:', notifErr);
+        }
+      }
+
+      // 3. بث التحديث عبر السوكيت المباشر (Socket.io) لغرفة المحادثة ولجهاز صاحب السيارة فوراً
+      try {
+        const io = getChatIO();
+        if (io) {
+          if (chatSystemContent) {
+            io.to(`chat_${report.chatId}`).emit('new_message', {
+              chatId: report.chatId,
+              senderType: 'SYSTEM',
+              content: chatSystemContent,
+              createdAt: new Date(),
+            });
+          }
+          if (report.chat?.car?.userId) {
+            io.emit(`owner_alert_${report.chat.car.userId}`, {
+              type: 'REPORT_ACTION',
+              chatId: report.chatId,
+              title: notifTitle,
+              message: notifMessage,
+            });
+          }
+        }
+      } catch (socketErr) {
+        console.error('Failed to broadcast socket event for report action:', socketErr);
+      }
+
+      res.json({
+        success: true,
+        message: `${responseMessage} (تم إرسال إشعار فوري للتطبيق ولأطراف المحادثة)`,
+      });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر اتخاذ الإجراء' });
     }

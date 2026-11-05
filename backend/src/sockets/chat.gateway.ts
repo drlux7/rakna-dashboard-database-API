@@ -2,6 +2,8 @@ import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { prisma } from '../config/prisma';
 
+let chatIO: Server | null = null;
+
 export function setupChatGateway(httpServer: HttpServer, corsOrigin: string) {
   const io = new Server(httpServer, {
     cors: {
@@ -92,5 +94,10 @@ export function setupChatGateway(httpServer: HttpServer, corsOrigin: string) {
     });
   });
 
+  chatIO = io;
   return io;
+}
+
+export function getChatIO(): Server | null {
+  return chatIO;
 }
