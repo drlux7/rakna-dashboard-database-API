@@ -950,7 +950,7 @@ export class WebChatController {
             <span>محادثة وتنبيه فوري مباشر</span>
           </div>
           <div class="chat-lock-tag" id="chatHeaderTag">
-            🔒 توثيق بالكاميرا لمرة واحدة
+            📸 توثيق صورة بالكاميرا
           </div>
         </div>
 
@@ -1025,7 +1025,7 @@ export class WebChatController {
             <div id="cameraPreviewBox" class="camera-preview-box" style="display:none;">
               <img id="photoPreviewImg" src="" alt="صورة الكاميرا">
               <div class="camera-preview-overlay">
-                <span class="preview-badge">🔒 صورة لمرة واحدة (View Once)</span>
+                <span class="preview-badge">📸 صورة توثيقية للسيارة</span>
                 <button type="button" class="btn-retake" onclick="document.getElementById('cameraFileInput').click()">
                   <span>🔄</span>
                   <span>إعادة الالتقاط</span>
@@ -1042,7 +1042,7 @@ export class WebChatController {
 
           <div class="input-locked-banner">
             <span>🔒</span>
-            <span>الصورة تُعرض لصاحب السيارة مرة واحدة فقط ثم تُحرق لحماية الخصوصية.</span>
+            <span>صورة توثيقية لمكان السيارة بخصوصية تامة 100%.</span>
           </div>
         </div>
 
@@ -1294,7 +1294,7 @@ export class WebChatController {
             initialMessage: selectedReasonText,
             sessionToken: sessionToken,
             imageUrl: capturedPhotoBase64,
-            isViewOnce: true
+            isViewOnce: false
           })
         });
         const data = await res.json();
@@ -1406,7 +1406,7 @@ export class WebChatController {
       const time = timeStr ? new Date(timeStr).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '';
       let photoBadgeHtml = '';
       if (hasViewOnce) {
-        photoBadgeHtml = '<div class="view-once-bubble"><span>🔒</span><span>صورة توثيقية لمرة واحدة</span></div>';
+        photoBadgeHtml = '<div class="view-once-bubble"><span>📸</span><span>صورة توثيقية مرفقة</span></div>';
       }
 
       item.innerHTML =

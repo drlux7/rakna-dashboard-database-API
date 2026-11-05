@@ -330,7 +330,7 @@ export class ReporterController {
               senderType: 'REPORTER',
               content: (initialMessage && initialMessage.trim()) ? initialMessage.trim().substring(0, 500) : '📷 صورة ملتقطة من الكاميرا',
               imageUrl: finalExistingImg || null,
-              isViewOnce: Boolean(isViewOnce),
+              isViewOnce: false,
             },
           });
 
@@ -412,7 +412,7 @@ export class ReporterController {
             senderType: 'REPORTER',
             content: (initialMessage && initialMessage.trim()) ? initialMessage.trim().substring(0, 500) : '📷 صورة ملتقطة من الكاميرا',
             imageUrl: finalImg || null,
-            isViewOnce: Boolean(isViewOnce),
+            isViewOnce: false,
           },
         });
       }
@@ -564,7 +564,7 @@ export class ReporterController {
           senderType: 'REPORTER',
           content: (content && content.trim()) ? content.trim().substring(0, 500) : '📷 صورة ملتقطة من الكاميرا',
           imageUrl: finalMsgImg || null,
-          isViewOnce: Boolean(isViewOnce),
+          isViewOnce: false,
         },
       });
 
