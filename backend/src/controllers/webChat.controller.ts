@@ -1354,16 +1354,52 @@ export class WebChatController {
         '</div>';
         if (activeBar) activeBar.style.display = 'flex';
       } else if (status === 'IGNORED') {
+        const storedUntil = Number(localStorage.getItem('rakna_ignored_until_' + TAG_CODE));
+        let ignoredUntil = storedUntil;
+        if (!ignoredUntil || isNaN(ignoredUntil) || ignoredUntil <= Date.now()) {
+          ignoredUntil = Date.now() + (3 * 60 * 1000);
+          localStorage.setItem('rakna_ignored_until_' + TAG_CODE, String(ignoredUntil));
+        }
+
+        function formatTimer(ms) {
+          const totalSec = Math.max(0, Math.ceil(ms / 1000));
+          const m = Math.floor(totalSec / 60);
+          const s = totalSec % 60;
+          return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        const remainingMs = ignoredUntil - Date.now();
+        if (remainingMs <= 0) {
+          resetIgnoredState();
+          return;
+        }
+
         box.innerHTML = '<div class="status-banner ignored">' +
-          '<span style="font-size:20px;">⏳</span>' +
-          '<div>' +
-            '<div style="font-weight:800; font-size:13px;">صاحب السيارة مشغول حالياً</div>' +
-            '<div style="font-size:11.5px; opacity:0.9;">اعتذر صاحب السيارة عن عدم إمكانية الرد في الوقت الحالي، وتم إغلاق التواصل.</div>' +
+          '<span style="font-size:22px;">⏳</span>' +
+          '<div style="flex:1;">' +
+            '<div style="font-weight:800; font-size:13px; color:#FBBF24;">صاحب السيارة مشغول حالياً</div>' +
+            '<div style="font-size:11.5px; opacity:0.9; margin-top:2px;">اعتذر صاحب السيارة عن عدم إمكانية الرد في الوقت الحالي.</div>' +
+            '<div style="font-size:12px; font-weight:800; color:#F59E0B; margin-top:6px; display:flex; align-items:center; gap:6px;">' +
+              '<span>يمكنك إرسال تنبيه جديد بعد:</span>' +
+              '<b id="ignoredCountdownText" style="background:rgba(245,158,11,0.2); padding:2px 8px; border-radius:6px; border:1px solid rgba(245,158,11,0.4); font-family:monospace; font-size:13px;">' + formatTimer(remainingMs) + '</b>' +
+            '</div>' +
           '</div>' +
         '</div>';
         if (activeBar) activeBar.style.display = 'none';
         hideCompose();
         if (pollTimer) clearInterval(pollTimer);
+
+        if (window.ignoredInterval) clearInterval(window.ignoredInterval);
+        window.ignoredInterval = setInterval(function() {
+          const diff = ignoredUntil - Date.now();
+          const timerSpan = document.getElementById('ignoredCountdownText');
+          if (diff <= 0) {
+            clearInterval(window.ignoredInterval);
+            resetIgnoredState();
+          } else if (timerSpan) {
+            timerSpan.innerText = formatTimer(diff);
+          }
+        }, 1000);
       } else if (status === 'BLOCKED') {
         box.innerHTML = '<div class="status-banner blocked">' +
           '<span style="font-size:20px;">🛡️</span>' +
@@ -1772,6 +1808,39 @@ export class WebChatController {
       }
     }
 
+    function resetIgnoredState() {
+      localStorage.removeItem('rakna_status_' + TAG_CODE);
+      localStorage.removeItem('rakna_chat_' + TAG_CODE);
+      localStorage.removeItem('rakna_ignored_until_' + TAG_CODE);
+      chatStatus = null;
+      currentChatId = null;
+      capturedPhotoBase64 = null;
+      selectedReasonText = '';
+
+      const box = document.getElementById('statusBannerBox');
+      if (box) {
+        box.innerHTML = '<div class="status-banner active" style="background:rgba(16,185,129,0.15); border-color:rgba(16,185,129,0.4);">' +
+          '<span style="font-size:20px;">✅</span>' +
+          '<div style="flex:1;">' +
+            '<div style="font-weight:800; font-size:13px; color:#10B981;">انتهت فترة الانتظار (3 دقائق)</div>' +
+            '<div style="font-size:11.5px; opacity:0.9;">يمكنك الآن اختيار سبب البلاغ والتقاط صورة بالكاميرا الخلفية وإرسال تنبيه جديد.</div>' +
+          '</div>' +
+        '</div>';
+      }
+
+      const panel = document.getElementById('composePanel');
+      if (panel) panel.style.display = 'block';
+      const promptBox = document.getElementById('cameraPrompt');
+      if (promptBox) promptBox.style.display = 'flex';
+      const previewBox = document.getElementById('cameraPreviewBox');
+      if (previewBox) previewBox.style.display = 'none';
+      const card = document.getElementById('cameraCard');
+      if (card) card.classList.remove('has-photo');
+      document.querySelectorAll('.btn-quick').forEach(b => b.classList.remove('selected'));
+      checkCanSubmit();
+      showToast('يمكنك الآن إرسال تنبيه جديد لصاحب السيارة 🚗');
+    }
+
     function startPolling() {
       if (pollTimer) clearInterval(pollTimer);
       pollTimer = setInterval(pollMessages, 2500);
@@ -1779,6 +1848,15 @@ export class WebChatController {
     }
 
     // Startup Execution Check
+    const storedIgnoredUntil = Number(localStorage.getItem('rakna_ignored_until_' + TAG_CODE));
+    if (chatStatus === 'IGNORED' && storedIgnoredUntil && Date.now() >= storedIgnoredUntil) {
+      localStorage.removeItem('rakna_status_' + TAG_CODE);
+      localStorage.removeItem('rakna_chat_' + TAG_CODE);
+      localStorage.removeItem('rakna_ignored_until_' + TAG_CODE);
+      chatStatus = null;
+      currentChatId = null;
+    }
+
     if (chatStatus === 'IGNORED' || chatStatus === 'BLOCKED') {
       hideCompose();
       renderStatusBanner(chatStatus);

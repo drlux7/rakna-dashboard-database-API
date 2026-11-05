@@ -198,8 +198,9 @@ export class WebRateLimitService {
   public blockIpForCar(rawIp: string | null | undefined, carId: string, status: 'BLOCKED' | 'IGNORED'): void {
     const ip = this.normalizeIp(rawIp);
     const key = `${carId}:${ip}`;
-    const durationHours = status === 'BLOCKED' ? 30 * 24 : 24; // 30 days for BLOCKED, 24 hours for IGNORED
-    const until = new Date(Date.now() + durationHours * 3600 * 1000).toISOString();
+    // 30 days for BLOCKED, strictly 3 MINUTES (180s) for IGNORED
+    const durationMs = status === 'BLOCKED' ? (30 * 24 * 3600 * 1000) : (3 * 60 * 1000);
+    const until = new Date(Date.now() + durationMs).toISOString();
 
     this.carBlocks[key] = {
       status,

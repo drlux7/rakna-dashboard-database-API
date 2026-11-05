@@ -230,20 +230,28 @@ export class ReporterController {
         return;
       }
 
+      const IGNORE_COOLDOWN_MS = 3 * 60 * 1000; // 3 minutes cooldown
       const existingIgnored = await prisma.chat.findFirst({
         where: {
           carId: tag.car.id,
           reporterSessionToken: reporterToken,
           status: 'IGNORED',
-          updatedAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          updatedAt: { gt: new Date(Date.now() - IGNORE_COOLDOWN_MS) },
         },
+        orderBy: { updatedAt: 'desc' },
       });
 
       if (existingIgnored || ipBlockStatus === 'IGNORED') {
+        let remainingSec = 180;
+        if (existingIgnored) {
+          const passedMs = Date.now() - existingIgnored.updatedAt.getTime();
+          remainingSec = Math.max(1, Math.ceil((IGNORE_COOLDOWN_MS - passedMs) / 1000));
+        }
         res.status(403).json({
           success: false,
-          message: 'صاحب السيارة مشغول الآن واعتذر عن عدم إمكانية الرد في الوقت الحالي ⏳.',
+          message: `صاحب السيارة مشغول الآن واعتذر عن عدم إمكانية الرد في الوقت الحالي. يمكنك إعادة المحاولة بعد ${remainingSec} ثانية ⏳.`,
           isIgnored: true,
+          retryAfterSeconds: remainingSec,
         });
         return;
       }
