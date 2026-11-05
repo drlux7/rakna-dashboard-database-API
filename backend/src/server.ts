@@ -131,6 +131,25 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
+// Android App Links & iOS Universal Links Verification
+app.get('/.well-known/assetlinks.json', (_req: Request, res: Response) => {
+  const filePath = path.join(process.cwd(), 'public/.well-known/assetlinks.json');
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'application/json');
+    return res.sendFile(filePath);
+  }
+  return res.status(404).json({ error: 'Assetlinks not found' });
+});
+
+app.get('/.well-known/apple-app-site-association', (_req: Request, res: Response) => {
+  const filePath = path.join(process.cwd(), 'public/.well-known/apple-app-site-association');
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'application/json');
+    return res.sendFile(filePath);
+  }
+  return res.status(404).json({ error: 'Apple app site association not found' });
+});
+
 // Public Stranger Web Chat & Deep-link Page for QR/NFC Scans
 app.get('/t/:tagCode', WebChatController.renderTagPage);
 

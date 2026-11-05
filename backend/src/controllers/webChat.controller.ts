@@ -1027,19 +1027,19 @@ export class WebChatController {
 </head>
 <body>
 
-  <!-- Sticky Top App Download Banner -->
+  <!-- Sticky Top Smart App Link Banner -->
   <header class="app-banner">
     <div class="app-banner-left">
-      <div class="app-logo-badge">🚗</div>
+      <div class="app-logo-badge">📱</div>
       <div class="app-banner-text">
-        <h4>تطبيق ركنة RAKNA</h4>
-        <p>حمّل التطبيق لتجربة تنبيهات وإشعارات أسرع</p>
+        <h4>تطبيق ركنة مثبت على هاتفك؟</h4>
+        <p>افتح المحادثة والتنبيهات المباشرة فوراً داخل التطبيق</p>
       </div>
     </div>
-    <a href="https://rakna.tech" target="_blank" class="btn-download" id="downloadAppBtn">
-      <span>تحميل التطبيق</span>
-      <span>⬇️</span>
-    </a>
+    <button type="button" class="btn-download" id="btnOpenInApp" onclick="openInRaknaApp()" style="border:none; cursor:pointer;">
+      <span>فتح في التطبيق</span>
+      <span>🚀</span>
+    </button>
   </header>
 
   <main class="container">
@@ -1258,22 +1258,34 @@ export class WebChatController {
   </footer>
 
   <script>
-    // 1. Safe Deep Link Attempt ONLY on mobile devices
+    // 1. Smart App Handoff & Deep Linking
     const TAG_CODE = "${cleanTag}";
-    (function tryDeepLink() {
+
+    function openInRaknaApp() {
+      const clean = encodeURIComponent(TAG_CODE.replace(/^#/, ''));
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+      if (isAndroid) {
+        // Android Intent scheme opens the app directly if installed, without error if not
+        window.location.href = 'intent://t/' + clean + '#Intent;scheme=rakna;package=com.example.rakna_app;end';
+      } else if (isIOS) {
+        window.location.href = 'rakna://t/' + clean;
+      } else {
+        window.location.href = 'rakna://t/' + clean;
+      }
+    }
+
+    // Automatic handoff attempt on mobile devices once per session
+    (function tryAutoHandoff() {
       try {
         const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-        if (isMobile) {
-          const appUrl = "rakna://tag/" + encodeURIComponent(TAG_CODE.replace('#', ''));
-          const iframe = document.createElement('iframe');
-          iframe.style.display = 'none';
-          iframe.src = appUrl;
-          document.body.appendChild(iframe);
-          setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 1000);
+        const attempted = sessionStorage.getItem('rakna_app_handoff_' + TAG_CODE);
+        if (isMobile && !attempted) {
+          sessionStorage.setItem('rakna_app_handoff_' + TAG_CODE, '1');
+          setTimeout(openInRaknaApp, 350);
         }
-      } catch (e) {
-        // App not installed, continue in browser silently
-      }
+      } catch (e) {}
     })();
 
     // 2. Chat Session & Anti-Spam State

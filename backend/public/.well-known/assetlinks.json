@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.example.rakna_app",
+      "sha256_cert_fingerprints": [
+        "9F:DE:D9:38:24:CE:34:E4:E9:34:F0:01:A3:24:28:FB:B5:00:4D:29:C8:86:E8:5F:EC:DE:EC:BB:CD:6B:E2:32",
+        "14:6D:E9:7D:0F:52:AC:70:92:43:03:7E:58:3B:58:3C:94:4E:97:4A:A5:FA:A1:BA:C1:2A:43:FF:78:E8:4A:2A"
+      ]
+    }
+  }
+]
