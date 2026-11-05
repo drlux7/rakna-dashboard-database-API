@@ -620,6 +620,171 @@ export class WebChatController {
       gap: 4px;
     }
 
+    /* Rear Camera Viewfinder Modal */
+    .rear-camera-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.88);
+      backdrop-filter: blur(10px);
+      padding: 16px;
+    }
+    .rear-camera-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+    .rear-camera-dialog {
+      position: relative;
+      width: 100%;
+      max-width: 440px;
+      background: #0f172a;
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      border-radius: 24px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      animation: modalFadeIn 0.25s ease;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .rear-camera-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      background: rgba(15, 23, 42, 0.95);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      z-index: 2;
+    }
+    .rear-camera-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34D399;
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .rear-camera-close-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .rear-camera-close-btn:hover {
+      background: rgba(239, 68, 68, 0.3);
+      color: #F87171;
+    }
+    .rear-camera-viewport {
+      position: relative;
+      width: 100%;
+      height: 380px;
+      background: #000;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .rear-camera-viewport video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .camera-viewfinder-grid {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      right: 24px;
+      bottom: 24px;
+      pointer-events: none;
+    }
+    .corner-tl, .corner-tr, .corner-bl, .corner-br {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border-color: #F5BE18;
+      border-style: solid;
+    }
+    .corner-tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-top-left-radius: 8px; }
+    .corner-tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-top-right-radius: 8px; }
+    .corner-bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-bottom-left-radius: 8px; }
+    .corner-br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-bottom-right-radius: 8px; }
+    .rear-camera-tip {
+      position: absolute;
+      bottom: 16px;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      color: #fff;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      pointer-events: none;
+    }
+    .rear-camera-footer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: #0f172a;
+      gap: 8px;
+    }
+    .btn-shutter-capture {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: transparent;
+      border: 4px solid #fff;
+      padding: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s ease;
+    }
+    .btn-shutter-capture:hover {
+      transform: scale(1.05);
+    }
+    .btn-shutter-capture:active {
+      transform: scale(0.92);
+    }
+    .shutter-inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #F5BE18 0%, #EAB308 100%);
+    }
+    .rear-camera-footer-note {
+      font-size: 11px;
+      color: #94A3B8;
+      font-weight: 600;
+    }
+
     /* Big Submit Report Button */
     .btn-submit-report {
       width: 100%;
@@ -1008,28 +1173,58 @@ export class WebChatController {
               .join('')}
           </div>
 
-          <!-- Camera Section (Mandatory) -->
+          <!-- Camera Section (Rear Camera Only - Mandatory) -->
           <div class="camera-card" id="cameraCard">
             <input type="file" id="cameraFileInput" accept="image/*" capture="environment" style="display:none;" onchange="onCameraPhotoTaken(event)">
             
             <div id="cameraPrompt">
               <div class="camera-icon-wrapper">📸</div>
-              <div class="camera-prompt-title">2️⃣ التقاط صورة بالكاميرا فقط (إلزامي للتوثيق)</div>
-              <div class="camera-prompt-desc">يجب التقاط صورة حية للمركبة أو الموقف أمامك لمنع البلاغات الكاذبة ولحماية خصوصية الجميع.</div>
-              <button type="button" class="btn-camera-trigger" onclick="document.getElementById('cameraFileInput').click()">
+              <div class="camera-prompt-title">2️⃣ التقاط صورة بالكاميرا الخلفية فقط (إلزامي للتوثيق)</div>
+              <div class="camera-prompt-desc">يجب التقاط صورة حية للمركبة بالكاميرا الخلفية لمنع البلاغات الكاذبة ولحماية الخصوصية ومصداقية البلاغ.</div>
+              <button type="button" class="btn-camera-trigger" onclick="triggerRearCamera()">
                 <span>📷</span>
-                <span>تشغيل الكاميرا والتقاط الصورة</span>
+                <span>تشغيل الكاميرا الخلفية والتقاط الصورة</span>
               </button>
             </div>
 
             <div id="cameraPreviewBox" class="camera-preview-box" style="display:none;">
-              <img id="photoPreviewImg" src="" alt="صورة الكاميرا">
+              <img id="photoPreviewImg" src="" alt="صورة الكاميرا الخلفية">
               <div class="camera-preview-overlay">
-                <span class="preview-badge">📸 صورة توثيقية للسيارة</span>
-                <button type="button" class="btn-retake" onclick="document.getElementById('cameraFileInput').click()">
+                <span class="preview-badge">📸 ملتقطة بالكاميرا الخلفية</span>
+                <button type="button" class="btn-retake" onclick="triggerRearCamera()">
                   <span>🔄</span>
-                  <span>إعادة الالتقاط</span>
+                  <span>إعادة الالتقاط بالكاميرا الخلفية</span>
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Rear Camera Viewfinder Modal -->
+          <div id="rearCameraModal" class="rear-camera-modal" style="display:none;">
+            <div class="rear-camera-overlay" onclick="closeRearCameraModal()"></div>
+            <div class="rear-camera-dialog">
+              <div class="rear-camera-header">
+                <div class="rear-camera-badge">
+                  <span>📸</span>
+                  <span>الكاميرا الخلفية فقط</span>
+                </div>
+                <button type="button" class="rear-camera-close-btn" onclick="closeRearCameraModal()">✕</button>
+              </div>
+              <div class="rear-camera-viewport">
+                <video id="liveRearVideo" playsinline autoplay muted></video>
+                <div class="camera-viewfinder-grid">
+                  <div class="corner-tl"></div>
+                  <div class="corner-tr"></div>
+                  <div class="corner-bl"></div>
+                  <div class="corner-br"></div>
+                </div>
+                <div class="rear-camera-tip">وجه الكاميرا الخلفية نحو السيارة أو العائق</div>
+              </div>
+              <div class="rear-camera-footer">
+                <button type="button" class="btn-shutter-capture" onclick="captureRearCameraPhoto()" aria-label="التقاط">
+                  <div class="shutter-inner"></div>
+                </button>
+                <div class="rear-camera-footer-note">انقر على الزر لالتقاط الصورة بالكاميرا الخلفية</div>
               </div>
             </div>
           </div>
@@ -1196,7 +1391,107 @@ export class WebChatController {
       checkCanSubmit();
     }
 
-    // Step 2: Camera Photo Capture (Camera only via capture="environment")
+    // Step 2: Rear Camera Only Photo Capture (WebRTC Live Viewfinder + Environment Capture Fallback)
+    let rearCameraStream = null;
+
+    async function triggerRearCamera() {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          // Attempt exact rear camera constraint first, fallback to ideal
+          let stream;
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                facingMode: { exact: 'environment' },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+              },
+              audio: false
+            });
+          } catch (e1) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+              },
+              audio: false
+            });
+          }
+
+          rearCameraStream = stream;
+          const video = document.getElementById('liveRearVideo');
+          if (video) {
+            video.srcObject = stream;
+            await video.play();
+          }
+          const modal = document.getElementById('rearCameraModal');
+          if (modal) modal.style.display = 'flex';
+          return;
+        } catch (err) {
+          console.warn('getUserMedia rear camera failed or not permitted, falling back to input capture="environment"', err);
+        }
+      }
+
+      // Fallback: invoke file input with capture="environment"
+      const fileInput = document.getElementById('cameraFileInput');
+      if (fileInput) fileInput.click();
+    }
+
+    function closeRearCameraModal() {
+      if (rearCameraStream) {
+        rearCameraStream.getTracks().forEach(track => track.stop());
+        rearCameraStream = null;
+      }
+      const video = document.getElementById('liveRearVideo');
+      if (video) video.srcObject = null;
+      const modal = document.getElementById('rearCameraModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function captureRearCameraPhoto() {
+      const video = document.getElementById('liveRearVideo');
+      if (!video) return;
+
+      const canvas = document.createElement('canvas');
+      const vw = video.videoWidth || 640;
+      const vh = video.videoHeight || 480;
+
+      const MAX_DIM = 1000;
+      let w = vw;
+      let h = vh;
+      if (w > MAX_DIM || h > MAX_DIM) {
+        if (w > h) {
+          h = Math.round((h * MAX_DIM) / w);
+          w = MAX_DIM;
+        } else {
+          w = Math.round((w * MAX_DIM) / h);
+          h = MAX_DIM;
+        }
+      }
+
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, w, h);
+      capturedPhotoBase64 = canvas.toDataURL('image/jpeg', 0.82);
+
+      closeRearCameraModal();
+
+      const previewImg = document.getElementById('photoPreviewImg');
+      if (previewImg) previewImg.src = capturedPhotoBase64;
+      const promptBox = document.getElementById('cameraPrompt');
+      if (promptBox) promptBox.style.display = 'none';
+      const previewBox = document.getElementById('cameraPreviewBox');
+      if (previewBox) previewBox.style.display = 'flex';
+      const card = document.getElementById('cameraCard');
+      if (card) card.classList.add('has-photo');
+
+      checkCanSubmit();
+      showToast('تم التقاط الصورة بالكاميرا الخلفية بنجاح 📸');
+    }
+
+    // Fallback: Camera Photo Capture (Camera only via capture="environment")
     function onCameraPhotoTaken(event) {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
@@ -1234,7 +1529,7 @@ export class WebChatController {
           if (card) card.classList.add('has-photo');
 
           checkCanSubmit();
-          showToast('تم التقاط الصورة بنجاح 📸');
+          showToast('تم التقاط الصورة بالكاميرا الخلفية بنجاح 📸');
         };
         img.src = e.target.result;
       };
