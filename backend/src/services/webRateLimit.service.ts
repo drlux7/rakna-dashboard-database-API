@@ -21,6 +21,7 @@ export class WebRateLimitService {
   private cache: Record<string, IpUsageRecord> = {};
   private carBlocks: Record<string, CarBlockRecord> = {}; // key: `${carId}:${ip}`
   private sessionToIp: Record<string, string> = {}; // key: sessionToken -> ip
+  private globalBans: Record<string, { bannedAt: string; reason: string }> = {}; // key: ip
 
   private constructor() {
     const dataDir = path.join(process.cwd(), 'data');
@@ -93,11 +94,15 @@ export class WebRateLimitService {
         const parsed = JSON.parse(content) || {};
         this.cache = parsed.cache || parsed;
         this.carBlocks = parsed.carBlocks || {};
+        this.sessionToIp = parsed.sessionToIp || {};
+        this.globalBans = parsed.globalBans || {};
         this.cleanOldRecords();
       }
     } catch (err) {
       this.cache = {};
       this.carBlocks = {};
+      this.sessionToIp = {};
+      this.globalBans = {};
     }
   }
 
@@ -109,6 +114,8 @@ export class WebRateLimitService {
       const dataToSave = {
         cache: this.cache,
         carBlocks: this.carBlocks,
+        sessionToIp: this.sessionToIp,
+        globalBans: this.globalBans,
       };
       fs.writeFileSync(this.storeFile, JSON.stringify(dataToSave, null, 2), 'utf8');
     } catch (err) {
@@ -149,10 +156,40 @@ export class WebRateLimitService {
   public mapSessionToIp(sessionToken: string, rawIp?: string | null): void {
     if (!sessionToken) return;
     this.sessionToIp[sessionToken] = this.normalizeIp(rawIp);
+    this.saveStore();
   }
 
   public getIpBySession(sessionToken: string): string | null {
     return this.sessionToIp[sessionToken] || null;
+  }
+
+  /**
+   * حظر IP عالمياً عبر كامل المنصة (للمخالفات الصريحة مثل الإساءة والتحرش)
+   */
+  public banIpGlobally(rawIp: string | null | undefined, reason: string = 'Abuse violation'): void {
+    const ip = this.normalizeIp(rawIp);
+    this.globalBans[ip] = {
+      bannedAt: new Date().toISOString(),
+      reason,
+    };
+    this.saveStore();
+  }
+
+  /**
+   * التحقق مما إذا كان الـ IP محظوراً بالكامل على المنصة
+   */
+  public isIpGloballyBanned(rawIp: string | null | undefined): boolean {
+    const ip = this.normalizeIp(rawIp);
+    return Boolean(this.globalBans[ip]);
+  }
+
+  /**
+   * إلغاء حظر الـ IP عالمياً
+   */
+  public unbanIpGlobally(rawIp: string | null | undefined): void {
+    const ip = this.normalizeIp(rawIp);
+    delete this.globalBans[ip];
+    this.saveStore();
   }
 
   /**

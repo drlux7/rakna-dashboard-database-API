@@ -5854,7 +5854,13 @@ export default function App() {
                     <button
                       type="button"
                       disabled={isActingReport}
-                      onClick={() => handleTakeReportAction(activeReportDetails.report.id, 'BLOCK_USER')}
+                      onClick={() => {
+                        const isReporterAbuser = activeReportDetails.report.reporterType === 'OWNER';
+                        const targetLabel = isReporterAbuser ? 'المُبلّغ المسيء (ماسح الـ Tag)' : 'صاحب السيارة';
+                        if (window.confirm(`هل أنت متأكد من حظر ${targetLabel} نهائياً وعبر الـ IP وإنهاء المحادثة؟`)) {
+                          handleTakeReportAction(activeReportDetails.report.id, 'BLOCK_USER');
+                        }
+                      }}
                       style={{
                         background: 'rgba(239, 68, 68, 0.2)',
                         color: '#f87171',
@@ -5870,7 +5876,11 @@ export default function App() {
                       }}
                     >
                       <Ban size={16} />
-                      <span>حظر المستخدم وإنهاء المحادثة</span>
+                      <span>
+                        {activeReportDetails.report.reporterType === 'OWNER'
+                          ? 'حظر المُبلّغ (ماسح الـ Tag) وإنهاء المحادثة'
+                          : 'حظر صاحب السيارة وإنهاء المحادثة'}
+                      </span>
                     </button>
 
                     <button

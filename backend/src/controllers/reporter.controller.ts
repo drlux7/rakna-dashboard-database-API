@@ -219,8 +219,9 @@ export class ReporterController {
         },
       });
       const ipBlockStatus = webRateLimitService.getCarBlockStatus(clientIp, tag.car.id);
+      const isGloballyBanned = webRateLimitService.isIpGloballyBanned(clientIp);
 
-      if (existingBlocked || ipBlockStatus === 'BLOCKED') {
+      if (existingBlocked || ipBlockStatus === 'BLOCKED' || isGloballyBanned) {
         res.status(403).json({
           success: false,
           message: 'تم حظرك من التواصل مع صاحب هذه المركبة 🛡️.',
@@ -489,7 +490,7 @@ export class ReporterController {
         webRateLimitService.mapSessionToIp(sessionToken, clientIp);
       }
 
-      if (chat.status === 'BLOCKED') {
+      if (chat.status === 'BLOCKED' || webRateLimitService.isIpGloballyBanned(clientIp)) {
         res.status(403).json({ success: false, message: 'هذه المحادثة محظورة ومغلقة نهائياً 🛡️', isBlocked: true });
         return;
       }

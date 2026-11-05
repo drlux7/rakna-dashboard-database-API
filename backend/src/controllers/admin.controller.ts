@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../config/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { whatsAppService } from '../services/whatsapp.service';
+import { webRateLimitService } from '../services/webRateLimit.service';
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -1342,24 +1343,78 @@ export class AdminController {
       }
 
       if (action === 'BLOCK_USER') {
-        await prisma.user.update({
-          where: { id: report.chat.car.userId },
-          data: { isBlocked: true },
-        });
-        await prisma.chat.update({
-          where: { id: report.chatId },
-          data: { status: 'BLOCKED' },
-        });
-        await prisma.chatReport.update({
-          where: { id: reportId },
-          data: { status: 'RESOLVED', adminNotes: notes || 'تم حظر حساب المستخدم وإغلاق المحادثة' },
-        });
+        const isOwnerReported = report.reporterType === 'REPORTER';
 
-        res.json({ success: true, message: 'تم حظر المستخدم وإغلاق المحادثة بنجاح 🚫' });
+        if (isOwnerReported) {
+          // البلاغ مقدم من ماسح الـ Tag ضد صاحب السيارة -> حظر صاحب السيارة
+          await prisma.user.update({
+            where: { id: report.chat.car.userId },
+            data: { isBlocked: true },
+          });
+          await prisma.chat.update({
+            where: { id: report.chatId },
+            data: { status: 'BLOCKED' },
+          });
+          await prisma.message.create({
+            data: {
+              chatId: report.chatId,
+              senderType: 'SYSTEM',
+              content: '🛡️ قرار الإدارة والرقابة: تم فحص البلاغ وحظر حساب مالك السيارة وإغلاق المحادثة.',
+            },
+          });
+          await prisma.chatReport.update({
+            where: { id: reportId },
+            data: { status: 'RESOLVED', adminNotes: notes || 'تم حظر حساب مالك السيارة وإغلاق المحادثة' },
+          });
+
+          res.json({ success: true, message: 'تم حظر حساب صاحب السيارة وإغلاق المحادثة بنجاح 🚫' });
+        } else {
+          // البلاغ مقدم من صاحب السيارة ضد المُبلّغ (ماسح الـ Tag) -> حظر المُبلّغ المسيء وليس صاحب السيارة!
+          await prisma.chat.update({
+            where: { id: report.chatId },
+            data: { status: 'BLOCKED' },
+          });
+
+          // استخراج عنوان IP الخاص بالمُبلّغ وحظره للسيارة وعالمياً
+          const reporterIp = webRateLimitService.getIpBySession(report.chat.reporterSessionToken);
+          if (reporterIp) {
+            webRateLimitService.blockIpForCar(reporterIp, report.chat.carId, 'BLOCKED');
+            webRateLimitService.banIpGlobally(reporterIp, 'حظر إداري بسبب سوء استخدام وبلاغ تحرش/إساءة');
+          }
+
+          // التأكد من أن صاحب السيارة (الضحية مقدم البلاغ) غير محظور إطلاقاً
+          await prisma.user.update({
+            where: { id: report.chat.car.userId },
+            data: { isBlocked: false },
+          });
+
+          // إرسال رسالة نظام للمحادثة توضح القرار
+          await prisma.message.create({
+            data: {
+              chatId: report.chatId,
+              senderType: 'SYSTEM',
+              content: '🛡️ قرار الإدارة والرقابة: تم فحص البلاغ وحظر المُبلّغ المسيء نهائياً وإغلاق المحادثة.',
+            },
+          });
+
+          await prisma.chatReport.update({
+            where: { id: reportId },
+            data: { status: 'RESOLVED', adminNotes: notes || 'تم حظر المُبلّغ (ماسح الـ Tag) عبر الـ IP والجلسة وإغلاق المحادثة' },
+          });
+
+          res.json({ success: true, message: 'تم حظر المُبلّغ (ماسح الـ Tag) وإنهاء المحادثة بنجاح 🚫' });
+        }
       } else if (action === 'TERMINATE_CHAT') {
         await prisma.chat.update({
           where: { id: report.chatId },
           data: { status: 'BLOCKED' },
+        });
+        await prisma.message.create({
+          data: {
+            chatId: report.chatId,
+            senderType: 'SYSTEM',
+            content: '🔒 قامت الإدارة بإنهاء وإغلاق هذه المحادثة.',
+          },
         });
         await prisma.chatReport.update({
           where: { id: reportId },
