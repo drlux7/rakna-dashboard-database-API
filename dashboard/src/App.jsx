@@ -442,6 +442,7 @@ export default function App() {
     if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
     const backendHost = (typeof window !== 'undefined' && window.location.hostname !== 'localhost') ? 'https://api.rakna.tech' : 'http://localhost:5000';
     if (clean.startsWith('/uploads/')) return `${backendHost}${clean}`;
+    if (clean.startsWith('uploads/')) return `${backendHost}/${clean}`;
     if (clean.includes('tag_trunk')) return `${backendHost}/uploads/tag_trunk.jpg`;
     if (clean.includes('tag_glass')) return `${backendHost}/uploads/tag_glass.jpg`;
     if (clean.includes('tag_scan')) return `${backendHost}/uploads/tag_scan.jpg`;
@@ -5184,12 +5185,27 @@ export default function App() {
 
                                   {msg.imageUrl && (
                                     <div style={{ marginTop: '14px' }}>
-                                      <img
-                                        src={msg.imageUrl}
-                                        alt="Ticket attachment"
-                                        style={{ maxWidth: '300px', maxHeight: '200px', borderRadius: '8px', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}
-                                        onClick={() => window.open(msg.imageUrl, '_blank')}
-                                      />
+                                      <a
+                                        href={resolveProductImageUrl(msg.imageUrl)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        title="انقر لفتح المرفق بالحجم الكامل"
+                                        style={{ display: 'inline-block' }}
+                                      >
+                                        <img
+                                          src={resolveProductImageUrl(msg.imageUrl)}
+                                          alt="Ticket attachment"
+                                          style={{
+                                            maxWidth: '300px',
+                                            maxHeight: '200px',
+                                            borderRadius: '8px',
+                                            cursor: 'pointer',
+                                            border: '1px solid rgba(255,255,255,0.1)',
+                                            display: 'block',
+                                            objectFit: 'cover'
+                                          }}
+                                        />
+                                      </a>
                                     </div>
                                   )}
                                 </div>
@@ -5790,12 +5806,32 @@ export default function App() {
                         </div>
                         <div style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>{msg.content}</div>
                         {msg.imageUrl && (
-                          <div style={{ marginTop: '8px' }}>
-                            <img
-                              src={msg.imageUrl}
-                              alt="Attached photo"
-                              style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)' }}
-                            />
+                          <div style={{ marginTop: '10px' }}>
+                            <a
+                              href={resolveProductImageUrl(msg.imageUrl)}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="انقر لفتح الصورة بالحجم الكامل"
+                              style={{ display: 'inline-block' }}
+                            >
+                              <img
+                                src={resolveProductImageUrl(msg.imageUrl)}
+                                alt="صورة مرفقة بالبلاغ"
+                                style={{
+                                  maxWidth: '100%',
+                                  maxHeight: '260px',
+                                  borderRadius: '10px',
+                                  border: '1px solid rgba(255,255,255,0.2)',
+                                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                                  display: 'block',
+                                  objectFit: 'cover',
+                                  cursor: 'pointer'
+                                }}
+                              />
+                            </a>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                              🔍 انقر على الصورة لفتحها بالحجم الكامل
+                            </div>
                           </div>
                         )}
                       </div>
