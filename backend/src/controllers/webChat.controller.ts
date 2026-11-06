@@ -74,11 +74,11 @@ export class WebChatController {
 
       const carInfo = tag?.car
         ? {
-            displayTitle: tag.car.nickname || `${tag.car.brand} ${tag.car.model}`,
-            brand: tag.car.brand,
-            model: tag.car.model,
-            colorName: tag.car.colorName || 'غير محدد',
-          }
+          displayTitle: tag.car.nickname || `${tag.car.brand} ${tag.car.model}`,
+          brand: tag.car.brand,
+          model: tag.car.model,
+          colorName: tag.car.colorName || 'غير محدد',
+        }
         : null;
 
       const html = `<!DOCTYPE html>
@@ -1030,7 +1030,7 @@ export class WebChatController {
   <!-- Sticky Top Smart App Link Banner -->
   <header class="app-banner">
     <div class="app-banner-left">
-      <div class="app-logo-badge">📱</div>
+      <div class="app-logo-badge"></div>
       <div class="app-banner-text">
         <h4>تطبيق ركنة مثبت على هاتفك؟</h4>
         <p>افتح المحادثة والتنبيهات المباشرة فوراً داخل التطبيق</p>
@@ -1038,41 +1038,41 @@ export class WebChatController {
     </div>
     <button type="button" class="btn-download" id="btnOpenInApp" onclick="openInRaknaApp()" style="border:none; cursor:pointer;">
       <span>فتح في التطبيق</span>
-      <span>🚀</span>
+      <span></span>
     </button>
   </header>
 
   <main class="container">
-    ${ pageState === 'NOT_FOUND' ? `
+    ${pageState === 'NOT_FOUND' ? `
       <!-- SCENARIO 1a: Tag not found in system -->
       <div class="state-card not-found">
-        <span class="state-icon">❓</span>
+        <span class="state-icon"></span>
         <div class="state-tag-pill">${cleanTag}</div>
         <h2 class="state-title">ملصق غير معرّف</h2>
         <p class="state-body">
           لا يوجد ملصق ركنة مسجّل بهذا الرمز في نظامنا.<br>
           إذا اشتريت المنتج حديثاً، تأكد من صحة المسح أو تواصل مع الدعم.
         </p>
-        <a href="https://rakna.tech" class="state-cta">🌐 موقع ركنة</a>
+        <a href="https://rakna.tech" class="state-cta"> موقع ركنة</a>
       </div>
 
     ` : pageState === 'NOT_ACTIVATED' ? `
       <!-- SCENARIO 1b: Tag exists but owner hasn't activated it yet -->
       <div class="state-card not-activated">
-        <span class="state-icon">⏳</span>
+        <span class="state-icon"></span>
         <div class="state-tag-pill">${cleanTag}</div>
         <h2 class="state-title">هذا الملصق غير مفعّل بعد</h2>
         <p class="state-body">
           الملصق موجود في النظام ولكن المالك لم يقم بتفعيله بعد.<br><br>
           <b>إذا كنت المالك:</b> افتح تطبيق ركنة وادخل كود التفعيل المرفق في الكرت داخل العلبة.
         </p>
-        <a href="https://rakna.tech" class="state-cta">📲 تحميل تطبيق ركنة للتفعيل</a>
+        <a href="https://rakna.tech" class="state-cta"> تحميل تطبيق ركنة للتفعيل</a>
       </div>
 
     ` : pageState === 'PAUSED' ? `
       <!-- SCENARIO 1c: Tag is paused by owner -->
       <div class="state-card paused">
-        <span class="state-icon">⏸️</span>
+        <span class="state-icon">⏸</span>
         <div class="state-tag-pill">${cleanTag}</div>
         <h2 class="state-title">الملصق متوقف مؤقتاً</h2>
         <p class="state-body">
@@ -1080,7 +1080,7 @@ export class WebChatController {
           لا يمكن إرسال أي تنبيه في الوقت الحالي.<br><br>
           <b>إذا كانت هناك حالة طارئة</b> يُرجى التواصل مع إدارة المبنى أو الجهات المختصة.
         </p>
-        <a href="https://rakna.tech" class="state-cta">🏠 الرئيسية</a>
+        <a href="https://rakna.tech" class="state-cta"> الرئيسية</a>
       </div>
 
     ` : `
@@ -1088,7 +1088,7 @@ export class WebChatController {
       <section class="car-card">
         <div class="car-header">
           <div class="car-title">
-            <span>🚗</span>
+            <span></span>
             <span>${carInfo?.displayTitle || 'سيارة مسجلة'}</span>
           </div>
           <div class="status-pill">
@@ -1102,7 +1102,7 @@ export class WebChatController {
           <span class="meta-tag">اللون: <b>${carInfo?.colorName || '-'}</b></span>
         </div>
         <div class="zero-knowledge-notice">
-          <span>🛡️</span>
+          <span></span>
           <span>خصوصية تامة: لا يتم كشف اسم أو رقم هاتف أي من الطرفين نهائياً.</span>
         </div>
       </section>
@@ -1111,18 +1111,18 @@ export class WebChatController {
       <section class="chat-section">
         <div class="chat-header">
           <div class="chat-header-title">
-            <span>💬</span>
+            <span></span>
             <span>محادثة وتنبيه فوري مباشر</span>
           </div>
           <div class="chat-lock-tag" id="chatHeaderTag">
-            📸 توثيق صورة بالكاميرا
+             توثيق صورة بالكاميرا
           </div>
         </div>
 
         <!-- Messages Box -->
         <div class="messages-box" id="messagesBox">
           <div class="empty-state" id="emptyState">
-            <div class="empty-icon">📸</div>
+            <div class="empty-icon"></div>
             <h5 style="color: #FFF; font-size: 14px; margin-bottom: 4px;">اختر سبب التواصل والتقط صورة بالكاميرا</h5>
             <p style="font-size: 12px;">سيتم إشعار صاحب السيارة فوراً وتأكيد البلاغ مع حفظ خصوصيتك.</p>
           </div>
@@ -1134,15 +1134,15 @@ export class WebChatController {
         <!-- Compose Panel (Shown before chat is submitted) -->
         <div class="quick-panel" id="composePanel">
           <div class="quick-title">
-            <span>1️⃣</span>
+            <span>1</span>
             <span>اختر سبب التواصل:</span>
             <div id="quotaBadge" class="quota-badge" style="display:none;"></div>
-            <div id="cooldownBadge" class="cooldown-badge" style="display:none;">⏳ انتظر <b id="countdownSec">15</b>ث</div>
+            <div id="cooldownBadge" class="cooldown-badge" style="display:none;"> انتظر <b id="countdownSec">15</b>ث</div>
           </div>
 
           <div id="limitReachedBanner" class="limit-reached-banner" style="display:none;">
             <div class="limit-reached-title">
-              <span>⚠️</span>
+              <span></span>
               <span>استنفدت الحد اليومي (5 رسائل سريعة)</span>
             </div>
             <div class="limit-reached-text">
@@ -1156,8 +1156,8 @@ export class WebChatController {
 
           <div class="quick-grid" id="quickGrid">
             ${activeList
-              .map(
-                (item: any, idx: number) => `
+          .map(
+            (item: any, idx: number) => `
               <button 
                 type="button" 
                 class="btn-quick" 
@@ -1165,12 +1165,12 @@ export class WebChatController {
                 data-text="${item.text || item.title}"
                 onclick="selectQuickReason(this)"
               >
-                <span class="btn-quick-icon">${['🚗', '🪟', '💡', '⚠️', '⏳', '🙏', '🚨', '📢'][idx % 8]}</span>
+                <span class="btn-quick-icon">${['', '', '', '', '', '', '', ''][idx % 8]}</span>
                 <span>${item.title}</span>
               </button>
             `
-              )
-              .join('')}
+          )
+          .join('')}
           </div>
 
           <!-- Camera Section (Rear Camera Only - Mandatory) -->
@@ -1178,11 +1178,11 @@ export class WebChatController {
             <input type="file" id="cameraFileInput" accept="image/*" capture="environment" style="display:none;" onchange="onCameraPhotoTaken(event)">
             
             <div id="cameraPrompt">
-              <div class="camera-icon-wrapper">📸</div>
-              <div class="camera-prompt-title">2️⃣ التقاط صورة بالكاميرا الخلفية فقط (إلزامي للتوثيق)</div>
+              <div class="camera-icon-wrapper"></div>
+              <div class="camera-prompt-title">2 التقاط صورة بالكاميرا الخلفية فقط (إلزامي للتوثيق)</div>
               <div class="camera-prompt-desc">يجب التقاط صورة حية للمركبة بالكاميرا الخلفية لمنع البلاغات الكاذبة ولحماية الخصوصية ومصداقية البلاغ.</div>
               <button type="button" class="btn-camera-trigger" onclick="triggerRearCamera()">
-                <span>📷</span>
+                <span></span>
                 <span>تشغيل الكاميرا الخلفية والتقاط الصورة</span>
               </button>
             </div>
@@ -1190,9 +1190,9 @@ export class WebChatController {
             <div id="cameraPreviewBox" class="camera-preview-box" style="display:none;">
               <img id="photoPreviewImg" src="" alt="صورة الكاميرا الخلفية">
               <div class="camera-preview-overlay">
-                <span class="preview-badge">📸 ملتقطة بالكاميرا الخلفية</span>
+                <span class="preview-badge"> ملتقطة بالكاميرا الخلفية</span>
                 <button type="button" class="btn-retake" onclick="triggerRearCamera()">
-                  <span>🔄</span>
+                  <span></span>
                   <span>إعادة الالتقاط بالكاميرا الخلفية</span>
                 </button>
               </div>
@@ -1205,7 +1205,7 @@ export class WebChatController {
             <div class="rear-camera-dialog">
               <div class="rear-camera-header">
                 <div class="rear-camera-badge">
-                  <span>📸</span>
+                  <span></span>
                   <span>الكاميرا الخلفية فقط</span>
                 </div>
                 <button type="button" class="rear-camera-close-btn" onclick="closeRearCameraModal()">✕</button>
@@ -1231,12 +1231,12 @@ export class WebChatController {
 
           <!-- Submit Button -->
           <button type="button" id="btnSubmitReport" class="btn-submit-report" disabled onclick="submitReportWithPhoto()">
-            <span>🚀</span>
+            <span></span>
             <span id="submitReportText">يرجى اختيار السبب والتقاط صورة بالكاميرا</span>
           </button>
 
           <div class="input-locked-banner">
-            <span>🔒</span>
+            <span></span>
             <span>صورة توثيقية لمكان السيارة بخصوصية تامة 100%.</span>
           </div>
         </div>
@@ -1320,9 +1320,9 @@ export class WebChatController {
       toast.className = 'toast-popup';
       if (isError) {
         toast.style.borderColor = '#EF4444';
-        toast.innerHTML = '<span>⚠️</span><span>' + escapeHtml(text) + '</span>';
+        toast.innerHTML = '<span></span><span>' + escapeHtml(text) + '</span>';
       } else {
-        toast.innerHTML = '<span>✅</span><span>' + escapeHtml(text) + '</span>';
+        toast.innerHTML = '<span></span><span>' + escapeHtml(text) + '</span>';
       }
       document.body.appendChild(toast);
       setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 4000);
@@ -1337,7 +1337,7 @@ export class WebChatController {
 
       if (status === 'PENDING_ACCEPT') {
         box.innerHTML = '<div class="status-banner pending">' +
-          '<span style="font-size:20px;">⏳</span>' +
+          '<span style="font-size:20px;"></span>' +
           '<div>' +
             '<div style="font-weight:800; font-size:13px;">بانتظار رد صاحب السيارة...</div>' +
             '<div style="font-size:11.5px; opacity:0.9;">تم إرسال بلاغك وتوثيق الكاميرا بنجاح. سيتم فتح المحادثة فور قبول المالك.</div>' +
@@ -1346,7 +1346,7 @@ export class WebChatController {
         if (activeBar) activeBar.style.display = 'none';
       } else if (status === 'ACTIVE') {
         box.innerHTML = '<div class="status-banner active">' +
-          '<span style="font-size:20px;">✅</span>' +
+          '<span style="font-size:20px;"></span>' +
           '<div>' +
             '<div style="font-weight:800; font-size:13px;">المحادثة نشطة الآن مع صاحب السيارة</div>' +
             '<div style="font-size:11.5px; opacity:0.9;">يمكنك كتابة رسائل إضافية مباشرة لصاحب السيارة بالأسفل.</div>' +
@@ -1375,7 +1375,7 @@ export class WebChatController {
         }
 
         box.innerHTML = '<div class="status-banner ignored">' +
-          '<span style="font-size:22px;">⏳</span>' +
+          '<span style="font-size:22px;"></span>' +
           '<div style="flex:1;">' +
             '<div style="font-weight:800; font-size:13px; color:#FBBF24;">صاحب السيارة مشغول حالياً</div>' +
             '<div style="font-size:11.5px; opacity:0.9; margin-top:2px;">اعتذر صاحب السيارة عن عدم إمكانية الرد في الوقت الحالي.</div>' +
@@ -1402,7 +1402,7 @@ export class WebChatController {
         }, 1000);
       } else if (status === 'BLOCKED') {
         box.innerHTML = '<div class="status-banner blocked">' +
-          '<span style="font-size:20px;">🛡️</span>' +
+          '<span style="font-size:20px;"></span>' +
           '<div>' +
             '<div style="font-weight:800; font-size:13px;">تم حظر وإغلاق هذه المحادثة</div>' +
             '<div style="font-size:11.5px; opacity:0.9;">قام الطرف الآخر بحظر المحادثة وإحالتها للإدارة والرقابة.</div>' +
@@ -1413,7 +1413,7 @@ export class WebChatController {
         if (pollTimer) clearInterval(pollTimer);
       } else if (status === 'CLOSED') {
         box.innerHTML = '<div class="status-banner closed">' +
-          '<span style="font-size:20px;">🔒</span>' +
+          '<span style="font-size:20px;"></span>' +
           '<div>' +
             '<div style="font-weight:800; font-size:13px;">تم إغلاق المحادثة</div>' +
             '<div style="font-size:11.5px; opacity:0.9;">تم إنهاء وإغلاق هذا التواصل بنجاح.</div>' +
@@ -1536,7 +1536,7 @@ export class WebChatController {
       if (card) card.classList.add('has-photo');
 
       checkCanSubmit();
-      showToast('تم التقاط الصورة بالكاميرا الخلفية بنجاح 📸');
+      showToast('تم التقاط الصورة بالكاميرا الخلفية بنجاح ');
     }
 
     // Fallback: Camera Photo Capture (Camera only via capture="environment")
@@ -1577,7 +1577,7 @@ export class WebChatController {
           if (card) card.classList.add('has-photo');
 
           checkCanSubmit();
-          showToast('تم التقاط الصورة بالكاميرا الخلفية بنجاح 📸');
+          showToast('تم التقاط الصورة بالكاميرا الخلفية بنجاح ');
         };
         img.src = e.target.result;
       };
@@ -1598,10 +1598,10 @@ export class WebChatController {
         txt.innerText = 'يرجى اختيار سبب التواصل من الخيارات أعلاه';
       } else if (!capturedPhotoBase64) {
         btn.disabled = true;
-        txt.innerText = 'يرجى التقاط صورة بالكاميرا أولاً لتفعيل الإرسال 📷';
+        txt.innerText = 'يرجى التقاط صورة بالكاميرا أولاً لتفعيل الإرسال ';
       } else {
         btn.disabled = false;
-        txt.innerText = '🚀 إرسال التنبيه وصورة الكاميرا لصاحب السيارة';
+        txt.innerText = ' إرسال التنبيه وصورة الكاميرا لصاحب السيارة';
       }
     }
 
@@ -1669,12 +1669,12 @@ export class WebChatController {
         } else {
           showToast(data.message || 'تعذر إرسال البلاغ', true);
           if (btn) btn.disabled = false;
-          if (txt) txt.innerText = '🚀 إرسال التنبيه وصورة الكاميرا لصاحب السيارة';
+          if (txt) txt.innerText = ' إرسال التنبيه وصورة الكاميرا لصاحب السيارة';
         }
       } catch (err) {
         showToast('حدث خطأ في الاتصال بالخادم. يرجى المحاولة ثانية.', true);
         if (btn) btn.disabled = false;
-        if (txt) txt.innerText = '🚀 إرسال التنبيه وصورة الكاميرا لصاحب السيارة';
+        if (txt) txt.innerText = ' إرسال التنبيه وصورة الكاميرا لصاحب السيارة';
       } finally {
         isSubmitting = false;
       }
@@ -1749,7 +1749,7 @@ export class WebChatController {
       const time = timeStr ? new Date(timeStr).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '';
       let photoBadgeHtml = '';
       if (hasViewOnce) {
-        photoBadgeHtml = '<div class="view-once-bubble"><span>📸</span><span>صورة توثيقية مرفقة</span></div>';
+        photoBadgeHtml = '<div class="view-once-bubble"><span></span><span>صورة توثيقية مرفقة</span></div>';
       }
 
       item.innerHTML =
@@ -1820,7 +1820,7 @@ export class WebChatController {
       const box = document.getElementById('statusBannerBox');
       if (box) {
         box.innerHTML = '<div class="status-banner active" style="background:rgba(16,185,129,0.15); border-color:rgba(16,185,129,0.4);">' +
-          '<span style="font-size:20px;">✅</span>' +
+          '<span style="font-size:20px;"></span>' +
           '<div style="flex:1;">' +
             '<div style="font-weight:800; font-size:13px; color:#10B981;">انتهت فترة الانتظار (3 دقائق)</div>' +
             '<div style="font-size:11.5px; opacity:0.9;">يمكنك الآن اختيار سبب البلاغ والتقاط صورة بالكاميرا الخلفية وإرسال تنبيه جديد.</div>' +
@@ -1838,7 +1838,7 @@ export class WebChatController {
       if (card) card.classList.remove('has-photo');
       document.querySelectorAll('.btn-quick').forEach(b => b.classList.remove('selected'));
       checkCanSubmit();
-      showToast('يمكنك الآن إرسال تنبيه جديد لصاحب السيارة 🚗');
+      showToast('يمكنك الآن إرسال تنبيه جديد لصاحب السيارة ');
     }
 
     function startPolling() {
