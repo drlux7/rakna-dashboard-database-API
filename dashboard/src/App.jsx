@@ -159,6 +159,7 @@ export default function App() {
   const [printColumns, setPrintColumns] = useState(3);
   const [printShowCutLines, setPrintShowCutLines] = useState(true);
   const [printShowHeader, setPrintShowHeader] = useState(true);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const [waConfig, setWaConfig] = useState({
     provider: 'BAILEYS',
@@ -694,11 +695,39 @@ export default function App() {
     }
   };
 
+
+  // Clean Print Studio Handler - Prevents duplication and enforces isolated canvas print
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      document.body.classList.remove('print-studio-active');
+      setIsPrinting(false);
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => window.removeEventListener('afterprint', handleAfterPrint);
+  }, []);
+
+  const handlePrintStudio = () => {
+    if (isPrinting) return;
+    setIsPrinting(true);
+    document.body.classList.add('print-studio-active');
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove('print-studio-active');
+        setIsPrinting(false);
+      }, 1500);
+    }, 150);
+  };
+
   const openPrintStudioForStickers = (items, title, subtitle) => {
     setPrintStudioType('stickers');
     setPrintStudioTitle(title || 'شيت طباعة ملصقات السيارات والـ QR');
     setPrintStudioSubtitle(subtitle || 'جاهزة للقص واللصق على هياكل وزجاج السيارات');
-    setPrintStudioItems(items);
+    // Deduplicate items by ID / tagCode to guarantee zero duplicates
+    const unique = Array.from(
+      new Map((items || []).map((t) => [t.id || t.tagCode, t])).values()
+    );
+    setPrintStudioItems(unique);
     setPrintColumns(3);
     setIsPrintStudioOpen(true);
   };
@@ -707,7 +736,11 @@ export default function App() {
     setPrintStudioType('activation_cards');
     setPrintStudioTitle(title || 'شيت طباعة كروت أكواد التفعيل السرية');
     setPrintStudioSubtitle(subtitle || 'تُطبع وتُوضع داخل كرتون العلبة ليستخدمها المشتري');
-    setPrintStudioItems(items);
+    // Deduplicate items by ID / code to guarantee zero duplicates
+    const unique = Array.from(
+      new Map((items || []).map((c) => [c.id || c.code, c])).values()
+    );
+    setPrintStudioItems(unique);
     setPrintColumns(2);
     setIsPrintStudioOpen(true);
   };
@@ -2523,7 +2556,7 @@ export default function App() {
 
                   {/* Generated Result Preview & Print Action */}
                   {generatedTags.length > 0 && (
-                    <div className="glass-panel" style={{ padding: '28px', marginBottom: '32px' }}>
+                    <div className="glass-panel no-print" style={{ padding: '28px', marginBottom: '32px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                         <div>
                           <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff' }}>
@@ -2590,7 +2623,7 @@ export default function App() {
                   {(() => {
                     const inStockTags = tags.filter((t) => t.status === 'IN_STOCK');
                     return (
-                      <div className="glass-panel" style={{ padding: '28px' }}>
+                      <div className="glass-panel no-print" style={{ padding: '28px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
                           <div>
                             <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -3092,12 +3125,13 @@ export default function App() {
 
                       <button
                         type="button"
-                        onClick={() => window.print()}
+                        onClick={handlePrintStudio}
+                        disabled={isPrinting}
                         className="btn-gold"
-                        style={{ padding: '8px 20px', fontSize: '0.9rem', fontWeight: 800, gap: '8px' }}
+                        style={{ padding: '8px 20px', fontSize: '0.9rem', fontWeight: 800, gap: '8px', cursor: isPrinting ? 'not-allowed' : 'pointer' }}
                       >
                         <Printer size={18} />
-                        <span>طباعة الآن (Print)</span>
+                        <span>{isPrinting ? 'جاري التحضير للطباعة...' : 'طباعة الآن (Print)'}</span>
                       </button>
 
                       <button
@@ -3159,10 +3193,16 @@ export default function App() {
                             key={t.id || t.tagCode}
                             className="print-sticker-card"
                             style={{
-                              border: printShowCutLines ? '1.5px dashed #333333' : '1px solid #e5e7eb',
+                              border: printShowCutLines ? '1.5px dashed #000000' : '1px solid #d1d5db',
                               padding: '16px',
                               textAlign: 'center',
                               borderRadius: '10px',
+                              background: '#ffffff',
+                              backgroundColor: '#ffffff',
+                              color: '#000000',
+                              pageBreakInside: 'avoid',
+                              breakInside: 'avoid',
+                              boxShadow: 'none',
                             }}
                           >
                             <div style={{ fontSize: '0.72rem', color: '#000000', fontWeight: 900, letterSpacing: '1px', marginBottom: '8px' }}>
@@ -3170,18 +3210,26 @@ export default function App() {
                             </div>
                             <div
                               className="qr-box"
+                              style={{
+                                background: '#ffffff',
+                                backgroundColor: '#ffffff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin: '0 auto 8px auto',
+                              }}
                               dangerouslySetInnerHTML={{
                                 __html: (t.qrCodeSvg || '')
-                                  .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;" ')
+                                  .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;fill:#000000;" ')
                               }}
                             />
-                            <div style={{ fontWeight: 900, fontSize: '1.2rem', color: '#000' }} className="tag-code">
+                            <div style={{ fontWeight: 900, fontSize: '1.25rem', color: '#000000' }} className="tag-code">
                               {t.tagCode}
                             </div>
-                            <div style={{ fontSize: '0.75rem', color: '#4b5563', marginTop: '4px' }}>
+                            <div style={{ fontSize: '0.78rem', color: '#000000', fontWeight: 700, marginTop: '4px' }}>
                               {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
                             </div>
-                            <div style={{ fontSize: '0.62rem', color: '#6b7280', fontFamily: 'var(--font-mono)', marginTop: '6px' }}>
+                            <div style={{ fontSize: '0.65rem', color: '#1f2937', fontFamily: 'var(--font-mono)', marginTop: '6px', fontWeight: 600 }}>
                               NFC: {t.secretToken?.substring(0, 16)}...
                             </div>
                           </div>

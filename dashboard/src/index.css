@@ -248,60 +248,90 @@ body {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 8mm;
   }
 
-  body, html {
+  /* 1. Global Reset to Pure White Paper and Black Ink */
+  html, body {
     background: #ffffff !important;
+    background-color: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
-    font-family: 'Cairo', sans-serif !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    font-family: 'Cairo', system-ui, -apple-system, sans-serif !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* 1. Hide everything that should not be printed */
+  /* 2. Hide everything that should NOT be printed */
   .no-print,
+  .print-studio-toolbar,
+  .sidebar,
+  .top-navbar,
+  .toast-container,
   aside,
   header,
   nav,
   button,
-  .btn-gold,
-  .btn-ghost,
-  .sidebar,
-  .top-navbar,
-  .toast-container,
   form,
   .search-box,
-  .filters-bar {
+  .filters-bar,
+  .stats-grid,
+  .stats-card,
+  table,
+  .data-table,
+  .glass-panel:not(.print-studio-canvas),
+  .dashboard-layout > *:not(.main-content) {
     display: none !important;
+    visibility: hidden !important;
   }
 
-  /* 2. Reset containers to full width and transparent/white backgrounds */
-  #root,
-  .app-container,
-  .dashboard-layout,
-  main,
-  .main-content,
-  .glass-panel {
-    background: transparent !important;
-    color: #000000 !important;
+  /* 3. When Print Studio is Active: Hide entire dashboard layout content */
+  body.print-studio-active .dashboard-layout,
+  body.print-studio-active .main-content > .fade-in > *:not(.print-studio-modal),
+  body.print-studio-active .glass-panel {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* 4. Display ONLY the Print Studio Modal and Canvas */
+  .print-studio-modal {
+    position: static !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
     padding: 0 !important;
     margin: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-    display: block !important;
     width: 100% !important;
     height: auto !important;
-    overflow: visible !important;
+    display: block !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 
-  /* 3. The printable sheets */
+  .print-studio-canvas {
+    display: block !important;
+    visibility: visible !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
   .print-sheet-grid {
     display: grid !important;
-    gap: 12mm !important;
-    padding: 5mm !important;
+    gap: 8mm !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
   }
 
   .print-sheet-grid.cols-3 {
@@ -312,84 +342,67 @@ body {
     grid-template-columns: repeat(2, 1fr) !important;
   }
 
-  /* Stickers Sheet for Vehicle Badges */
-  .print-tag-card {
-    border: 1.5px dashed #333333 !important;
+  /* 5. Force ALL Cards to Pure White Background with Black Text */
+  .print-sticker-card,
+  .print-tag-card,
+  .print-activation-card {
     background: #ffffff !important;
+    background-color: #ffffff !important;
     color: #000000 !important;
-    border-radius: 12px !important;
-    padding: 14px !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    text-align: center !important;
     box-shadow: none !important;
   }
 
+  .print-sticker-card *,
+  .print-tag-card *,
+  .print-activation-card * {
+    color: #000000 !important;
+    text-shadow: none !important;
+  }
+
+  .print-sticker-card .tag-code,
   .print-tag-card .tag-code {
     color: #000000 !important;
     font-weight: 900 !important;
-    font-size: 1.2rem !important;
+    font-size: 1.25rem !important;
   }
 
+  .print-sticker-card .qr-box,
   .print-tag-card .qr-box {
     background: #ffffff !important;
+    background-color: #ffffff !important;
     box-shadow: none !important;
     border: 1px solid #cccccc !important;
-    margin: 0 auto 10px auto !important;
+    margin: 0 auto 8px auto !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
   }
 
+  .print-sticker-card .qr-box svg,
   .print-tag-card .qr-box svg {
     display: block !important;
     width: 128px !important;
     height: 128px !important;
+    fill: #000000 !important;
+    background: #ffffff !important;
   }
 
-  /* Activation Secret Cards for Package Insertion */
   .print-activation-card {
     border: 2px solid #000000 !important;
-    background: #ffffff !important;
-    color: #000000 !important;
-    border-radius: 14px !important;
+    border-radius: 12px !important;
     padding: 18px !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    text-align: center !important;
-    box-shadow: none !important;
   }
 
   .print-activation-card .act-code-box {
     background: #f3f4f6 !important;
+    background-color: #f3f4f6 !important;
     border: 2px dashed #000000 !important;
     color: #000000 !important;
-    font-size: 1.25rem !important;
+    font-size: 1.35rem !important;
     font-weight: 900 !important;
     padding: 10px 14px !important;
     margin: 10px 0 !important;
-  }
-
-  /* Modal Print Studio overlay during print */
-  .print-studio-modal {
-    position: static !important;
-    background: transparent !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    width: 100% !important;
-    height: auto !important;
-    display: block !important;
-  }
-
-  .print-studio-toolbar {
-    display: none !important;
-  }
-
-  .print-studio-canvas {
-    background: #ffffff !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    max-width: 100% !important;
   }
 }
