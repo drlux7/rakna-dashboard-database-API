@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import QRCode from 'qrcode';
 import { prisma } from '../config/prisma';
 import { webRateLimitService } from '../services/webRateLimit.service';
 
@@ -11,6 +12,49 @@ export class WebChatController {
     try {
       const rawTag = (req.params.tagCode as string) || '';
       const cleanTag = rawTag.startsWith('#') ? rawTag : `#${rawTag}`;
+
+      // 0. Detect Operating System / Device Type:
+      // Allow phones and tablets (Android, iOS, iPadOS, etc.)
+      // Block desktop computers (Windows, Mac, Linux Desktop)
+      const userAgent = (req.headers['user-agent'] as string) || '';
+      const uaLower = userAgent.toLowerCase();
+
+      const isExplicitMobileOrTablet =
+        /android|iphone|ipad|ipod|windows phone|iemobile|mobile|tablet|harmonyos|silk|kindle/i.test(userAgent);
+
+      const isDesktopUA =
+        !isExplicitMobileOrTablet &&
+        (uaLower.includes('windows nt') ||
+          uaLower.includes('win64') ||
+          uaLower.includes('wow64') ||
+          uaLower.includes('win32') ||
+          (uaLower.includes('macintosh') && !uaLower.includes('iphone') && !uaLower.includes('ipad')) ||
+          (uaLower.includes('linux') && !uaLower.includes('android')) ||
+          uaLower.includes('cros'));
+
+      const isForceMobile = req.query.force_mobile === '1';
+
+      if (isDesktopUA && !isForceMobile) {
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+        const host = req.get('host') || 'rakna.tech';
+        const pageUrl = `${protocol}://${host}/t/${encodeURIComponent(rawTag)}`;
+
+        let qrCodeDataUrl = '';
+        try {
+          qrCodeDataUrl = await QRCode.toDataURL(pageUrl, {
+            margin: 1,
+            scale: 6,
+            color: { dark: '#000000', light: '#FFFFFF' },
+          });
+        } catch (_) {}
+
+        const desktopGuardHtml = WebChatController.buildDesktopGuardHtml(pageUrl, qrCodeDataUrl);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.send(desktopGuardHtml);
+        return;
+      }
 
       // Check daily IP rate limit (5 quick messages per day)
       const clientIp = webRateLimitService.extractIp(req);
@@ -144,15 +188,23 @@ export class WebChatController {
       gap: 12px;
     }
     .app-logo-badge {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #D4AF37 0%, #8A6D1C 100%);
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #151c2c;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
-      box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
+      overflow: hidden;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4), 0 0 10px rgba(212, 175, 55, 0.25);
+      border: 1px solid rgba(212, 175, 55, 0.4);
+    }
+    .app-logo-badge img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
     .app-banner-text h4 {
       font-size: 14px;
@@ -1024,13 +1076,17 @@ export class WebChatController {
       font-weight: 700;
     }
   </style>
+  <link rel="icon" type="image/png" href="/rakna_applogo.png">
+  <link rel="apple-touch-icon" href="/rakna_applogo.png">
 </head>
 <body>
 
   <!-- Sticky Top Smart App Link Banner -->
   <header class="app-banner">
     <div class="app-banner-left">
-      <div class="app-logo-badge"></div>
+      <div class="app-logo-badge">
+        <img src="/rakna_applogo.png" alt="ركنة" />
+      </div>
       <div class="app-banner-text">
         <h4>تطبيق ركنة مثبت على هاتفك؟</h4>
         <p>افتح المحادثة والتنبيهات المباشرة فوراً داخل التطبيق</p>
@@ -1038,7 +1094,7 @@ export class WebChatController {
     </div>
     <button type="button" class="btn-download" id="btnOpenInApp" onclick="openInRaknaApp()" style="border:none; cursor:pointer;">
       <span>فتح في التطبيق</span>
-      <span></span>
+      <span>🚀</span>
     </button>
   </header>
 
@@ -1881,5 +1937,258 @@ export class WebChatController {
       console.error('Error rendering web chat page:', error);
       res.status(500).send('تعذر تحميل صفحة ركنة');
     }
+  }
+
+  private static buildDesktopGuardHtml(pageUrl: string, qrCodeDataUrl: string): string {
+    return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ركنة - هذه الخاصية تعمل فقط من خلال الهاتف</title>
+  <link rel="icon" type="image/png" href="/rakna_applogo.png">
+  <link rel="apple-touch-icon" href="/rakna_applogo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #D4AF37;
+      --primary-light: #F3E5AB;
+      --primary-dark: #AA820A;
+      --bg-dark: #0B0F19;
+      --card-bg: rgba(22, 30, 49, 0.85);
+      --card-border: rgba(212, 175, 55, 0.25);
+      --text-main: #F8FAFC;
+      --text-muted: #94A3B8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Cairo', system-ui, -apple-system, sans-serif;
+    }
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 50% 15%, rgba(212, 175, 55, 0.15) 0%, transparent 60%),
+        radial-gradient(circle at 10% 90%, rgba(30, 41, 59, 0.5) 0%, transparent 50%),
+        radial-gradient(circle at 90% 90%, rgba(212, 175, 55, 0.08) 0%, transparent 50%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 20px;
+    }
+    .guard-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 28px;
+      max-width: 580px;
+      width: 100%;
+      padding: 40px 32px;
+      text-align: center;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(212, 175, 55, 0.12);
+      animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .app-logo {
+      width: 82px;
+      height: 82px;
+      border-radius: 22px;
+      margin: 0 auto 20px;
+      box-shadow: 0 8px 30px rgba(212, 175, 55, 0.35);
+      border: 2px solid rgba(212, 175, 55, 0.45);
+      background: #111;
+      display: block;
+      object-fit: cover;
+    }
+    .device-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 20px;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #F87171;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 18px;
+    }
+    .guard-title {
+      font-size: 24px;
+      font-weight: 900;
+      color: #FFF;
+      line-height: 1.35;
+      margin-bottom: 12px;
+      letter-spacing: -0.3px;
+    }
+    .guard-title span {
+      color: var(--primary);
+    }
+    .guard-desc {
+      font-size: 14.5px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      margin-bottom: 26px;
+    }
+    .qr-container {
+      background: rgba(11, 15, 25, 0.7);
+      border: 1.5px dashed rgba(212, 175, 55, 0.35);
+      border-radius: 22px;
+      padding: 24px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .qr-box {
+      width: 190px;
+      height: 190px;
+      background: #FFF;
+      border-radius: 16px;
+      padding: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+    .qr-box img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      border-radius: 8px;
+    }
+    .qr-hint {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary-light);
+    }
+    .platforms-row {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .platform-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 12px;
+      font-weight: 600;
+      color: #E2E8F0;
+    }
+    .copy-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(11, 15, 25, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 14px;
+      padding: 8px 12px;
+      direction: ltr;
+    }
+    .copy-box input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #94A3B8;
+      font-size: 12px;
+      font-family: monospace;
+      outline: none;
+    }
+    .copy-btn {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #0B0F19;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-weight: 800;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
+    }
+    .footer-note {
+      font-size: 11.5px;
+      color: #64748B;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="guard-card">
+    <img src="/rakna_applogo.png" alt="ركنة - Rakna" class="app-logo" />
+    <div class="device-badge">
+      <span>🚫</span>
+      <span>خاصية غير مدعومة على أجهزة الكمبيوتر</span>
+    </div>
+    <h1 class="guard-title">هذه الخاصية تعمل فقط من خلال <span>الهاتف المحمول</span></h1>
+    <p class="guard-desc">
+      عذراً، نظام وتطبيق <strong>"ركنة"</strong> مصمم للتواصل المباشر والتوثيق الآمن عبر <strong>الهواتف الذكية والأجهزة اللوحية فقط</strong> (Android و iOS).<br>
+      لحماية خصوصية صاحب السيارة ومنع الرسائل المزيفة، تم قصر الخدمة على الهواتف المحمولة.
+    </p>
+
+    <div class="qr-container">
+      <div class="qr-box">
+        ${qrCodeDataUrl ? `<img src="${qrCodeDataUrl}" alt="امسح الرمز بهاتفك" />` : ''}
+      </div>
+      <div class="qr-hint">📷 افتح كاميرا هاتفك وامسح الرمز للمتابعة فوراً</div>
+    </div>
+
+    <div class="platforms-row">
+      <div class="platform-pill">📱 هواتف وتابلت أندرويد (Android)</div>
+      <div class="platform-pill">🍏 هواتف آيفون وآيباد (iOS)</div>
+    </div>
+
+    <div class="copy-box">
+      <input type="text" value="${pageUrl}" id="pageUrlInput" readonly />
+      <button class="copy-btn" onclick="copyLink()">نسخ الرابط</button>
+    </div>
+
+    <p class="footer-note">منظومة ركنة الذكية لحل أزمة الركنات وحماية المركبات • بخصوصية 100%</p>
+  </div>
+
+  <script>
+    function copyLink() {
+      var input = document.getElementById('pageUrlInput');
+      input.select();
+      input.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(input.value).then(function() {
+        alert('تم نسخ الرابط! يمكنك إرساله لهاتفك عبر واتساب أو تيليجرام لفتحه.');
+      }).catch(function() {
+        alert('يمكنك تحديد الرابط ونسخه يدوياً.');
+      });
+    }
+
+    // iPadOS Safari touch detection fallback
+    (function() {
+      var ua = navigator.userAgent || '';
+      var isTouchMac = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+      if (isTouchMac && window.location.search.indexOf('force_mobile=1') === -1) {
+        var sep = window.location.search ? '&' : '?';
+        window.location.href = window.location.href + sep + 'force_mobile=1';
+      }
+    })();
+  </script>
+</body>
+</html>`;
   }
 }
