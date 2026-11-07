@@ -160,6 +160,8 @@ export default function App() {
   const [printShowCutLines, setPrintShowCutLines] = useState(true);
   const [printShowHeader, setPrintShowHeader] = useState(true);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isShippingSlipOpen, setIsShippingSlipOpen] = useState(false);
+  const [selectedOrderForShipping, setSelectedOrderForShipping] = useState(null);
 
   const [waConfig, setWaConfig] = useState({
     provider: 'BAILEYS',
@@ -705,6 +707,49 @@ export default function App() {
     window.addEventListener('afterprint', handleAfterPrint);
     return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
+
+
+  // Shipping Slip Handlers
+  const handleOpenShippingSlip = (order) => {
+    setSelectedOrderForShipping(order);
+    setIsShippingSlipOpen(true);
+  };
+
+  const handlePrintShippingSlip = () => {
+    if (isPrinting) return;
+    setIsPrinting(true);
+    document.body.classList.add('shipping-slip-active');
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove('shipping-slip-active');
+        setIsPrinting(false);
+      }, 1500);
+    }, 150);
+  };
+
+  const handleCopyShippingDetails = (order) => {
+    if (!order) return;
+    const itemsText = order.items && order.items.length > 0
+      ? order.items.map((it) => `${it.productName || 'منتج'} (x${it.quantity})`).join('، ')
+      : 'منتجات متجر ركنة';
+
+    const text = `📦 *بوليصة شحن طلب ركنة - RAKNA*
+🔢 رقم الطلب: ${order.orderNumber}
+👤 العميل: ${order.recipientName}
+📞 رقم الهاتف: ${order.phone}
+📍 المحافظة: ${order.governorate}
+🏠 العنوان التفصيلي: ${order.addressDetails}
+💰 المبلغ المطلوب تحصيله (COD): ${order.totalPrice} ج.م
+📦 المحتويات: ${itemsText}
+🛵 طريقة الدفع: الدفع عند الاستلام نقداً`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('تم نسخ تفاصيل الشحن بنجاح لرسائل الواتساب أو شركة الشحن! 📋');
+    }).catch(() => {
+      alert(text);
+    });
+  };
 
   const handlePrintStudio = () => {
     if (isPrinting) return;
@@ -2413,6 +2458,26 @@ export default function App() {
                               )}
                             </div>
                           </td>
+                          <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenShippingSlip(order)}
+                              className="btn-gold"
+                              style={{
+                                padding: '7px 12px',
+                                fontSize: '0.8rem',
+                                fontWeight: 800,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                whiteSpace: 'nowrap',
+                              }}
+                              title="طباعة بوليصة شحن وتفاصيل العميل"
+                            >
+                              <Printer size={15} />
+                              <span>طباعة الشحن</span>
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -3284,6 +3349,264 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              {/* ════════════════ SHIPPING SLIP & WAYBILL PRINT MODAL ════════════════ */}
+              {isShippingSlipOpen && selectedOrderForShipping && (
+                <div
+                  className="shipping-slip-modal"
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(5, 7, 10, 0.94)',
+                    backdropFilter: 'blur(10px)',
+                    zIndex: 10000,
+                    overflowY: 'auto',
+                    padding: '24px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                  }}
+                >
+                  {/* Toolbar (Hidden in Print) */}
+                  <div
+                    className="no-print shipping-slip-toolbar"
+                    style={{
+                      width: '100%',
+                      maxWidth: '820px',
+                      background: 'rgba(20, 26, 40, 0.95)',
+                      border: '1px solid var(--gold-primary)',
+                      borderRadius: '16px',
+                      padding: '16px 22px',
+                      marginBottom: '20px',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '14px',
+                      position: 'sticky',
+                      top: '16px',
+                      zIndex: 10001,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Truck size={22} color="var(--gold-primary)" />
+                      <div>
+                        <h4 style={{ color: '#fff', fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>
+                          بوليصة شحن وتوصيل طلب COD • {selectedOrderForShipping.orderNumber}
+                        </h4>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '2px 0 0' }}>
+                          العميل: {selectedOrderForShipping.recipientName} • المحافظة: {selectedOrderForShipping.governorate}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyShippingDetails(selectedOrderForShipping)}
+                        className="btn-ghost"
+                        style={{ padding: '8px 14px', fontSize: '0.85rem', gap: '6px' }}
+                        title="نسخ نص بيانات الشحن للواتساب"
+                      >
+                        <Copy size={16} />
+                        <span>نسخ للواتساب</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handlePrintShippingSlip}
+                        disabled={isPrinting}
+                        className="btn-gold"
+                        style={{ padding: '8px 20px', fontSize: '0.9rem', fontWeight: 800, gap: '8px', cursor: isPrinting ? 'not-allowed' : 'pointer' }}
+                      >
+                        <Printer size={18} />
+                        <span>{isPrinting ? 'جاري التحضير للطباعة...' : 'طباعة البوليصة الآن (Print)'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsShippingSlipOpen(false);
+                          setSelectedOrderForShipping(null);
+                        }}
+                        className="btn-ghost"
+                        style={{ padding: '8px 14px', fontSize: '0.9rem', color: '#f87171' }}
+                        title="إغلاق"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Printable Waybill Sheet (Pure White Background & Black Text) */}
+                  <div
+                    className="printable-area shipping-waybill-canvas"
+                    style={{
+                      width: '100%',
+                      maxWidth: '750px',
+                      background: '#ffffff',
+                      backgroundColor: '#ffffff',
+                      color: '#000000',
+                      borderRadius: '12px',
+                      padding: '28px',
+                      border: '2px solid #000000',
+                      boxShadow: '0 12px 48px rgba(0,0,0,0.8)',
+                      direction: 'rtl',
+                    }}
+                  >
+                    {/* Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2.5px solid #000000', paddingBottom: '14px', marginBottom: '18px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#000000' }}>🚗 ركنة RAKNA</span>
+                          <span style={{ fontSize: '0.8rem', background: '#000000', color: '#ffffff', padding: '3px 8px', borderRadius: '4px', fontWeight: 800 }}>
+                            بوليصة شحن وتوصيل
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: '#000000', marginTop: '4px', fontWeight: 600 }}>
+                          منظومة حماية المركبات والتواصل الذكي • إشعار تسليم COD
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'left', direction: 'ltr' }}>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: 'monospace', color: '#000000', letterSpacing: '1px' }}>
+                          {selectedOrderForShipping.orderNumber}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: '#333333', fontWeight: 600 }}>
+                          تاريخ الطلب: {new Date(selectedOrderForShipping.createdAt || Date.now()).toLocaleDateString('ar-EG')}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Grid: Sender & Recipient Info */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '18px' }}>
+                      {/* Recipient Info (To) */}
+                      <div style={{ border: '2px solid #000000', borderRadius: '8px', padding: '12px', background: '#ffffff' }}>
+                        <div style={{ fontWeight: 900, fontSize: '0.95rem', borderBottom: '1.5px solid #000000', paddingBottom: '6px', marginBottom: '8px', color: '#000000', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>📍 بيانات المستلم (العميل)</span>
+                        </div>
+                        <div style={{ fontSize: '0.88rem', marginBottom: '5px', color: '#000000' }}>
+                          <b>الاسم:</b> <span style={{ fontWeight: 800, fontSize: '0.95rem' }}>{selectedOrderForShipping.recipientName}</span>
+                        </div>
+                        <div style={{ fontSize: '0.88rem', marginBottom: '5px', color: '#000000' }}>
+                          <b>الهاتف:</b> <span style={{ fontWeight: 900, fontFamily: 'monospace', fontSize: '1rem', direction: 'ltr', display: 'inline-block' }}>{selectedOrderForShipping.phone}</span>
+                        </div>
+                        <div style={{ fontSize: '0.88rem', marginBottom: '5px', color: '#000000' }}>
+                          <b>المحافظة:</b> <span style={{ fontWeight: 800 }}>{selectedOrderForShipping.governorate}</span>
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#000000', lineHeight: 1.5 }}>
+                          <b>العنوان التفصيلي:</b> {selectedOrderForShipping.addressDetails}
+                        </div>
+                      </div>
+
+                      {/* Sender Info (From) */}
+                      <div style={{ border: '1.5px solid #000000', borderRadius: '8px', padding: '12px', background: '#f9fafb' }}>
+                        <div style={{ fontWeight: 900, fontSize: '0.95rem', borderBottom: '1.5px solid #000000', paddingBottom: '6px', marginBottom: '8px', color: '#000000', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>🏢 بيانات الراسل (المتجر)</span>
+                        </div>
+                        <div style={{ fontSize: '0.85rem', marginBottom: '5px', color: '#000000' }}>
+                          <b>الراسل:</b> شركة ركنة الذكية (RAKNA Tech)
+                        </div>
+                        <div style={{ fontSize: '0.85rem', marginBottom: '5px', color: '#000000' }}>
+                          <b>خدمة العملاء:</b> دعم متجر وتطبيق ركنة الرسمي
+                        </div>
+                        <div style={{ fontSize: '0.85rem', marginBottom: '5px', color: '#000000' }}>
+                          <b>الموقع الإلكتروني:</b> rakna.tech
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#374151', marginTop: '6px', lineHeight: 1.4 }}>
+                          <b>طبيعة الشحنة:</b> ملصقات ذكية مشفرة لحماية السيارات وكروت تفعيل
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Package Contents Table */}
+                    <div style={{ border: '1.5px solid #000000', borderRadius: '8px', overflow: 'hidden', marginBottom: '18px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
+                        <thead>
+                          <tr style={{ background: '#f3f4f6', borderBottom: '1.5px solid #000000', fontSize: '0.85rem', color: '#000000' }}>
+                            <th style={{ padding: '8px 12px' }}>م</th>
+                            <th style={{ padding: '8px 12px' }}>المنتج / محتويات الطرد</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'center' }}>الكمية</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'left' }}>سعر الوحدة</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'left' }}>الإجمالي</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedOrderForShipping.items && selectedOrderForShipping.items.length > 0 ? (
+                            selectedOrderForShipping.items.map((it, idx) => (
+                              <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb', fontSize: '0.85rem', color: '#000000' }}>
+                                <td style={{ padding: '8px 12px', fontWeight: 700 }}>{idx + 1}</td>
+                                <td style={{ padding: '8px 12px', fontWeight: 800 }}>{it.productName || 'ملصق ركنة الذكي'}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 900 }}>{it.quantity || 1}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace' }}>{it.unitPrice || selectedOrderForShipping.totalPrice} EGP</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace', fontWeight: 800 }}>
+                                  {(it.unitPrice ? it.unitPrice * (it.quantity || 1) : selectedOrderForShipping.totalPrice)} EGP
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr style={{ fontSize: '0.85rem', color: '#000000' }}>
+                              <td style={{ padding: '8px 12px', fontWeight: 700 }}>1</td>
+                              <td style={{ padding: '8px 12px', fontWeight: 800 }}>ملصق حماية المركبات ركنة (Tag)</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 900 }}>1</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace' }}>{selectedOrderForShipping.totalPrice} EGP</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace', fontWeight: 800 }}>{selectedOrderForShipping.totalPrice} EGP</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Big COD Cash Collection Banner */}
+                    <div style={{
+                      border: '2.5px solid #000000',
+                      borderRadius: '10px',
+                      padding: '14px 18px',
+                      background: '#f9fafb',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '18px',
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 900, color: '#000000' }}>
+                          💵 المبلغ المطلوب تحصيله من العميل نقداً (COD):
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: '#374151', marginTop: '2px' }}>
+                          طريقة الدفع: الدفع عند الاستلام • شامل مصاريف الشحن والتوصيل
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#000000', fontFamily: 'monospace', letterSpacing: '1px' }}>
+                          {selectedOrderForShipping.totalPrice} EGP
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Courier Instructions & Signatures */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '14px', borderTop: '1.5px dashed #000000', paddingTop: '12px' }}>
+                      <div style={{ fontSize: '0.78rem', color: '#1f2937', lineHeight: 1.6 }}>
+                        <b>⚠️ تعليمات هامة لمندوب شركة الشحن:</b><br />
+                        • يرجى الاتصال بالعميل قبل التحرك للتسليم للتأكد من تواجده بالعنوان.<br />
+                        • لا يُسمح بفتح الطرد أو العبث بالملصق الأمني إلا بعد تحصيل كامل المبلغ.<br />
+                        • في حال تعذر الوصول، يرجى إعادة المحاولة أو التواصل مع خدمة العملاء.
+                      </div>
+                      <div style={{ borderRight: '1.5px dashed #000000', paddingRight: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div style={{ fontSize: '0.8rem', color: '#000000' }}>
+                          <b>توقيع مستلم الشحنة:</b> ..............................
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#000000', marginTop: '8px' }}>
+                          <b>توقيع وتاريخ المندوب:</b> ..............................
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
 
@@ -3374,6 +3697,7 @@ export default function App() {
                         <th style={{ padding: '12px' }}>طريقة الدفع</th>
                         <th style={{ padding: '12px' }}>حالة الشحن</th>
                         <th style={{ padding: '12px' }}>تحديث الحالة</th>
+                        <th style={{ padding: '12px', textAlign: 'center' }}>بوليصة الشحن</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3462,6 +3786,26 @@ export default function App() {
                                   </button>
                                 )}
                               </div>
+                            </td>
+                            <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenShippingSlip(order)}
+                                className="btn-gold"
+                                style={{
+                                  padding: '7px 14px',
+                                  fontSize: '0.82rem',
+                                  fontWeight: 800,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  whiteSpace: 'nowrap',
+                                }}
+                                title="طباعة بوليصة شحن وتفاصيل العميل"
+                              >
+                                <Printer size={15} />
+                                <span>طباعة الشحن</span>
+                              </button>
                             </td>
                           </tr>
                         ))

@@ -395,6 +395,54 @@ body {
     padding: 18px !important;
   }
 
+
+  /* Shipping Waybill Specific Print Rules */
+  body.shipping-slip-active .dashboard-layout,
+  body.shipping-slip-active .main-content > .fade-in > *:not(.shipping-slip-modal),
+  body.shipping-slip-active .glass-panel {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  .shipping-slip-modal {
+    position: static !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .shipping-slip-toolbar {
+    display: none !important;
+  }
+
+  .shipping-waybill-canvas {
+    display: block !important;
+    visibility: visible !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: 2px solid #000000 !important;
+    padding: 20px !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .shipping-waybill-canvas * {
+    color: #000000 !important;
+    text-shadow: none !important;
+  }
+
   .print-activation-card .act-code-box {
     background: #f3f4f6 !important;
     background-color: #f3f4f6 !important;
