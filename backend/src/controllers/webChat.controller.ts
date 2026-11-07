@@ -33,8 +33,9 @@ export class WebChatController {
           uaLower.includes('cros'));
 
       const isForceMobile = req.query.force_mobile === '1';
+      const isGuardRequested = req.query.guard === 'desktop';
 
-      if (isDesktopUA && !isForceMobile) {
+      if ((isDesktopUA || isGuardRequested) && !isForceMobile) {
         const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
         const host = req.get('host') || 'rakna.tech';
         const pageUrl = `${protocol}://${host}/t/${encodeURIComponent(rawTag)}`;
@@ -136,16 +137,16 @@ export class WebChatController {
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #D4AF37;
-      --primary-light: #F3E5AB;
-      --primary-dark: #AA820A;
-      --bg-dark: #0B0F19;
-      --card-bg: rgba(22, 30, 49, 0.75);
-      --card-border: rgba(212, 175, 55, 0.2);
-      --text-main: #F8FAFC;
-      --text-muted: #94A3B8;
-      --bubble-user: #D4AF37;
-      --bubble-owner: #1E293B;
+      --primary: #EAB308;
+      --primary-light: #FEF08A;
+      --primary-dark: #CA8A04;
+      --bg-page: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --card-border: #E2E8F0;
+      --text-main: #0F172A;
+      --text-muted: #64748B;
+      --bubble-user: #FACC15;
+      --bubble-owner: #F1F5F9;
       --danger: #EF4444;
       --success: #10B981;
     }
@@ -157,14 +158,17 @@ export class WebChatController {
       font-family: 'Cairo', system-ui, -apple-system, sans-serif;
     }
     body {
-      background-color: var(--bg-dark);
+      background-color: var(--bg-page);
       background-image: 
-        radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.15) 0%, transparent 50%),
-        radial-gradient(circle at 100% 100%, rgba(30, 41, 59, 0.4) 0%, transparent 40%);
+        radial-gradient(circle at 50% 0%, rgba(250, 204, 21, 0.22) 0%, transparent 55%),
+        radial-gradient(circle at 10% 80%, rgba(234, 179, 8, 0.12) 0%, transparent 50%),
+        radial-gradient(circle at 90% 40%, rgba(250, 204, 21, 0.15) 0%, transparent 45%);
       color: var(--text-main);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     /* Top Sticky App Download Banner */
@@ -172,15 +176,15 @@ export class WebChatController {
       position: sticky;
       top: 0;
       z-index: 100;
-      background: rgba(15, 23, 42, 0.92);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(212, 175, 55, 0.25);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1.5px solid rgba(234, 179, 8, 0.35);
       padding: 10px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04), 0 2px 10px rgba(234, 179, 8, 0.12);
     }
     .app-banner-left {
       display: flex;
@@ -191,14 +195,14 @@ export class WebChatController {
       width: 44px;
       height: 44px;
       border-radius: 12px;
-      background: #151c2c;
+      background: #FFFFFF;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
       flex-shrink: 0;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4), 0 0 10px rgba(212, 175, 55, 0.25);
-      border: 1px solid rgba(212, 175, 55, 0.4);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), 0 0 10px rgba(234, 179, 8, 0.25);
+      border: 1.5px solid rgba(234, 179, 8, 0.45);
     }
     .app-logo-badge img {
       width: 100%;
@@ -208,18 +212,18 @@ export class WebChatController {
     }
     .app-banner-text h4 {
       font-size: 14px;
-      font-weight: 700;
-      color: #FFF;
+      font-weight: 800;
+      color: #0F172A;
       line-height: 1.2;
     }
     .app-banner-text p {
       font-size: 11px;
-      color: var(--primary-light);
+      color: #64748B;
       margin-top: 2px;
     }
     .btn-download {
-      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-      color: #0B0F19;
+      background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+      color: #0F172A;
       font-size: 12px;
       font-weight: 800;
       padding: 8px 16px;
@@ -228,13 +232,13 @@ export class WebChatController {
       display: flex;
       align-items: center;
       gap: 6px;
-      box-shadow: 0 4px 12px rgba(212, 175, 55, 0.35);
+      box-shadow: 0 4px 14px rgba(234, 179, 8, 0.35);
       transition: all 0.2s ease;
       white-space: nowrap;
     }
     .btn-download:hover {
       transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(212, 175, 55, 0.5);
+      box-shadow: 0 6px 18px rgba(234, 179, 8, 0.5);
     }
 
     /* Container */
@@ -250,12 +254,12 @@ export class WebChatController {
 
     /* Car Protection Card */
     .car-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 18px;
       padding: 16px;
       margin-bottom: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 0 25px rgba(234, 179, 8, 0.08);
       position: relative;
       overflow: hidden;
     }
@@ -266,7 +270,7 @@ export class WebChatController {
       right: 0;
       left: 0;
       height: 3px;
-      background: linear-gradient(90deg, var(--primary) 0%, #F59E0B 100%);
+      background: linear-gradient(90deg, #FACC15 0%, #EAB308 100%);
     }
     .car-header {
       display: flex;
@@ -282,8 +286,8 @@ export class WebChatController {
       border-radius: 20px;
       font-size: 12px;
       font-weight: 700;
-      background: rgba(16, 185, 129, 0.15);
-      color: #34D399;
+      background: rgba(16, 185, 129, 0.12);
+      color: #059669;
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
     .status-dot {
@@ -301,7 +305,7 @@ export class WebChatController {
     .car-title {
       font-size: 18px;
       font-weight: 800;
-      color: #FFF;
+      color: #0F172A;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -314,37 +318,38 @@ export class WebChatController {
     }
     .meta-tag {
       font-size: 12px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: #F1F5F9;
+      border: 1px solid #E2E8F0;
       padding: 4px 10px;
       border-radius: 8px;
-      color: var(--text-muted);
+      color: #475569;
     }
     .meta-tag b {
-      color: #FFF;
+      color: #0F172A;
     }
     .zero-knowledge-notice {
       display: flex;
       align-items: center;
       gap: 6px;
       font-size: 11px;
-      color: var(--text-muted);
+      color: #64748B;
       margin-top: 10px;
       padding-top: 10px;
-      border-top: 1px dashed rgba(255, 255, 255, 0.08);
+      border-top: 1px dashed #E2E8F0;
     }
 
     /* Inactive / Error State Cards */
     .state-card {
       text-align: center;
       padding: 48px 24px 40px;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
       border-radius: 20px;
       margin: 48px auto;
       max-width: 440px;
       position: relative;
       overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
     }
     .state-card::before {
       content: '';
@@ -359,42 +364,42 @@ export class WebChatController {
     .state-title {
       font-size: 20px;
       font-weight: 800;
-      color: #FFF;
+      color: #0F172A;
       margin-bottom: 10px;
       line-height: 1.3;
     }
     .state-body {
       font-size: 13px;
-      color: var(--text-muted);
+      color: #64748B;
       line-height: 1.7;
       max-width: 340px;
       margin: 0 auto 24px;
     }
-    .state-body b { color: #CBD5E1; }
+    .state-body b { color: #1E293B; }
     .state-cta {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-      color: #0B0F19;
+      background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+      color: #0F172A;
       font-size: 13px;
       font-weight: 800;
       padding: 12px 24px;
       border-radius: 24px;
       text-decoration: none;
-      box-shadow: 0 4px 16px rgba(212, 175, 55, 0.35);
+      box-shadow: 0 4px 16px rgba(234, 179, 8, 0.35);
       transition: all 0.2s ease;
     }
-    .state-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(212,175,55,0.5); }
+    .state-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(234, 179, 8, 0.5); }
     .state-tag-pill {
       display: inline-block;
       margin-bottom: 16px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.12);
+      background: #F1F5F9;
+      border: 1px solid #E2E8F0;
       padding: 4px 14px;
       border-radius: 20px;
       font-size: 13px;
-      color: var(--text-muted);
+      color: #475569;
       font-weight: 700;
       letter-spacing: 0.5px;
     }
@@ -404,36 +409,36 @@ export class WebChatController {
       flex: 1;
       display: flex;
       flex-direction: column;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
       border-radius: 20px;
       overflow: hidden;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 12px 36px -8px rgba(0, 0, 0, 0.07), 0 0 20px rgba(234, 179, 8, 0.05);
     }
     .chat-header {
       padding: 12px 16px;
-      background: rgba(15, 23, 42, 0.6);
-      border-bottom: 1px solid rgba(212, 175, 55, 0.15);
+      background: #F8FAFC;
+      border-bottom: 1px solid #E2E8F0;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
     .chat-header-title {
       font-size: 13px;
-      font-weight: 700;
-      color: var(--primary-light);
+      font-weight: 800;
+      color: #0F172A;
       display: flex;
       align-items: center;
       gap: 6px;
     }
     .chat-lock-tag {
       font-size: 11px;
-      background: rgba(212, 175, 55, 0.15);
-      color: var(--primary);
-      border: 1px solid rgba(212, 175, 55, 0.3);
+      background: rgba(234, 179, 8, 0.12);
+      color: #854D0E;
+      border: 1px solid rgba(234, 179, 8, 0.35);
       padding: 2px 8px;
       border-radius: 12px;
-      font-weight: 600;
+      font-weight: 700;
     }
 
     /* Messages Thread */
@@ -446,17 +451,18 @@ export class WebChatController {
       gap: 12px;
       min-height: 200px;
       max-height: 380px;
+      background: #FAFAFA;
     }
     .empty-state {
       margin: auto;
       text-align: center;
-      color: var(--text-muted);
+      color: #64748B;
       padding: 20px;
     }
     .empty-icon {
       font-size: 40px;
       margin-bottom: 8px;
-      color: var(--primary);
+      color: #EAB308;
     }
     .message-item {
       display: flex;
@@ -482,16 +488,18 @@ export class WebChatController {
       position: relative;
     }
     .message-item.me .message-bubble {
-      background: linear-gradient(135deg, #D4AF37 0%, #C49726 100%);
-      color: #0B0F19;
-      font-weight: 600;
+      background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+      color: #1E1B4B;
+      font-weight: 700;
       border-bottom-right-radius: 4px;
+      box-shadow: 0 2px 8px rgba(234, 179, 8, 0.25);
     }
     .message-item.owner .message-bubble {
-      background: #1E293B;
-      color: #F8FAFC;
-      border: 1px solid rgba(212, 175, 55, 0.25);
+      background: #F1F5F9;
+      color: #0F172A;
+      border: 1px solid #E2E8F0;
       border-bottom-left-radius: 4px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
     }
     .message-info {
       display: flex;
@@ -499,7 +507,7 @@ export class WebChatController {
       gap: 6px;
       font-size: 10px;
       margin-top: 3px;
-      color: var(--text-muted);
+      color: #64748B;
     }
     .message-item.me .message-info {
       justify-content: flex-start;
@@ -508,20 +516,20 @@ export class WebChatController {
       justify-content: flex-end;
     }
     .owner-badge {
-      color: var(--primary);
+      color: #CA8A04;
       font-weight: 700;
     }
 
     /* Quick Messages Panel */
     .quick-panel {
       padding: 14px;
-      background: rgba(15, 23, 42, 0.85);
-      border-top: 1px solid rgba(212, 175, 55, 0.15);
+      background: #FFFFFF;
+      border-top: 1px solid #E2E8F0;
     }
     .quick-title {
       font-size: 12px;
-      font-weight: 700;
-      color: var(--primary-light);
+      font-weight: 800;
+      color: #0F172A;
       margin-bottom: 10px;
       display: flex;
       align-items: center;
@@ -533,9 +541,9 @@ export class WebChatController {
       gap: 8px;
     }
     .btn-quick {
-      background: rgba(30, 41, 59, 0.8);
-      border: 1px solid rgba(212, 175, 55, 0.25);
-      color: #F1F5F9;
+      background: #F8FAFC;
+      border: 1.5px solid #E2E8F0;
+      color: #1E293B;
       padding: 10px 12px;
       border-radius: 12px;
       font-size: 12px;
@@ -549,8 +557,9 @@ export class WebChatController {
       line-height: 1.3;
     }
     .btn-quick:hover:not(:disabled) {
-      background: rgba(212, 175, 55, 0.18);
-      border-color: var(--primary);
+      background: #FEF3C7;
+      border-color: #F59E0B;
+      color: #92400E;
       transform: translateY(-1px);
     }
     .btn-quick:active:not(:disabled) {
@@ -565,27 +574,29 @@ export class WebChatController {
       flex-shrink: 0;
     }
     .btn-quick.selected {
-      background: rgba(212, 175, 55, 0.28) !important;
-      border-color: var(--primary) !important;
-      box-shadow: 0 0 14px rgba(212, 175, 55, 0.45) !important;
-      outline: 2px solid var(--primary);
+      background: #FEF08A !important;
+      border-color: #EAB308 !important;
+      color: #713F12 !important;
+      box-shadow: 0 0 16px rgba(234, 179, 8, 0.35) !important;
+      outline: 2px solid #EAB308;
     }
 
     /* Camera Capture Box */
     .camera-card {
       margin-top: 14px;
       margin-bottom: 12px;
-      background: rgba(20, 27, 45, 0.9);
-      border: 1.5px dashed rgba(212, 175, 55, 0.45);
+      background: #FFFFFF;
+      border: 2px dashed rgba(234, 179, 8, 0.55);
       border-radius: 16px;
       padding: 16px;
       text-align: center;
       transition: all 0.2s ease;
+      box-shadow: 0 4px 18px rgba(234, 179, 8, 0.08);
     }
     .camera-card.has-photo {
       border-style: solid;
-      border-color: rgba(34, 197, 94, 0.6);
-      background: rgba(15, 23, 42, 0.95);
+      border-color: #10B981;
+      background: #F0FDF4;
     }
     .camera-icon-wrapper {
       font-size: 32px;
@@ -594,12 +605,12 @@ export class WebChatController {
     .camera-prompt-title {
       font-size: 13.5px;
       font-weight: 800;
-      color: #F8FAFC;
+      color: #0F172A;
       margin-bottom: 4px;
     }
     .camera-prompt-desc {
       font-size: 11.5px;
-      color: var(--text-muted);
+      color: #64748B;
       margin-bottom: 12px;
       line-height: 1.4;
     }
@@ -608,9 +619,9 @@ export class WebChatController {
       align-items: center;
       justify-content: center;
       gap: 8px;
-      background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0.08) 100%);
-      border: 1.5px solid var(--primary);
-      color: var(--primary-light);
+      background: linear-gradient(135deg, #FEF08A 0%, #FDE047 100%);
+      border: 1.5px solid #EAB308;
+      color: #713F12;
       padding: 10px 18px;
       border-radius: 12px;
       font-weight: 800;
@@ -619,9 +630,10 @@ export class WebChatController {
       width: 100%;
       max-width: 260px;
       transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(234, 179, 8, 0.2);
     }
     .btn-camera-trigger:hover {
-      background: rgba(212, 175, 55, 0.28);
+      background: linear-gradient(135deg, #FDE047 0%, #FACC15 100%);
       transform: translateY(-1px);
     }
     .camera-preview-box {
@@ -636,7 +648,7 @@ export class WebChatController {
       height: 170px;
       object-fit: cover;
       border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      border: 1px solid #CBD5E1;
     }
     .camera-preview-overlay {
       display: flex;
@@ -649,8 +661,8 @@ export class WebChatController {
     .preview-badge {
       font-size: 11px;
       font-weight: 800;
-      color: #10B981;
-      background: rgba(16, 185, 129, 0.15);
+      color: #059669;
+      background: rgba(16, 185, 129, 0.12);
       border: 1px solid rgba(16, 185, 129, 0.3);
       padding: 4px 8px;
       border-radius: 8px;
@@ -659,9 +671,9 @@ export class WebChatController {
       gap: 4px;
     }
     .btn-retake {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      color: #F87171;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #DC2626;
       font-size: 11.5px;
       font-weight: 700;
       padding: 5px 10px;
@@ -698,13 +710,13 @@ export class WebChatController {
       position: relative;
       width: 100%;
       max-width: 440px;
-      background: #0f172a;
-      border: 1px solid rgba(212, 175, 55, 0.35);
+      background: #FFFFFF;
+      border: 1px solid #CBD5E1;
       border-radius: 24px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
       animation: modalFadeIn 0.25s ease;
     }
     @keyframes modalFadeIn {
@@ -716,26 +728,26 @@ export class WebChatController {
       align-items: center;
       justify-content: space-between;
       padding: 14px 18px;
-      background: rgba(15, 23, 42, 0.95);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      background: #F8FAFC;
+      border-bottom: 1px solid #E2E8F0;
       z-index: 2;
     }
     .rear-camera-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid rgba(16, 185, 129, 0.35);
-      color: #34D399;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #059669;
       padding: 5px 10px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 800;
     }
     .rear-camera-close-btn {
-      background: rgba(255, 255, 255, 0.1);
+      background: #E2E8F0;
       border: none;
-      color: #fff;
+      color: #334155;
       width: 32px;
       height: 32px;
       border-radius: 50%;
@@ -747,8 +759,8 @@ export class WebChatController {
       transition: background 0.2s;
     }
     .rear-camera-close-btn:hover {
-      background: rgba(239, 68, 68, 0.3);
-      color: #F87171;
+      background: #FEE2E2;
+      color: #DC2626;
     }
     .rear-camera-viewport {
       position: relative;
@@ -777,7 +789,7 @@ export class WebChatController {
       position: absolute;
       width: 24px;
       height: 24px;
-      border-color: #F5BE18;
+      border-color: #FACC15;
       border-style: solid;
     }
     .corner-tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-top-left-radius: 8px; }
@@ -803,7 +815,8 @@ export class WebChatController {
       align-items: center;
       justify-content: center;
       padding: 16px;
-      background: #0f172a;
+      background: #F8FAFC;
+      border-top: 1px solid #E2E8F0;
       gap: 8px;
     }
     .btn-shutter-capture {
@@ -811,7 +824,7 @@ export class WebChatController {
       height: 68px;
       border-radius: 50%;
       background: transparent;
-      border: 4px solid #fff;
+      border: 4px solid #CBD5E1;
       padding: 4px;
       cursor: pointer;
       display: flex;
@@ -821,6 +834,7 @@ export class WebChatController {
     }
     .btn-shutter-capture:hover {
       transform: scale(1.05);
+      border-color: #EAB308;
     }
     .btn-shutter-capture:active {
       transform: scale(0.92);
@@ -829,11 +843,11 @@ export class WebChatController {
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      background: linear-gradient(135deg, #F5BE18 0%, #EAB308 100%);
+      background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
     }
     .rear-camera-footer-note {
       font-size: 11px;
-      color: #94A3B8;
+      color: #64748B;
       font-weight: 600;
     }
 
@@ -844,26 +858,26 @@ export class WebChatController {
       align-items: center;
       justify-content: center;
       gap: 10px;
-      background: linear-gradient(135deg, #F5BE18 0%, #D49B00 100%);
-      color: #000;
+      background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+      color: #0F172A;
       font-size: 14px;
       font-weight: 900;
       padding: 13px 20px;
       border-radius: 14px;
       border: none;
       cursor: pointer;
-      box-shadow: 0 4px 16px rgba(245, 190, 24, 0.3);
+      box-shadow: 0 4px 16px rgba(234, 179, 8, 0.35);
       transition: all 0.25s ease;
       margin-top: 10px;
     }
     .btn-submit-report:hover:not(:disabled) {
       transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(245, 190, 24, 0.5);
+      box-shadow: 0 8px 24px rgba(234, 179, 8, 0.5);
     }
     .btn-submit-report:disabled {
-      background: rgba(51, 65, 85, 0.6);
+      background: #E2E8F0;
       color: #94A3B8;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid #CBD5E1;
       box-shadow: none;
       cursor: not-allowed;
       transform: none;
@@ -883,29 +897,29 @@ export class WebChatController {
       animation: fadeIn 0.3s ease;
     }
     .status-banner.pending {
-      background: rgba(245, 158, 11, 0.14);
-      border: 1px solid rgba(245, 158, 11, 0.4);
-      color: #FBBF24;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: #B45309;
     }
     .status-banner.active {
-      background: rgba(34, 197, 94, 0.14);
-      border: 1px solid rgba(34, 197, 94, 0.4);
-      color: #4ADE80;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      color: #15803D;
     }
     .status-banner.ignored {
-      background: rgba(245, 158, 11, 0.18);
-      border: 1px solid rgba(245, 158, 11, 0.5);
-      color: #FCD34D;
+      background: rgba(245, 158, 11, 0.14);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #B45309;
     }
     .status-banner.blocked {
-      background: rgba(239, 68, 68, 0.18);
-      border: 1px solid rgba(239, 68, 68, 0.5);
-      color: #FCA5A5;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #B91C1C;
     }
     .status-banner.closed {
-      background: rgba(100, 116, 139, 0.2);
-      border: 1px solid rgba(100, 116, 139, 0.4);
-      color: #CBD5E1;
+      background: rgba(100, 116, 139, 0.12);
+      border: 1px solid rgba(100, 116, 139, 0.3);
+      color: #475569;
     }
 
     /* Live Reply Bar */
@@ -913,45 +927,50 @@ export class WebChatController {
       display: flex;
       gap: 8px;
       padding: 12px 14px;
-      background: rgba(15, 23, 42, 0.95);
-      border-top: 1px solid rgba(212, 175, 55, 0.2);
+      background: #FFFFFF;
+      border-top: 1px solid #E2E8F0;
     }
     .live-reply-input {
       flex: 1;
-      background: rgba(30, 41, 59, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: #F8FAFC;
+      border: 1.5px solid #CBD5E1;
       border-radius: 12px;
       padding: 10px 14px;
-      color: #FFF;
+      color: #0F172A;
       font-size: 13px;
       outline: none;
+      user-select: text;
+      -webkit-user-select: text;
     }
     .live-reply-input:focus {
-      border-color: var(--primary);
+      border-color: #EAB308;
+      background: #FFFFFF;
+      box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.15);
     }
     .btn-send-reply {
-      background: var(--primary);
-      color: #000;
+      background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+      color: #0F172A;
       border: none;
-      padding: 0 16px;
+      padding: 0 18px;
       border-radius: 12px;
       font-weight: 800;
       cursor: pointer;
       display: flex;
       align-items: center;
       gap: 6px;
+      box-shadow: 0 4px 12px rgba(234, 179, 8, 0.25);
     }
     .view-once-bubble {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
       padding: 6px 12px;
       border-radius: 10px;
       font-size: 11.5px;
       font-weight: 800;
-      color: #FBBF24;
+      color: #B45309;
       margin-top: 6px;
     }
 
@@ -959,22 +978,22 @@ export class WebChatController {
     .quota-badge {
       font-size: 11px;
       font-weight: 700;
-      color: #F1F5F9;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #334155;
+      background: #F1F5F9;
+      border: 1px solid #E2E8F0;
       padding: 3px 8px;
       border-radius: 10px;
       margin-right: auto;
     }
     .quota-badge b {
-      color: var(--primary);
+      color: #CA8A04;
     }
     .cooldown-badge {
       font-size: 11px;
       font-weight: 700;
-      color: #F59E0B;
-      background: rgba(245, 158, 11, 0.15);
-      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: #B45309;
+      background: #FEF3C7;
+      border: 1px solid #FCD34D;
       padding: 3px 8px;
       border-radius: 10px;
       animation: pulse 1s infinite;
@@ -983,14 +1002,14 @@ export class WebChatController {
       margin-bottom: 14px;
       padding: 16px 18px;
       border-radius: 14px;
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(245, 190, 24, 0.12) 100%);
-      border: 1px solid rgba(245, 190, 24, 0.4);
+      background: #FFFBEB;
+      border: 1px solid #FCD34D;
       text-align: center;
       line-height: 1.5;
       animation: fadeIn 0.3s ease;
     }
     .limit-reached-title {
-      color: #F87171;
+      color: #DC2626;
       font-size: 13.5px;
       font-weight: 800;
       margin-bottom: 6px;
@@ -1000,7 +1019,7 @@ export class WebChatController {
       gap: 6px;
     }
     .limit-reached-text {
-      color: #CBD5E1;
+      color: #475569;
       font-size: 12px;
       margin-bottom: 12px;
     }
@@ -1009,33 +1028,33 @@ export class WebChatController {
       align-items: center;
       justify-content: center;
       gap: 8px;
-      background: linear-gradient(135deg, #F5BE18 0%, #D49B00 100%);
-      color: #000;
+      background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+      color: #0F172A;
       font-weight: 800;
       font-size: 12.5px;
       padding: 9px 20px;
       border-radius: 10px;
       text-decoration: none;
-      box-shadow: 0 4px 14px rgba(245, 190, 24, 0.35);
+      box-shadow: 0 4px 14px rgba(234, 179, 8, 0.35);
       transition: all 0.2s ease;
     }
     .btn-download-app:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 18px rgba(245, 190, 24, 0.5);
+      box-shadow: 0 6px 18px rgba(234, 179, 8, 0.5);
     }
     .toast-popup {
       position: fixed;
       top: 60px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(15, 23, 42, 0.95);
-      border: 1px solid var(--primary);
-      color: #FFF;
+      background: #FFFFFF;
+      border: 1.5px solid #EAB308;
+      color: #0F172A;
       padding: 10px 20px;
       border-radius: 14px;
       font-size: 12.5px;
       font-weight: 700;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 0 15px rgba(234, 179, 8, 0.2);
       z-index: 9999;
       display: flex;
       align-items: center;
@@ -1052,10 +1071,10 @@ export class WebChatController {
       margin-top: 10px;
       padding: 8px 12px;
       border-radius: 10px;
-      background: rgba(212, 175, 55, 0.08);
-      border: 1px dashed rgba(212, 175, 55, 0.3);
+      background: #FEF9C3;
+      border: 1px dashed rgba(234, 179, 8, 0.5);
       font-size: 11px;
-      color: var(--primary-light);
+      color: #854D0E;
       text-align: center;
       display: flex;
       align-items: center;
@@ -1068,18 +1087,61 @@ export class WebChatController {
       text-align: center;
       padding: 16px;
       font-size: 11px;
-      color: var(--text-muted);
+      color: #64748B;
     }
     .footer a {
-      color: var(--primary);
+      color: #CA8A04;
       text-decoration: none;
       font-weight: 700;
+    }
+
+    /* Anti-Inspect Shield Overlay */
+    .inspect-shield-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 99999999;
+      background: rgba(248, 250, 252, 0.98);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+    .inspect-shield-box {
+      background: #FFFFFF;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 26px;
+      padding: 36px 26px;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.1), 0 0 35px rgba(234, 179, 8, 0.2);
+      animation: modalFadeIn 0.3s ease;
     }
   </style>
   <link rel="icon" type="image/png" href="/rakna_applogo.png">
   <link rel="apple-touch-icon" href="/rakna_applogo.png">
 </head>
 <body>
+
+  <!-- Anti-Inspect Security Shield -->
+  <div id="inspectShieldOverlay" class="inspect-shield-overlay">
+    <div class="inspect-shield-box">
+      <div style="font-size: 52px; margin-bottom: 14px;">🛡️</div>
+      <h3 style="font-size: 19px; font-weight: 900; color: #0F172A; margin-bottom: 10px;">أدوات الفحص والمطورين غير مسموح بها</h3>
+      <p style="font-size: 13.5px; color: #64748B; line-height: 1.7; margin-bottom: 20px;">
+        تم حظر أدوات التفتيش والـ <strong>DevTools / Inspect</strong> لحماية أمان المحادثة وخصوصية مالك المركبة.<br>
+        يرجى تصفح الرابط عبر متصفح هاتفك المحمول مباشرة دون تشغيل أدوات الفحص.
+      </p>
+      <div style="display: inline-block; padding: 8px 18px; background: #FEF3C7; border: 1.5px solid #F59E0B; border-radius: 14px; color: #92400E; font-size: 12.5px; font-weight: 800;">
+        ركنة • حماية فورية وخصوصية مشددة
+      </div>
+    </div>
+  </div>
 
   <!-- Sticky Top Smart App Link Banner -->
   <header class="app-banner">
@@ -1921,6 +1983,122 @@ export class WebChatController {
       renderStatusBanner(chatStatus || 'PENDING_ACCEPT');
       startPolling();
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // 🛡️ ANTI-INSPECT & DEVTOOLS INTEGRITY GUARD
+    // ════════════════════════════════════════════════════════════════════════
+    (function initSecurityGuard() {
+      var isTriggered = false;
+
+      function triggerInspectBlock(reason) {
+        if (isTriggered) return;
+        isTriggered = true;
+        try {
+          var overlay = document.getElementById('inspectShieldOverlay');
+          if (overlay) {
+            overlay.style.display = 'flex';
+          }
+          // Clear active form and disable inputs
+          var replyInput = document.getElementById('liveReplyInput');
+          if (replyInput) replyInput.disabled = true;
+          var submitBtn = document.getElementById('btnSubmitReport');
+          if (submitBtn) submitBtn.disabled = true;
+        } catch (e) {}
+      }
+
+      // 1. Block Context Menu (Right Click)
+      document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        return false;
+      }, true);
+
+      // 2. Block Inspect Keyboard Shortcuts
+      document.addEventListener('keydown', function(e) {
+        var k = (e.key || '').toLowerCase();
+        var code = e.keyCode || e.which;
+
+        // F12
+        if (k === 'f12' || code === 123) {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerInspectBlock('F12');
+          return false;
+        }
+
+        // Ctrl+Shift+I / J / C (Windows/Linux) or Cmd+Opt+I / J / C (Mac)
+        if ((e.ctrlKey && e.shiftKey) || (e.metaKey && e.altKey)) {
+          if (k === 'i' || k === 'j' || k === 'c' || code === 73 || code === 74 || code === 67) {
+            e.preventDefault();
+            e.stopPropagation();
+            triggerInspectBlock('Shortcut');
+            return false;
+          }
+        }
+
+        // Ctrl+U or Cmd+U (View Source)
+        if ((e.ctrlKey || e.metaKey) && (k === 'u' || code === 85)) {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerInspectBlock('ViewSource');
+          return false;
+        }
+
+        // Ctrl+S or Cmd+S (Save)
+        if ((e.ctrlKey || e.metaKey) && (k === 's' || code === 83)) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+      }, true);
+
+      // 3. Client-Side Desktop Emulation & Spoofing Guard
+      // When a user opens DevTools on desktop (Windows / Mac) and selects mobile device mode (e.g. iPhone 16),
+      // navigator.platform and userAgentData still expose Windows/Mac desktop environment!
+      function checkDesktopSpoofing() {
+        try {
+          var p = (navigator.platform || '').toLowerCase();
+          var uad = navigator.userAgentData;
+          var uadPlatform = (uad && uad.platform ? uad.platform : '').toLowerCase();
+
+          var isWin = p.indexOf('win') !== -1 || uadPlatform.indexOf('win') !== -1;
+          var isMac = (p.indexOf('macintel') !== -1 && navigator.maxTouchPoints <= 1) || uadPlatform.indexOf('mac') !== -1;
+          var isLinuxDesktop = p.indexOf('linux') !== -1 && !/android/i.test(navigator.userAgent);
+
+          // Check if device uses fine mouse pointer with hover
+          var hasMouseHover = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+          if ((isWin || isMac || isLinuxDesktop) && hasMouseHover) {
+            // PC browser spoofing mobile via DevTools Device Toolbar
+            window.location.href = window.location.pathname + '?guard=desktop';
+          }
+        } catch (e) {}
+      }
+      checkDesktopSpoofing();
+
+      // 4. Docked DevTools Window Metrics Detection
+      function checkDevToolsDimensions() {
+        try {
+          var widthDiff = window.outerWidth - window.innerWidth;
+          var heightDiff = window.outerHeight - window.innerHeight;
+          // Docked DevTools creates a substantial outer/inner discrepancy
+          if (widthDiff > 160 || heightDiff > 160) {
+            triggerInspectBlock('DevTools Dimension');
+          }
+        } catch (e) {}
+      }
+      window.addEventListener('resize', checkDevToolsDimensions);
+      setTimeout(checkDevToolsDimensions, 1000);
+
+      // 5. Anti-Debugging timing detector
+      setInterval(function() {
+        var start = performance.now();
+        debugger;
+        var end = performance.now();
+        if (end - start > 100) {
+          triggerInspectBlock('Debugger');
+        }
+      }, 1000);
+    })();
   </script>
 </body>
 </html>`;
@@ -1953,14 +2131,14 @@ export class WebChatController {
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #D4AF37;
-      --primary-light: #F3E5AB;
-      --primary-dark: #AA820A;
-      --bg-dark: #0B0F19;
-      --card-bg: rgba(22, 30, 49, 0.85);
-      --card-border: rgba(212, 175, 55, 0.25);
-      --text-main: #F8FAFC;
-      --text-muted: #94A3B8;
+      --primary: #EAB308;
+      --primary-light: #FEF08A;
+      --primary-dark: #CA8A04;
+      --bg-page: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --card-border: #E2E8F0;
+      --text-main: #0F172A;
+      --text-muted: #64748B;
     }
     * {
       box-sizing: border-box;
@@ -1969,21 +2147,23 @@ export class WebChatController {
       font-family: 'Cairo', system-ui, -apple-system, sans-serif;
     }
     body {
-      background-color: var(--bg-dark);
+      background-color: var(--bg-page);
       background-image: 
-        radial-gradient(circle at 50% 15%, rgba(212, 175, 55, 0.15) 0%, transparent 60%),
-        radial-gradient(circle at 10% 90%, rgba(30, 41, 59, 0.5) 0%, transparent 50%),
-        radial-gradient(circle at 90% 90%, rgba(212, 175, 55, 0.08) 0%, transparent 50%);
+        radial-gradient(circle at 50% 15%, rgba(250, 204, 21, 0.22) 0%, transparent 60%),
+        radial-gradient(circle at 10% 90%, rgba(241, 245, 249, 0.8) 0%, transparent 50%),
+        radial-gradient(circle at 90% 90%, rgba(234, 179, 8, 0.12) 0%, transparent 50%);
       color: var(--text-main);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 30px 20px;
+      user-select: none;
+      -webkit-user-select: none;
     }
     .guard-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border-radius: 28px;
@@ -1991,7 +2171,7 @@ export class WebChatController {
       width: 100%;
       padding: 40px 32px;
       text-align: center;
-      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(212, 175, 55, 0.12);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.08), 0 0 40px rgba(234, 179, 8, 0.15);
       animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     }
     @keyframes fadeIn {
@@ -2003,9 +2183,9 @@ export class WebChatController {
       height: 82px;
       border-radius: 22px;
       margin: 0 auto 20px;
-      box-shadow: 0 8px 30px rgba(212, 175, 55, 0.35);
-      border: 2px solid rgba(212, 175, 55, 0.45);
-      background: #111;
+      box-shadow: 0 8px 30px rgba(234, 179, 8, 0.35);
+      border: 2px solid rgba(234, 179, 8, 0.45);
+      background: #FFFFFF;
       display: block;
       object-fit: cover;
     }
@@ -2015,9 +2195,9 @@ export class WebChatController {
       gap: 8px;
       padding: 6px 16px;
       border-radius: 20px;
-      background: rgba(239, 68, 68, 0.12);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #F87171;
+      background: rgba(239, 68, 68, 0.10);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: #DC2626;
       font-size: 13px;
       font-weight: 700;
       margin-bottom: 18px;
@@ -2025,37 +2205,39 @@ export class WebChatController {
     .guard-title {
       font-size: 24px;
       font-weight: 900;
-      color: #FFF;
+      color: #0F172A;
       line-height: 1.35;
       margin-bottom: 12px;
       letter-spacing: -0.3px;
     }
     .guard-title span {
-      color: var(--primary);
+      color: #CA8A04;
     }
     .guard-desc {
       font-size: 14.5px;
       line-height: 1.7;
-      color: var(--text-muted);
+      color: #64748B;
       margin-bottom: 26px;
     }
     .qr-container {
-      background: rgba(11, 15, 25, 0.7);
-      border: 1.5px dashed rgba(212, 175, 55, 0.35);
+      background: #F8FAFC;
+      border: 1.5px dashed rgba(234, 179, 8, 0.45);
       border-radius: 22px;
       padding: 24px 20px;
       margin-bottom: 24px;
       display: flex;
       flex-direction: column;
       align-items: center;
+      box-shadow: 0 4px 18px rgba(234, 179, 8, 0.06);
     }
     .qr-box {
       width: 190px;
       height: 190px;
-      background: #FFF;
+      background: #FFFFFF;
       border-radius: 16px;
       padding: 10px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+      border: 1px solid #E2E8F0;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2070,7 +2252,7 @@ export class WebChatController {
     .qr-hint {
       font-size: 13px;
       font-weight: 700;
-      color: var(--primary-light);
+      color: #854D0E;
     }
     .platforms-row {
       display: flex;
@@ -2085,18 +2267,18 @@ export class WebChatController {
       gap: 6px;
       padding: 6px 14px;
       border-radius: 12px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: #F1F5F9;
+      border: 1px solid #E2E8F0;
       font-size: 12px;
-      font-weight: 600;
-      color: #E2E8F0;
+      font-weight: 700;
+      color: #334155;
     }
     .copy-box {
       display: flex;
       align-items: center;
       gap: 8px;
-      background: rgba(11, 15, 25, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
       border-radius: 14px;
       padding: 8px 12px;
       direction: ltr;
@@ -2105,14 +2287,16 @@ export class WebChatController {
       flex: 1;
       background: transparent;
       border: none;
-      color: #94A3B8;
+      color: #0F172A;
       font-size: 12px;
       font-family: monospace;
       outline: none;
+      user-select: text;
+      -webkit-user-select: text;
     }
     .copy-btn {
-      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-      color: #0B0F19;
+      background: linear-gradient(135deg, #FACC15 0%, #EAB308 100%);
+      color: #0F172A;
       border: none;
       padding: 8px 16px;
       border-radius: 10px;
@@ -2121,10 +2305,11 @@ export class WebChatController {
       cursor: pointer;
       font-family: 'Cairo', sans-serif;
       transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(234, 179, 8, 0.3);
     }
     .copy-btn:hover {
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
+      box-shadow: 0 6px 16px rgba(234, 179, 8, 0.45);
     }
     .footer-note {
       font-size: 11.5px;
@@ -2177,6 +2362,21 @@ export class WebChatController {
         alert('يمكنك تحديد الرابط ونسخه يدوياً.');
       });
     }
+
+    // Context menu and key shortcut protection on desktop guard
+    document.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      return false;
+    });
+    document.addEventListener('keydown', function(e) {
+      var k = (e.key || '').toLowerCase();
+      var code = e.keyCode || e.which;
+      if (k === 'f12' || code === 123) { e.preventDefault(); return false; }
+      if ((e.ctrlKey && e.shiftKey) || (e.metaKey && e.altKey)) {
+        if (k === 'i' || k === 'j' || k === 'c' || code === 73 || code === 74 || code === 67) { e.preventDefault(); return false; }
+      }
+      if ((e.ctrlKey || e.metaKey) && (k === 'u' || code === 85)) { e.preventDefault(); return false; }
+    });
 
     // iPadOS Safari touch detection fallback
     (function() {
