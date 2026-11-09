@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
 import { webRateLimitService } from '../services/webRateLimit.service';
+import { ChatExpiryService } from '../services/chatExpiry.service';
 
 function saveBase64Image(base64Str: string): string {
   if (!base64Str || !base64Str.startsWith('data:image')) return base64Str;
@@ -263,15 +264,25 @@ export class ReporterController {
           reporterSessionToken: reporterToken,
           status: 'PENDING_ACCEPT',
         },
+        include: {
+          messages: { orderBy: { createdAt: 'desc' }, take: 2 },
+        },
       });
       if (pendingChat) {
-        res.status(400).json({
-          success: false,
-          message: 'بلاغك السابق قيد الانتظار لموافقة صاحب السيارة بالفعل ⏳',
-          isPending: true,
-          chatId: pendingChat.id,
-        });
-        return;
+        if (ChatExpiryService.isChatExpired(pendingChat)) {
+          await prisma.chat.update({
+            where: { id: pendingChat.id },
+            data: { status: 'EXPIRED' },
+          });
+        } else {
+          res.status(400).json({
+            success: false,
+            message: 'بلاغك السابق قيد الانتظار لموافقة صاحب السيارة بالفعل ⏳',
+            isPending: true,
+            chatId: pendingChat.id,
+          });
+          return;
+        }
       }
 
       // ──────────────── Check if an active chat already exists for this reporter & car ────────────────
@@ -280,12 +291,20 @@ export class ReporterController {
           carId: tag.car.id,
           reporterSessionToken: reporterToken,
           status: 'ACTIVE',
-          createdAt: { gt: new Date(Date.now() - 3 * 60 * 60 * 1000) }, // within last 3 hours
+          createdAt: { gt: new Date(Date.now() - 5 * 60 * 60 * 1000) },
+        },
+        include: {
+          messages: { orderBy: { createdAt: 'desc' }, take: 5 },
         },
         orderBy: { createdAt: 'desc' },
       });
 
-      if (existingChat) {
+      if (existingChat && ChatExpiryService.isChatExpired(existingChat)) {
+        await prisma.chat.update({
+          where: { id: existingChat.id },
+          data: { status: 'EXPIRED' },
+        });
+      } else if (existingChat) {
         // Check cooldown since last reporter message
         const lastReporterMsg = await prisma.message.findFirst({
           where: { chatId: existingChat.id, senderType: 'REPORTER' },
@@ -503,6 +522,21 @@ export class ReporterController {
         return;
       }
 
+      if (chat.status === 'EXPIRED' || ChatExpiryService.isChatExpired(chat)) {
+        if (chat.status !== 'EXPIRED') {
+          await prisma.chat.update({
+            where: { id: chat.id },
+            data: { status: 'EXPIRED' },
+          });
+        }
+        res.status(403).json({
+          success: false,
+          message: 'تم إغلاق المحادثة لمرور 5 ساعات دون رد من صاحب السيارة',
+          isExpired: true,
+        });
+        return;
+      }
+
       if (chat.status === 'IGNORED') {
         res.status(403).json({ success: false, message: 'صاحب السيارة مشغول حالياً ولا يمكن استقبال رسائل ⏳', isIgnored: true });
         return;
@@ -687,6 +721,18 @@ export class ReporterController {
         data: { isRead: true },
       });
 
+      // فحص انتهاء الصلاحية لمرور 5 ساعات دون رد من صاحب السيارة
+      let currentStatus = chat.status;
+      if (currentStatus !== 'EXPIRED' && currentStatus !== 'BLOCKED' && currentStatus !== 'CLOSED') {
+        if (ChatExpiryService.isChatExpired(chat)) {
+          currentStatus = 'EXPIRED';
+          await prisma.chat.update({
+            where: { id: chat.id },
+            data: { status: 'EXPIRED' },
+          });
+        }
+      }
+
       const MAX_UNANSWERED_MESSAGES = 5;
       const lastOwnerMsg = [...chat.messages].reverse().find((m) => m.senderType === 'OWNER');
       const reporterMsgsSince = chat.messages.filter((m) => {
@@ -704,11 +750,13 @@ export class ReporterController {
         success: true,
         chat: {
           id: chat.id,
-          status: chat.status,
+          status: currentStatus,
+          isExpired: currentStatus === 'EXPIRED',
           contactReason: chat.contactReason,
           carTitle: chat.car ? (chat.car.nickname || `${chat.car.brand} ${chat.car.model}`) : '',
           carColor: chat.car?.colorName || '',
         },
+        isExpired: currentStatus === 'EXPIRED',
         messages: chat.messages,
         remainingMessages: remaining,
         limitReached: remaining <= 0,

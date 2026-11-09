@@ -48,6 +48,7 @@ import { syncTagsQrCodesToProduction } from './controllers/admin.controller';
 import { ChatsController } from './controllers/chats.controller';
 import { StoreController } from './controllers/store.controller';
 import { NotificationsController } from './controllers/notifications.controller';
+import { ChatExpiryService } from './services/chatExpiry.service';
 import { AdminController } from './controllers/admin.controller';
 import { SupportController } from './controllers/support.controller';
 import { WebChatController } from './controllers/webChat.controller';
@@ -367,6 +368,12 @@ server.listen(PORT, () => {
   syncTagsQrCodesToProduction().catch((err) => {
     console.error('[TAGS-SYNC-STARTUP] Warning:', err?.message || err);
   });
+
+  // فحص دوري للمحادثات القديمة وإغلاق التي مضى عليها 5 ساعات دون رد
+  ChatExpiryService.sweepExpiredChats().catch(() => {});
+  setInterval(() => {
+    ChatExpiryService.sweepExpiredChats().catch(() => {});
+  }, 5 * 60 * 1000);
 
   // Auto-seed default contact reasons / quick messages if database table is empty
   seedDefaultContactReasonsIfEmpty().catch((err) => {

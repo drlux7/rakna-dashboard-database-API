@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../config/prisma';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { webRateLimitService } from '../services/webRateLimit.service';
+import { ChatExpiryService } from '../services/chatExpiry.service';
 
 export class ChatsController {
   /**
@@ -34,7 +35,7 @@ export class ChatsController {
           },
           messages: {
             orderBy: { createdAt: 'desc' },
-            take: 1, // Last message
+            take: 5,
           },
         },
         orderBy: { lastMessageAt: 'desc' },
@@ -44,12 +45,20 @@ export class ChatsController {
         const lastMsg = ch.messages[0];
         const unread = lastMsg ? !lastMsg.isRead && lastMsg.senderType === 'REPORTER' : false;
 
+        let currentStatus = ch.status;
+        if (currentStatus !== 'EXPIRED' && currentStatus !== 'BLOCKED' && currentStatus !== 'CLOSED') {
+          if (ChatExpiryService.isChatExpired(ch)) {
+            currentStatus = 'EXPIRED';
+            prisma.chat.update({ where: { id: ch.id }, data: { status: 'EXPIRED' } }).catch(() => {});
+          }
+        }
+
         return {
           id: ch.id,
           carTitle: ch.car.nickname || `${ch.car.brand} ${ch.car.model}`,
           carColor: ch.car.colorName,
           contactReason: ch.contactReason,
-          status: ch.status,
+          status: currentStatus,
           lastMessage: lastMsg?.content || 'صورة مرفقة',
           lastMessageTime: lastMsg?.createdAt || ch.createdAt,
           hasUnread: unread,
@@ -99,12 +108,24 @@ export class ChatsController {
         data: { isRead: true },
       });
 
+      // Check if expired after 5 hours without owner reply
+      let chatStatus = chat.status;
+      if (chatStatus !== 'EXPIRED' && chatStatus !== 'BLOCKED' && chatStatus !== 'CLOSED') {
+        if (ChatExpiryService.isChatExpired(chat)) {
+          chatStatus = 'EXPIRED';
+          await prisma.chat.update({
+            where: { id: chat.id },
+            data: { status: 'EXPIRED' },
+          });
+        }
+      }
+
       res.json({
         success: true,
         chat: {
           id: chat.id,
           contactReason: chat.contactReason,
-          status: chat.status,
+          status: chatStatus,
           carTitle: chat.car.nickname || `${chat.car.brand} ${chat.car.model}`,
           messages: chat.messages,
         },
@@ -139,6 +160,17 @@ export class ChatsController {
 
       if (chat.status === 'BLOCKED') {
         res.status(403).json({ success: false, message: 'المحادثة محظورة' });
+        return;
+      }
+
+      if (chat.status === 'EXPIRED' || chat.status === 'CLOSED' || ChatExpiryService.isChatExpired(chat)) {
+        if (chat.status !== 'EXPIRED' && chat.status !== 'CLOSED') {
+          await prisma.chat.update({
+            where: { id: chat.id },
+            data: { status: 'EXPIRED' },
+          });
+        }
+        res.status(403).json({ success: false, message: 'انتهت مهلة الرد على هذه المحادثة (مرور 5 ساعات دون رد).' });
         return;
       }
 
@@ -249,6 +281,17 @@ export class ChatsController {
 
       if (!chat || chat.car.userId !== req.user!.id) {
         res.status(404).json({ success: false, message: 'المحادثة غير موجودة أو ليست في حسابك' });
+        return;
+      }
+
+      if (action === 'OPEN' && (chat.status === 'EXPIRED' || ChatExpiryService.isChatExpired(chat))) {
+        if (chat.status !== 'EXPIRED') {
+          await prisma.chat.update({
+            where: { id },
+            data: { status: 'EXPIRED' },
+          });
+        }
+        res.status(403).json({ success: false, message: 'انتهت صلاحية المحادثة لمرور 5 ساعات دون رد.' });
         return;
       }
 

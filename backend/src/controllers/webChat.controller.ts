@@ -1255,7 +1255,7 @@ export class WebChatController {
             <span>1</span>
             <span>اختر سبب التواصل:</span>
             <div id="quotaBadge" class="quota-badge" style="display:none;"></div>
-            <div id="cooldownBadge" class="cooldown-badge" style="display:none;"> انتظر <b id="countdownSec">15</b>ث</div>
+            <div id="cooldownBadge" class="cooldown-badge" style="display:none;">يرجى الانتظار قليلاً...</div>
           </div>
 
           <div id="limitReachedBanner" class="limit-reached-banner" style="display:none;">
@@ -1471,53 +1471,20 @@ export class WebChatController {
           '</div>' +
         '</div>';
         if (activeBar) activeBar.style.display = 'flex';
+      } else if (status === 'EXPIRED') {
+        clearWebChatState();
+        return;
       } else if (status === 'IGNORED') {
-        const storedUntil = Number(localStorage.getItem('rakna_ignored_until_' + TAG_CODE));
-        let ignoredUntil = storedUntil;
-        if (!ignoredUntil || isNaN(ignoredUntil) || ignoredUntil <= Date.now()) {
-          ignoredUntil = Date.now() + (3 * 60 * 1000);
-          localStorage.setItem('rakna_ignored_until_' + TAG_CODE, String(ignoredUntil));
-        }
-
-        function formatTimer(ms) {
-          const totalSec = Math.max(0, Math.ceil(ms / 1000));
-          const m = Math.floor(totalSec / 60);
-          const s = totalSec % 60;
-          return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
-        }
-
-        const remainingMs = ignoredUntil - Date.now();
-        if (remainingMs <= 0) {
-          resetIgnoredState();
-          return;
-        }
-
         box.innerHTML = '<div class="status-banner ignored">' +
           '<span style="font-size:22px;"></span>' +
           '<div style="flex:1;">' +
             '<div style="font-weight:800; font-size:13px; color:#FBBF24;">صاحب السيارة مشغول حالياً</div>' +
             '<div style="font-size:11.5px; opacity:0.9; margin-top:2px;">اعتذر صاحب السيارة عن عدم إمكانية الرد في الوقت الحالي.</div>' +
-            '<div style="font-size:12px; font-weight:800; color:#F59E0B; margin-top:6px; display:flex; align-items:center; gap:6px;">' +
-              '<span>يمكنك إرسال تنبيه جديد بعد:</span>' +
-              '<b id="ignoredCountdownText" style="background:rgba(245,158,11,0.2); padding:2px 8px; border-radius:6px; border:1px solid rgba(245,158,11,0.4); font-family:monospace; font-size:13px;">' + formatTimer(remainingMs) + '</b>' +
-            '</div>' +
           '</div>' +
         '</div>';
         if (activeBar) activeBar.style.display = 'none';
         hideCompose();
         if (pollTimer) clearInterval(pollTimer);
-
-        if (window.ignoredInterval) clearInterval(window.ignoredInterval);
-        window.ignoredInterval = setInterval(function() {
-          const diff = ignoredUntil - Date.now();
-          const timerSpan = document.getElementById('ignoredCountdownText');
-          if (diff <= 0) {
-            clearInterval(window.ignoredInterval);
-            resetIgnoredState();
-          } else if (timerSpan) {
-            timerSpan.innerText = formatTimer(diff);
-          }
-        }, 1000);
       } else if (status === 'BLOCKED') {
         box.innerHTML = '<div class="status-banner blocked">' +
           '<span style="font-size:20px;"></span>' +
@@ -1896,6 +1863,10 @@ export class WebChatController {
         
         if (res.status === 403 || res.status === 404) {
           const data = await res.json().catch(() => ({}));
+          if (data.isExpired) {
+            clearWebChatState();
+            return;
+          }
           if (data.isBlocked) {
             localStorage.setItem('rakna_status_' + TAG_CODE, 'BLOCKED');
             renderStatusBanner('BLOCKED');
@@ -1908,6 +1879,10 @@ export class WebChatController {
 
         const data = await res.json();
         if (data.success) {
+          if (data.isExpired || (data.chat && data.chat.status === 'EXPIRED')) {
+            clearWebChatState();
+            return;
+          }
           if (data.chat && data.chat.status) {
             chatStatus = data.chat.status;
             localStorage.setItem('rakna_status_' + TAG_CODE, chatStatus);
@@ -1926,8 +1901,47 @@ export class WebChatController {
       }
     }
 
-    function resetIgnoredState() {
+    function clearWebChatState() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
       localStorage.removeItem('rakna_status_' + TAG_CODE);
+      localStorage.removeItem('rakna_chat_' + TAG_CODE);
+      localStorage.removeItem('rakna_ignored_until_' + TAG_CODE);
+      chatStatus = null;
+      currentChatId = null;
+      capturedPhotoBase64 = null;
+      selectedReasonText = '';
+
+      const activeBar = document.getElementById('activeChatInputBar');
+      if (activeBar) activeBar.style.display = 'none';
+
+      const box = document.getElementById('statusBannerBox');
+      if (box) {
+        box.innerHTML = '';
+        box.style.display = 'none';
+      }
+
+      if (messagesBox) {
+        messagesBox.querySelectorAll('.message-item').forEach(el => el.remove());
+        if (emptyState) emptyState.style.display = 'block';
+      }
+
+      const panel = document.getElementById('composePanel');
+      if (panel) panel.style.display = 'block';
+      const promptBox = document.getElementById('cameraPrompt');
+      if (promptBox) promptBox.style.display = 'flex';
+      const previewBox = document.getElementById('cameraPreviewBox');
+      if (previewBox) previewBox.style.display = 'none';
+      const card = document.getElementById('cameraCard');
+      if (card) card.classList.remove('has-photo');
+      document.querySelectorAll('.btn-quick').forEach(b => b.classList.remove('selected'));
+      checkCanSubmit();
+    }
+
+    function resetIgnoredState() {
+      clearWebChatState();
       localStorage.removeItem('rakna_chat_' + TAG_CODE);
       localStorage.removeItem('rakna_ignored_until_' + TAG_CODE);
       chatStatus = null;
@@ -1966,22 +1980,26 @@ export class WebChatController {
     }
 
     // Startup Execution Check
-    const storedIgnoredUntil = Number(localStorage.getItem('rakna_ignored_until_' + TAG_CODE));
-    if (chatStatus === 'IGNORED' && storedIgnoredUntil && Date.now() >= storedIgnoredUntil) {
-      localStorage.removeItem('rakna_status_' + TAG_CODE);
-      localStorage.removeItem('rakna_chat_' + TAG_CODE);
-      localStorage.removeItem('rakna_ignored_until_' + TAG_CODE);
-      chatStatus = null;
-      currentChatId = null;
-    }
+    if (chatStatus === 'EXPIRED') {
+      clearWebChatState();
+    } else {
+      const storedIgnoredUntil = Number(localStorage.getItem('rakna_ignored_until_' + TAG_CODE));
+      if (chatStatus === 'IGNORED' && storedIgnoredUntil && Date.now() >= storedIgnoredUntil) {
+        localStorage.removeItem('rakna_status_' + TAG_CODE);
+        localStorage.removeItem('rakna_chat_' + TAG_CODE);
+        localStorage.removeItem('rakna_ignored_until_' + TAG_CODE);
+        chatStatus = null;
+        currentChatId = null;
+      }
 
-    if (chatStatus === 'IGNORED' || chatStatus === 'BLOCKED') {
-      hideCompose();
-      renderStatusBanner(chatStatus);
-    } else if (currentChatId && sessionToken) {
-      hideCompose();
-      renderStatusBanner(chatStatus || 'PENDING_ACCEPT');
-      startPolling();
+      if (chatStatus === 'IGNORED' || chatStatus === 'BLOCKED') {
+        hideCompose();
+        renderStatusBanner(chatStatus);
+      } else if (currentChatId && sessionToken) {
+        hideCompose();
+        renderStatusBanner(chatStatus || 'PENDING_ACCEPT');
+        startPolling();
+      }
     }
 
     // ════════════════════════════════════════════════════════════════════════

@@ -582,7 +582,7 @@ export default function App() {
               setQrImage(null);
             }
           }
-        } catch (_) {}
+        } catch (_) { }
       }, 4500);
     }
     return () => {
@@ -1054,7 +1054,7 @@ export default function App() {
         queued: Math.max(0, prev.queued - 1),
       }));
       showToast('تم فتح محادثة الواتساب وتحديث الحالة إلى مُرسل ✅');
-    }).catch(() => {});
+    }).catch(() => { });
   };
 
   const handleCopyCode = (code) => {
@@ -6654,728 +6654,728 @@ export default function App() {
                 <>
                   {/* KPI Summary Cards */}
                   <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-                gap: '16px',
-                marginBottom: '26px',
-              }}>
-                <div className="kpi-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>إجمالي المنتجات</span>
-                    <ShoppingBag size={18} color="var(--gold-primary)" />
-                  </div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#fff', marginTop: '8px' }}>
-                    {productsList.length}
-                  </div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    معروضة في شاشة المتجر
-                  </div>
-                </div>
-
-                <div className="kpi-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>متوفرة للطلب الآن</span>
-                    <CheckCircle2 size={18} color="#10b981" />
-                  </div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981', marginTop: '8px' }}>
-                    {productsList.filter((p) => p.inStock !== false).length}
-                  </div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    يمكن للمستخدمين شراؤها فوراً
-                  </div>
-                </div>
-
-                <div className="kpi-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>غير متوفرة حالياً</span>
-                    <AlertCircle size={18} color="#ef4444" />
-                  </div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#ef4444', marginTop: '8px' }}>
-                    {productsList.filter((p) => p.inStock === false).length}
-                  </div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    تظهر كـ نفد من المخزون
-                  </div>
-                </div>
-
-                <div className="kpi-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>عروض وخصومات نشطة</span>
-                    <Flame size={18} color="#f97316" />
-                  </div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f97316', marginTop: '8px' }}>
-                    {productsList.filter((p) => p.originalPrice && p.originalPrice > p.price).length}
-                  </div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    منتجات بأسعار مخفضة
-                  </div>
-                </div>
-              </div>
-
-              {/* Products Cards Grid */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
-                gap: '20px',
-              }}>
-                {productsList.length === 0 ? (
-                  <div style={{
-                    gridColumn: '1 / -1',
-                    textAlign: 'center',
-                    padding: '60px 20px',
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    borderRadius: '16px',
-                    border: '1px dashed var(--border-subtle)',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                    gap: '16px',
+                    marginBottom: '26px',
                   }}>
-                    <ShoppingBag size={48} color="var(--gold-primary)" style={{ margin: '0 auto 16px', opacity: 0.7 }} />
-                    <h3 style={{ color: '#fff', fontSize: '1.15rem', marginBottom: '8px', fontWeight: 800 }}>لا توجد أي منتجات معروضة في المتجر حالياً</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '20px', maxWidth: '420px', margin: '0 auto 20px' }}>
-                      ابدأ بإضافة أول منتج لمتجر ركنة (مثل ملصق الشنطة الذكي أو ملصق الزجاج) وحدد سعره والعروض ليظهر فوراً في التطبيق.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleOpenAddProduct}
-                      className="btn-primary"
-                      style={{ padding: '10px 24px', fontSize: '0.92rem', fontWeight: 800, margin: '0 auto', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-                    >
-                      <PlusCircle size={18} />
-                      <span>إضافة أول منتج للمتجر الآن</span>
-                    </button>
-                  </div>
-                ) : (
-                  productsList.map((prod, index) => {
-                  let featList = [];
-                  try {
-                    if (typeof prod.features === 'string') {
-                      const parsed = JSON.parse(prod.features);
-                      if (Array.isArray(parsed)) featList = parsed;
-                      else featList = [prod.features];
-                    } else if (Array.isArray(prod.features)) {
-                      featList = prod.features;
-                    }
-                  } catch (_) {
-                    featList = prod.features ? [prod.features] : [];
-                  }
-
-                  const hasDiscount = prod.originalPrice && prod.originalPrice > prod.price;
-                  const discountVal = prod.discountPercent || (hasDiscount ? Math.round((1 - prod.price / prod.originalPrice) * 100) : null);
-
-                  return (
-                    <div
-                      key={prod.id}
-                      className="kpi-card fade-in"
-                      style={{
-                        padding: '0',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        border: prod.inStock !== false ? '1px solid var(--border-subtle)' : '1px dashed rgba(239, 68, 68, 0.4)',
-                        opacity: prod.inStock !== false ? 1 : 0.72,
-                        transition: 'all 0.22s ease',
-                      }}
-                    >
-                      {/* Product Visual Header / Image Preview */}
-                      <div style={{
-                        position: 'relative',
-                        height: '175px',
-                        background: 'linear-gradient(180deg, rgba(20, 24, 33, 0.8) 0%, rgba(13, 16, 23, 0.98) 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                      }}>
-                        {/* Status Badge (Top Right in RTL) */}
-                        <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 2 }}>
-                          {prod.badgeText && (
-                            <span style={{
-                              background: 'rgba(0, 0, 0, 0.85)',
-                              color: 'var(--gold-primary)',
-                              border: '1px solid rgba(245, 190, 24, 0.35)',
-                              padding: '4px 10px',
-                              borderRadius: '8px',
-                              fontSize: '0.74rem',
-                              fontWeight: 800,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}>
-                              <Sparkles size={12} />
-                              {prod.badgeText}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Stock Availability Pill (Top Left in RTL) */}
-                        <div style={{ position: 'absolute', top: '12px', left: '12px', zIndex: 2 }}>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleProductStock(prod.id)}
-                            title="اضغط للتبديل السريع"
-                            style={{
-                              background: prod.inStock !== false ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                              color: prod.inStock !== false ? '#10b981' : '#f87171',
-                              border: `1px solid ${prod.inStock !== false ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
-                              borderRadius: '20px',
-                              padding: '4px 12px',
-                              fontSize: '0.74rem',
-                              fontWeight: 800,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                            }}
-                          >
-                            <span style={{
-                              width: '7px',
-                              height: '7px',
-                              borderRadius: '50%',
-                              background: prod.inStock !== false ? '#10b981' : '#f87171',
-                            }}></span>
-                            <span>{prod.inStock !== false ? 'متوفر للطلب' : 'غير متوفر حالياً'}</span>
-                          </button>
-                        </div>
-
-                        {/* Real Image Rendering */}
-                        {resolveProductImageUrl(prod.imageAsset) ? (
-                          <img
-                            src={resolveProductImageUrl(prod.imageAsset)}
-                            alt={prod.name}
-                            style={{
-                              position: 'absolute',
-                              top: 0,
-                              left: 0,
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              zIndex: 1,
-                            }}
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                            }}
-                          />
-                        ) : null}
-
-                        {/* Fallback if image fails or is empty */}
-                        <div style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                          color: 'var(--text-secondary)',
-                          zIndex: 0,
-                        }}>
-                          <div style={{
-                            width: '84px',
-                            height: '56px',
-                            borderRadius: '12px',
-                            background: 'rgba(245, 190, 24, 0.1)',
-                            border: '1px solid rgba(245, 190, 24, 0.25)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-                          }}>
-                            <ImageIcon size={30} color="var(--gold-primary)" />
-                          </div>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                            بدون صورة
-                          </span>
-                        </div>
-
-                        {/* Aesthetic Gradient Overlay for badges and texts readability */}
-                        <div style={{
-                          position: 'absolute',
-                          inset: 0,
-                          background: 'linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.05) 50%, rgba(0, 0, 0, 0.65) 100%)',
-                          zIndex: 1,
-                          pointerEvents: 'none',
-                        }} />
-
-                        {/* Discount Ribbon (Bottom Right) */}
-                        {hasDiscount && (
-                          <div style={{
-                            position: 'absolute',
-                            bottom: '10px',
-                            right: '12px',
-                            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                            color: '#fff',
-                            padding: '3px 10px',
-                            borderRadius: '8px',
-                            fontSize: '0.74rem',
-                            fontWeight: 800,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.35)',
-                          }}>
-                            <Flame size={12} />
-                            <span>خصم {discountVal}% 🔥</span>
-                          </div>
-                        )}
+                    <div className="kpi-card">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>إجمالي المنتجات</span>
+                        <ShoppingBag size={18} color="var(--gold-primary)" />
                       </div>
-
-                      {/* Card Content */}
-                      <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                        <div>
-                          {/* Title & Price Header */}
-                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
-                            <div style={{ flex: 1 }}>
-                              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', margin: '0 0 4px 0' }}>
-                                {prod.name}
-                              </h3>
-                              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
-                                {prod.subtitle}
-                              </p>
-                            </div>
-
-                            <div style={{ textAlign: 'left', minWidth: '85px' }}>
-                              <div style={{ fontSize: '1.45rem', fontWeight: 900, color: 'var(--gold-primary)', lineHeight: 1 }}>
-                                {prod.price} <span style={{ fontSize: '0.82rem' }}>ج.م</span>
-                              </div>
-                              {hasDiscount && (
-                                <div style={{ fontSize: '0.78rem', color: '#888', textDecoration: 'line-through', marginTop: '3px' }}>
-                                  {prod.originalPrice} ج.م
-                                </div>
-                              )}
-                              <div style={{ fontSize: '0.68rem', color: '#10b981', fontWeight: 700, marginTop: '2px' }}>
-                                شحن مجاني
-                              </div>
-                            </div>
-                          </div>
-
-                          <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '14px 0' }} />
-
-                          {/* Features List */}
-                          <div style={{ marginBottom: '16px' }}>
-                            <div style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '8px' }}>
-                              المواصفات الفنية والمميزات:
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              {featList.map((feat, fIdx) => (
-                                <div key={fIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                                  <CheckCircle2 size={14} color="var(--gold-primary)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                                  <span style={{ lineHeight: 1.35 }}>{feat}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Actions Row */}
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          paddingTop: '14px',
-                          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-                          marginTop: 'auto',
-                        }}>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditProduct(prod)}
-                            className="btn-primary"
-                            style={{
-                              flex: 1,
-                              padding: '9px 12px',
-                              fontSize: '0.82rem',
-                              fontWeight: 700,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '6px',
-                            }}
-                          >
-                            <Edit3 size={15} />
-                            <span>تعديل السعر والعروض</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleToggleProductStock(prod.id)}
-                            style={{
-                              padding: '9px 12px',
-                              borderRadius: '8px',
-                              background: prod.inStock !== false ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.15)',
-                              color: prod.inStock !== false ? '#f87171' : '#10b981',
-                              border: `1px solid ${prod.inStock !== false ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.3)'}`,
-                              fontSize: '0.82rem',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '5px',
-                            }}
-                            title={prod.inStock !== false ? 'جعله غير متوفر' : 'جعله متوفر'}
-                          >
-                            <span>{prod.inStock !== false ? 'تعيين غير متوفر' : 'تعيين متوفر'}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteProduct(prod)}
-                            style={{
-                              padding: '9px',
-                              borderRadius: '8px',
-                              background: 'rgba(239, 68, 68, 0.1)',
-                              color: '#f87171',
-                              border: '1px solid rgba(239, 68, 68, 0.25)',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                            title="حذف المنتج نهائياً من المتجر"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#fff', marginTop: '8px' }}>
+                        {productsList.length}
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        معروضة في شاشة المتجر
                       </div>
                     </div>
-                  );
-                })
-              )}
-              </div>
-            </>
-          )}
 
-          {/* Slider & Banners Management Section */}
-          {storeSubTab === 'slider' && (
-            <div>
-              {/* Slider KPIs */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-                gap: '16px',
-                marginBottom: '26px',
-              }}>
-                <div className="kpi-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>إجمالي شرائح السلايدر</span>
-                    <ImageIcon size={18} color="var(--gold-primary)" />
-                  </div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#fff', marginTop: '8px' }}>
-                    {bannersList.length}
-                  </div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    بانرات مسجلة في شريط العرض
-                  </div>
-                </div>
+                    <div className="kpi-card">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>متوفرة للطلب الآن</span>
+                        <CheckCircle2 size={18} color="#10b981" />
+                      </div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981', marginTop: '8px' }}>
+                        {productsList.filter((p) => p.inStock !== false).length}
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        يمكن للمستخدمين شراؤها فوراً
+                      </div>
+                    </div>
 
-                <div className="kpi-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>معروضة ونشطة بالسلايدر</span>
-                    <CheckCircle2 size={18} color="#10b981" />
-                  </div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981', marginTop: '8px' }}>
-                    {bannersList.filter((b) => b.isActive !== false).length}
-                  </div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    تظهر وتنزلق للمستخدمين في التطبيق
-                  </div>
-                </div>
+                    <div className="kpi-card">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>غير متوفرة حالياً</span>
+                        <AlertCircle size={18} color="#ef4444" />
+                      </div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#ef4444', marginTop: '8px' }}>
+                        {productsList.filter((p) => p.inStock === false).length}
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        تظهر كـ نفد من المخزون
+                      </div>
+                    </div>
 
-                <div className="kpi-card">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>شرائح مخفية مؤقتاً</span>
-                    <EyeOff size={18} color="#f59e0b" />
+                    <div className="kpi-card">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>عروض وخصومات نشطة</span>
+                        <Flame size={18} color="#f97316" />
+                      </div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f97316', marginTop: '8px' }}>
+                        {productsList.filter((p) => p.originalPrice && p.originalPrice > p.price).length}
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        منتجات بأسعار مخفضة
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b', marginTop: '8px' }}>
-                    {bannersList.filter((b) => b.isActive === false).length}
-                  </div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    معطلة ومستثناة من العرض التلقائي
-                  </div>
-                </div>
-              </div>
 
-              {/* Banners Grid */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                gap: '20px',
-              }}>
-                {bannersList.length === 0 ? (
+                  {/* Products Cards Grid */}
                   <div style={{
-                    gridColumn: '1 / -1',
-                    textAlign: 'center',
-                    padding: '60px 20px',
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    borderRadius: '16px',
-                    border: '1px dashed var(--border-subtle)',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+                    gap: '20px',
                   }}>
-                    <ImageIcon size={48} color="var(--text-muted)" style={{ margin: '0 auto 16px', opacity: 0.6 }} />
-                    <h3 style={{ color: '#fff', fontSize: '1.1rem', marginBottom: '8px' }}>لا توجد أي شرائح في السلايدر حالياً</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '18px' }}>
-                      أضف صور وبانرات توضيحية لتعريف المستخدمين بأماكن التثبيت وخصائص ملصق ركنة
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleOpenAddBanner}
-                      className="btn-primary"
-                      style={{ padding: '8px 20px', fontSize: '0.88rem' }}
-                    >
-                      <PlusCircle size={16} />
-                      <span>إضافة أول شريحة الآن</span>
-                    </button>
-                  </div>
-                ) : (
-                  bannersList.map((banner, index) => {
-                    const resolvedImg = resolveProductImageUrl(banner.image);
-                    return (
-                      <div
-                        key={banner.id || index}
-                        style={{
-                          background: 'var(--bg-card)',
-                          border: `1px solid ${banner.isActive !== false ? 'rgba(245, 190, 24, 0.25)' : 'rgba(255, 255, 255, 0.08)'}`,
-                          borderRadius: '16px',
-                          overflow: 'hidden',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          transition: 'all 0.25s ease',
-                          boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
-                          opacity: banner.isActive !== false ? 1 : 0.72,
-                        }}
-                      >
-                        {/* Card Image Banner with Overlay */}
-                        <div style={{ position: 'relative', height: '170px', width: '100%', background: '#0a0a0c' }}>
-                          {resolvedImg ? (
-                            <img
-                              src={resolvedImg}
-                              alt={banner.title || 'شريحة سلايدر'}
-                              style={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover',
-                                filter: banner.isActive === false ? 'grayscale(80%)' : 'none',
-                              }}
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                              }}
-                            />
-                          ) : (
+                    {productsList.length === 0 ? (
+                      <div style={{
+                        gridColumn: '1 / -1',
+                        textAlign: 'center',
+                        padding: '60px 20px',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        borderRadius: '16px',
+                        border: '1px dashed var(--border-subtle)',
+                      }}>
+                        <ShoppingBag size={48} color="var(--gold-primary)" style={{ margin: '0 auto 16px', opacity: 0.7 }} />
+                        <h3 style={{ color: '#fff', fontSize: '1.15rem', marginBottom: '8px', fontWeight: 800 }}>لا توجد أي منتجات معروضة في المتجر حالياً</h3>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '20px', maxWidth: '420px', margin: '0 auto 20px' }}>
+                          ابدأ بإضافة أول منتج لمتجر ركنة (مثل ملصق الشنطة الذكي أو ملصق الزجاج) وحدد سعره والعروض ليظهر فوراً في التطبيق.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleOpenAddProduct}
+                          className="btn-primary"
+                          style={{ padding: '10px 24px', fontSize: '0.92rem', fontWeight: 800, margin: '0 auto', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                        >
+                          <PlusCircle size={18} />
+                          <span>إضافة أول منتج للمتجر الآن</span>
+                        </button>
+                      </div>
+                    ) : (
+                      productsList.map((prod, index) => {
+                        let featList = [];
+                        try {
+                          if (typeof prod.features === 'string') {
+                            const parsed = JSON.parse(prod.features);
+                            if (Array.isArray(parsed)) featList = parsed;
+                            else featList = [prod.features];
+                          } else if (Array.isArray(prod.features)) {
+                            featList = prod.features;
+                          }
+                        } catch (_) {
+                          featList = prod.features ? [prod.features] : [];
+                        }
+
+                        const hasDiscount = prod.originalPrice && prod.originalPrice > prod.price;
+                        const discountVal = prod.discountPercent || (hasDiscount ? Math.round((1 - prod.price / prod.originalPrice) * 100) : null);
+
+                        return (
+                          <div
+                            key={prod.id}
+                            className="kpi-card fade-in"
+                            style={{
+                              padding: '0',
+                              overflow: 'hidden',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between',
+                              border: prod.inStock !== false ? '1px solid var(--border-subtle)' : '1px dashed rgba(239, 68, 68, 0.4)',
+                              opacity: prod.inStock !== false ? 1 : 0.72,
+                              transition: 'all 0.22s ease',
+                            }}
+                          >
+                            {/* Product Visual Header / Image Preview */}
                             <div style={{
-                              width: '100%',
-                              height: '100%',
+                              position: 'relative',
+                              height: '175px',
+                              background: 'linear-gradient(180deg, rgba(20, 24, 33, 0.8) 0%, rgba(13, 16, 23, 0.98) 100%)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              background: 'linear-gradient(135deg, #1c1c24, #0f0f14)',
-                              color: 'var(--text-muted)',
+                              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                             }}>
-                              <ImageIcon size={36} />
+                              {/* Status Badge (Top Right in RTL) */}
+                              <div style={{ position: 'absolute', top: '12px', right: '12px', zIndex: 2 }}>
+                                {prod.badgeText && (
+                                  <span style={{
+                                    background: 'rgba(0, 0, 0, 0.85)',
+                                    color: 'var(--gold-primary)',
+                                    border: '1px solid rgba(245, 190, 24, 0.35)',
+                                    padding: '4px 10px',
+                                    borderRadius: '8px',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 800,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                  }}>
+                                    <Sparkles size={12} />
+                                    {prod.badgeText}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Stock Availability Pill (Top Left in RTL) */}
+                              <div style={{ position: 'absolute', top: '12px', left: '12px', zIndex: 2 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleProductStock(prod.id)}
+                                  title="اضغط للتبديل السريع"
+                                  style={{
+                                    background: prod.inStock !== false ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                                    color: prod.inStock !== false ? '#10b981' : '#f87171',
+                                    border: `1px solid ${prod.inStock !== false ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
+                                    borderRadius: '20px',
+                                    padding: '4px 12px',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                  }}
+                                >
+                                  <span style={{
+                                    width: '7px',
+                                    height: '7px',
+                                    borderRadius: '50%',
+                                    background: prod.inStock !== false ? '#10b981' : '#f87171',
+                                  }}></span>
+                                  <span>{prod.inStock !== false ? 'متوفر للطلب' : 'غير متوفر حالياً'}</span>
+                                </button>
+                              </div>
+
+                              {/* Real Image Rendering */}
+                              {resolveProductImageUrl(prod.imageAsset) ? (
+                                <img
+                                  src={resolveProductImageUrl(prod.imageAsset)}
+                                  alt={prod.name}
+                                  style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover',
+                                    zIndex: 1,
+                                  }}
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              ) : null}
+
+                              {/* Fallback if image fails or is empty */}
+                              <div style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                color: 'var(--text-secondary)',
+                                zIndex: 0,
+                              }}>
+                                <div style={{
+                                  width: '84px',
+                                  height: '56px',
+                                  borderRadius: '12px',
+                                  background: 'rgba(245, 190, 24, 0.1)',
+                                  border: '1px solid rgba(245, 190, 24, 0.25)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                                }}>
+                                  <ImageIcon size={30} color="var(--gold-primary)" />
+                                </div>
+                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                  بدون صورة
+                                </span>
+                              </div>
+
+                              {/* Aesthetic Gradient Overlay for badges and texts readability */}
+                              <div style={{
+                                position: 'absolute',
+                                inset: 0,
+                                background: 'linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.05) 50%, rgba(0, 0, 0, 0.65) 100%)',
+                                zIndex: 1,
+                                pointerEvents: 'none',
+                              }} />
+
+                              {/* Discount Ribbon (Bottom Right) */}
+                              {hasDiscount && (
+                                <div style={{
+                                  position: 'absolute',
+                                  bottom: '10px',
+                                  right: '12px',
+                                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                                  color: '#fff',
+                                  padding: '3px 10px',
+                                  borderRadius: '8px',
+                                  fontSize: '0.74rem',
+                                  fontWeight: 800,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  boxShadow: '0 2px 8px rgba(239, 68, 68, 0.35)',
+                                }}>
+                                  <Flame size={12} />
+                                  <span>خصم {discountVal}% 🔥</span>
+                                </div>
+                              )}
                             </div>
-                          )}
 
-                          {/* Gradient overlay */}
-                          <div style={{
-                            position: 'absolute',
-                            inset: 0,
-                            background: 'linear-gradient(to top, rgba(15,15,20,0.92) 0%, rgba(15,15,20,0.2) 60%, transparent 100%)',
-                          }} />
+                            {/* Card Content */}
+                            <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                              <div>
+                                {/* Title & Price Header */}
+                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
+                                  <div style={{ flex: 1 }}>
+                                    <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', margin: '0 0 4px 0' }}>
+                                      {prod.name}
+                                    </h3>
+                                    <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
+                                      {prod.subtitle}
+                                    </p>
+                                  </div>
 
-                          {/* Top Bar Badges */}
-                          <div style={{
-                            position: 'absolute',
-                            top: '10px',
-                            left: '12px',
-                            right: '12px',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}>
-                            <span style={{
-                              background: banner.isActive !== false ? 'rgba(16, 185, 129, 0.9)' : 'rgba(239, 68, 68, 0.9)',
-                              color: '#fff',
-                              fontSize: '0.7rem',
-                              fontWeight: 800,
-                              padding: '3px 9px',
-                              borderRadius: '20px',
-                              backdropFilter: 'blur(4px)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}>
-                              {banner.isActive !== false ? '● نشطة في السلايدر' : '○ مخفية مؤقتاً'}
-                            </span>
+                                  <div style={{ textAlign: 'left', minWidth: '85px' }}>
+                                    <div style={{ fontSize: '1.45rem', fontWeight: 900, color: 'var(--gold-primary)', lineHeight: 1 }}>
+                                      {prod.price} <span style={{ fontSize: '0.82rem' }}>ج.م</span>
+                                    </div>
+                                    {hasDiscount && (
+                                      <div style={{ fontSize: '0.78rem', color: '#888', textDecoration: 'line-through', marginTop: '3px' }}>
+                                        {prod.originalPrice} ج.م
+                                      </div>
+                                    )}
+                                    <div style={{ fontSize: '0.68rem', color: '#10b981', fontWeight: 700, marginTop: '2px' }}>
 
-                            <span style={{
-                              background: 'rgba(0, 0, 0, 0.65)',
-                              color: 'var(--gold-primary)',
-                              fontSize: '0.72rem',
-                              fontWeight: 800,
-                              padding: '3px 8px',
-                              borderRadius: '8px',
-                              border: '1px solid rgba(245, 190, 24, 0.3)',
-                            }}>
-                              الترتيب: #{banner.sortOrder || (index + 1)}
-                            </span>
-                          </div>
+                                    </div>
+                                  </div>
+                                </div>
 
-                          {/* Bottom of Image overlay: Badge and Location */}
-                          <div style={{
-                            position: 'absolute',
-                            bottom: '8px',
-                            right: '12px',
-                            left: '12px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                          }}>
-                            {banner.badge && (
-                              <span style={{
-                                background: 'rgba(245, 190, 24, 0.95)',
-                                color: '#000',
-                                fontSize: '0.68rem',
-                                fontWeight: 900,
-                                padding: '2px 8px',
-                                borderRadius: '6px',
-                              }}>
-                                {banner.badge}
-                              </span>
-                            )}
-                            {banner.location && (
-                              <span style={{
-                                color: '#e2e8f0',
-                                fontSize: '0.74rem',
-                                fontWeight: 700,
-                                textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-                              }}>
-                                📍 {banner.location}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                                <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '14px 0' }} />
 
-                        {/* Card Body */}
-                        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                          <h4 style={{
-                            color: '#fff',
-                            fontSize: '0.98rem',
-                            fontWeight: 800,
-                            margin: '0 0 6px',
-                            lineHeight: 1.3,
-                          }}>
-                            {banner.title || 'بدون عنوان رئيسي'}
-                          </h4>
+                                {/* Features List */}
+                                <div style={{ marginBottom: '16px' }}>
+                                  <div style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '8px' }}>
+                                    المواصفات الفنية والمميزات:
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {featList.map((feat, fIdx) => (
+                                      <div key={fIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                                        <CheckCircle2 size={14} color="var(--gold-primary)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                        <span style={{ lineHeight: 1.35 }}>{feat}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
 
-                          <p style={{
-                            color: 'var(--text-secondary)',
-                            fontSize: '0.8rem',
-                            margin: '0 0 14px',
-                            lineHeight: 1.45,
-                            flex: 1,
-                          }}>
-                            {banner.subtitle || 'لا يوجد وصف فرعي للشريحة'}
-                          </p>
-
-                          {/* Image path info */}
-                          <div style={{
-                            background: 'rgba(255, 255, 255, 0.03)',
-                            border: '1px solid rgba(255, 255, 255, 0.06)',
-                            borderRadius: '8px',
-                            padding: '6px 10px',
-                            marginBottom: '14px',
-                            fontSize: '0.72rem',
-                            color: 'var(--text-muted)',
-                            direction: 'ltr',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}>
-                            🖼️ {banner.image}
-                          </div>
-
-                          {/* Card Actions */}
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            borderTop: '1px solid var(--border-subtle)',
-                            paddingTop: '12px',
-                          }}>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEditBanner(banner)}
-                              className="btn-ghost"
-                              style={{
-                                flex: 1,
-                                padding: '7px 12px',
-                                fontSize: '0.8rem',
-                                fontWeight: 700,
-                                justifyContent: 'center',
-                                gap: '6px',
-                                border: '1px solid var(--border-subtle)',
-                              }}
-                            >
-                              <Edit3 size={14} />
-                              <span>تعديل الشريحة</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleToggleBanner(banner)}
-                              style={{
-                                padding: '7px 11px',
-                                borderRadius: '8px',
-                                background: banner.isActive !== false ? 'rgba(245, 190, 24, 0.12)' : 'rgba(16, 185, 129, 0.15)',
-                                color: banner.isActive !== false ? 'var(--gold-primary)' : '#34d399',
-                                border: `1px solid ${banner.isActive !== false ? 'rgba(245, 190, 24, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
-                                cursor: 'pointer',
+                              {/* Actions Row */}
+                              <div style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                              title={banner.isActive !== false ? 'إخفاء الشريحة مؤقتاً من السلايدر' : 'تفعيل ظهور الشريحة في السلايدر'}
-                            >
-                              {banner.isActive !== false ? <EyeOff size={15} /> : <Eye size={15} />}
-                            </button>
+                                gap: '8px',
+                                paddingTop: '14px',
+                                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                                marginTop: 'auto',
+                              }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditProduct(prod)}
+                                  className="btn-primary"
+                                  style={{
+                                    flex: 1,
+                                    padding: '9px 12px',
+                                    fontSize: '0.82rem',
+                                    fontWeight: 700,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                  }}
+                                >
+                                  <Edit3 size={15} />
+                                  <span>تعديل السعر والعروض</span>
+                                </button>
 
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteBanner(banner)}
-                              style={{
-                                padding: '7px 11px',
-                                borderRadius: '8px',
-                                background: 'rgba(239, 68, 68, 0.1)',
-                                color: '#f87171',
-                                border: '1px solid rgba(239, 68, 68, 0.25)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                              title="حذف الشريحة نهائياً من السلايدر"
-                            >
-                              <Trash2 size={15} />
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleProductStock(prod.id)}
+                                  style={{
+                                    padding: '9px 12px',
+                                    borderRadius: '8px',
+                                    background: prod.inStock !== false ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.15)',
+                                    color: prod.inStock !== false ? '#f87171' : '#10b981',
+                                    border: `1px solid ${prod.inStock !== false ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.3)'}`,
+                                    fontSize: '0.82rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                  }}
+                                  title={prod.inStock !== false ? 'جعله غير متوفر' : 'جعله متوفر'}
+                                >
+                                  <span>{prod.inStock !== false ? 'تعيين غير متوفر' : 'تعيين متوفر'}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteProduct(prod)}
+                                  style={{
+                                    padding: '9px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    color: '#f87171',
+                                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                  title="حذف المنتج نهائياً من المتجر"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                        </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Slider & Banners Management Section */}
+              {storeSubTab === 'slider' && (
+                <div>
+                  {/* Slider KPIs */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                    gap: '16px',
+                    marginBottom: '26px',
+                  }}>
+                    <div className="kpi-card">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>إجمالي شرائح السلايدر</span>
+                        <ImageIcon size={18} color="var(--gold-primary)" />
                       </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
+                      <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#fff', marginTop: '8px' }}>
+                        {bannersList.length}
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        بانرات مسجلة في شريط العرض
+                      </div>
+                    </div>
 
-          {/* Add / Edit Product Modal */}
-          {productModalOpen && createPortal(
-            <div style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(0, 0, 0, 0.78)',
-              backdropFilter: 'blur(6px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 99999,
-              padding: '20px',
-            }}>
+                    <div className="kpi-card">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>معروضة ونشطة بالسلايدر</span>
+                        <CheckCircle2 size={18} color="#10b981" />
+                      </div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#10b981', marginTop: '8px' }}>
+                        {bannersList.filter((b) => b.isActive !== false).length}
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        تظهر وتنزلق للمستخدمين في التطبيق
+                      </div>
+                    </div>
+
+                    <div className="kpi-card">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontWeight: 600 }}>شرائح مخفية مؤقتاً</span>
+                        <EyeOff size={18} color="#f59e0b" />
+                      </div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b', marginTop: '8px' }}>
+                        {bannersList.filter((b) => b.isActive === false).length}
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        معطلة ومستثناة من العرض التلقائي
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Banners Grid */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                    gap: '20px',
+                  }}>
+                    {bannersList.length === 0 ? (
+                      <div style={{
+                        gridColumn: '1 / -1',
+                        textAlign: 'center',
+                        padding: '60px 20px',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        borderRadius: '16px',
+                        border: '1px dashed var(--border-subtle)',
+                      }}>
+                        <ImageIcon size={48} color="var(--text-muted)" style={{ margin: '0 auto 16px', opacity: 0.6 }} />
+                        <h3 style={{ color: '#fff', fontSize: '1.1rem', marginBottom: '8px' }}>لا توجد أي شرائح في السلايدر حالياً</h3>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '18px' }}>
+                          أضف صور وبانرات توضيحية لتعريف المستخدمين بأماكن التثبيت وخصائص ملصق ركنة
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleOpenAddBanner}
+                          className="btn-primary"
+                          style={{ padding: '8px 20px', fontSize: '0.88rem' }}
+                        >
+                          <PlusCircle size={16} />
+                          <span>إضافة أول شريحة الآن</span>
+                        </button>
+                      </div>
+                    ) : (
+                      bannersList.map((banner, index) => {
+                        const resolvedImg = resolveProductImageUrl(banner.image);
+                        return (
+                          <div
+                            key={banner.id || index}
+                            style={{
+                              background: 'var(--bg-card)',
+                              border: `1px solid ${banner.isActive !== false ? 'rgba(245, 190, 24, 0.25)' : 'rgba(255, 255, 255, 0.08)'}`,
+                              borderRadius: '16px',
+                              overflow: 'hidden',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              transition: 'all 0.25s ease',
+                              boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
+                              opacity: banner.isActive !== false ? 1 : 0.72,
+                            }}
+                          >
+                            {/* Card Image Banner with Overlay */}
+                            <div style={{ position: 'relative', height: '170px', width: '100%', background: '#0a0a0c' }}>
+                              {resolvedImg ? (
+                                <img
+                                  src={resolvedImg}
+                                  alt={banner.title || 'شريحة سلايدر'}
+                                  style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover',
+                                    filter: banner.isActive === false ? 'grayscale(80%)' : 'none',
+                                  }}
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  background: 'linear-gradient(135deg, #1c1c24, #0f0f14)',
+                                  color: 'var(--text-muted)',
+                                }}>
+                                  <ImageIcon size={36} />
+                                </div>
+                              )}
+
+                              {/* Gradient overlay */}
+                              <div style={{
+                                position: 'absolute',
+                                inset: 0,
+                                background: 'linear-gradient(to top, rgba(15,15,20,0.92) 0%, rgba(15,15,20,0.2) 60%, transparent 100%)',
+                              }} />
+
+                              {/* Top Bar Badges */}
+                              <div style={{
+                                position: 'absolute',
+                                top: '10px',
+                                left: '12px',
+                                right: '12px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                              }}>
+                                <span style={{
+                                  background: banner.isActive !== false ? 'rgba(16, 185, 129, 0.9)' : 'rgba(239, 68, 68, 0.9)',
+                                  color: '#fff',
+                                  fontSize: '0.7rem',
+                                  fontWeight: 800,
+                                  padding: '3px 9px',
+                                  borderRadius: '20px',
+                                  backdropFilter: 'blur(4px)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}>
+                                  {banner.isActive !== false ? '● نشطة في السلايدر' : '○ مخفية مؤقتاً'}
+                                </span>
+
+                                <span style={{
+                                  background: 'rgba(0, 0, 0, 0.65)',
+                                  color: 'var(--gold-primary)',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 800,
+                                  padding: '3px 8px',
+                                  borderRadius: '8px',
+                                  border: '1px solid rgba(245, 190, 24, 0.3)',
+                                }}>
+                                  الترتيب: #{banner.sortOrder || (index + 1)}
+                                </span>
+                              </div>
+
+                              {/* Bottom of Image overlay: Badge and Location */}
+                              <div style={{
+                                position: 'absolute',
+                                bottom: '8px',
+                                right: '12px',
+                                left: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                              }}>
+                                {banner.badge && (
+                                  <span style={{
+                                    background: 'rgba(245, 190, 24, 0.95)',
+                                    color: '#000',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 900,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                  }}>
+                                    {banner.badge}
+                                  </span>
+                                )}
+                                {banner.location && (
+                                  <span style={{
+                                    color: '#e2e8f0',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 700,
+                                    textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                                  }}>
+                                    📍 {banner.location}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Card Body */}
+                            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                              <h4 style={{
+                                color: '#fff',
+                                fontSize: '0.98rem',
+                                fontWeight: 800,
+                                margin: '0 0 6px',
+                                lineHeight: 1.3,
+                              }}>
+                                {banner.title || 'بدون عنوان رئيسي'}
+                              </h4>
+
+                              <p style={{
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.8rem',
+                                margin: '0 0 14px',
+                                lineHeight: 1.45,
+                                flex: 1,
+                              }}>
+                                {banner.subtitle || 'لا يوجد وصف فرعي للشريحة'}
+                              </p>
+
+                              {/* Image path info */}
+                              <div style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px solid rgba(255, 255, 255, 0.06)',
+                                borderRadius: '8px',
+                                padding: '6px 10px',
+                                marginBottom: '14px',
+                                fontSize: '0.72rem',
+                                color: 'var(--text-muted)',
+                                direction: 'ltr',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                🖼️ {banner.image}
+                              </div>
+
+                              {/* Card Actions */}
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                borderTop: '1px solid var(--border-subtle)',
+                                paddingTop: '12px',
+                              }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditBanner(banner)}
+                                  className="btn-ghost"
+                                  style={{
+                                    flex: 1,
+                                    padding: '7px 12px',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 700,
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    border: '1px solid var(--border-subtle)',
+                                  }}
+                                >
+                                  <Edit3 size={14} />
+                                  <span>تعديل الشريحة</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleBanner(banner)}
+                                  style={{
+                                    padding: '7px 11px',
+                                    borderRadius: '8px',
+                                    background: banner.isActive !== false ? 'rgba(245, 190, 24, 0.12)' : 'rgba(16, 185, 129, 0.15)',
+                                    color: banner.isActive !== false ? 'var(--gold-primary)' : '#34d399',
+                                    border: `1px solid ${banner.isActive !== false ? 'rgba(245, 190, 24, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                  title={banner.isActive !== false ? 'إخفاء الشريحة مؤقتاً من السلايدر' : 'تفعيل ظهور الشريحة في السلايدر'}
+                                >
+                                  {banner.isActive !== false ? <EyeOff size={15} /> : <Eye size={15} />}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteBanner(banner)}
+                                  style={{
+                                    padding: '7px 11px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    color: '#f87171',
+                                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                  title="حذف الشريحة نهائياً من السلايدر"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Add / Edit Product Modal */}
+              {productModalOpen && createPortal(
+                <div style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'rgba(0, 0, 0, 0.78)',
+                  backdropFilter: 'blur(6px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 99999,
+                  padding: '20px',
+                }}>
                   <div style={{
                     background: 'var(--bg-surface)',
                     border: '1px solid var(--border-subtle)',
