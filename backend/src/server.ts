@@ -241,6 +241,7 @@ apiRouter.use('/reporter', reporterRouter);
 // ──────────────── Owner Chats Routes ────────────────
 const chatsRouter = express.Router();
 chatsRouter.get('/', authenticateOwner, ChatsController.getChats);
+chatsRouter.delete('/clear-all', authenticateOwner, ChatsController.clearAll);
 chatsRouter.get('/:id/messages', authenticateOwner, ChatsController.getMessages);
 chatsRouter.post('/:id/reply', authenticateOwner, ChatsController.reply);
 chatsRouter.post('/:id/action', authenticateOwner, ChatsController.handleAction);

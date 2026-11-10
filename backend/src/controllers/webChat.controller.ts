@@ -1385,23 +1385,39 @@ export class WebChatController {
       const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
       if (isAndroid) {
-        // Android Intent scheme opens the app directly if installed, without error if not
-        window.location.href = 'intent://t/' + clean + '#Intent;scheme=rakna;package=com.example.rakna_app;end';
+        // Use S.browser_fallback_url so Android Chrome NEVER redirects to Google Play when the app is not installed
+        const fallbackUrl = new URL(window.location.href);
+        fallbackUrl.searchParams.set('app_not_installed', '1');
+        window.location.href =
+          'intent://t/' + clean +
+          '#Intent;scheme=rakna;package=com.example.rakna_app;S.browser_fallback_url=' +
+          encodeURIComponent(fallbackUrl.toString()) +
+          ';end';
       } else if (isIOS) {
         window.location.href = 'rakna://t/' + clean;
+        setTimeout(() => {
+          if (!document.hidden) {
+            showToast('التطبيق غير مثبت على هاتفك، يمكنك التواصل مع صاحب السيارة مباشرة من هنا.');
+          }
+        }, 1200);
       } else {
         window.location.href = 'rakna://t/' + clean;
       }
     }
 
-    // Automatic handoff attempt on mobile devices once per session
-    (function tryAutoHandoff() {
+    // Do NOT auto-redirect to intent:// on page load so users without the app stay on web without going to Google Play.
+    // If redirected back via S.browser_fallback_url, clean the URL and notify the user.
+    (function handleAppFallbackReturn() {
       try {
-        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-        const attempted = sessionStorage.getItem('rakna_app_handoff_' + TAG_CODE);
-        if (isMobile && !attempted) {
-          sessionStorage.setItem('rakna_app_handoff_' + TAG_CODE, '1');
-          setTimeout(openInRaknaApp, 350);
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('app_not_installed') === '1') {
+          params.delete('app_not_installed');
+          const cleanSearch = params.toString();
+          const cleanUrl = window.location.pathname + (cleanSearch ? '?' + cleanSearch : '') + window.location.hash;
+          window.history.replaceState({}, '', cleanUrl);
+          window.addEventListener('DOMContentLoaded', () => {
+            showToast('التطبيق غير مثبت على هاتفك، يمكنك المتابعة والتواصل مباشرة من المتصفح.');
+          });
         }
       } catch (e) {}
     })();

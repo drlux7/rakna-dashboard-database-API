@@ -419,5 +419,28 @@ export class ChatsController {
       res.status(500).json({ success: false, message: 'تعذر تحديث حالة المشاهدة' });
     }
   }
+
+  /**
+   * حذف جميع محادثات سيارات صاحب الحساب
+   */
+  static async clearAll(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userCars = await prisma.car.findMany({
+        where: { userId: req.user!.id },
+        select: { id: true },
+      });
+      const carIds = userCars.map((c) => c.id);
+
+      if (carIds.length > 0) {
+        await prisma.chat.deleteMany({
+          where: { carId: { in: carIds } },
+        });
+      }
+
+      res.json({ success: true, message: 'تم حذف جميع محادثات سياراتك بنجاح' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر حذف المحادثات' });
+    }
+  }
 }
 
