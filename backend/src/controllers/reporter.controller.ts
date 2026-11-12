@@ -104,6 +104,55 @@ export class ReporterController {
 
       const isCarActive = tag.status === 'ACTIVE' && (tag.car?.isTagActive ?? false);
 
+      // Check if this reporter already has an open/pending/unreplied chat with this car
+      let existingChatInfo: {
+        id: string;
+        status: string;
+        contactReason: string;
+        hasOwnerReply: boolean;
+        canCreateNewReport: boolean;
+      } | null = null;
+
+      const sessionToken = ((req.query.sessionToken as string) || (req.headers['x-reporter-session'] as string) || '').trim();
+      if (tag.car && sessionToken && !isOwner) {
+        const latestChat = await prisma.chat.findFirst({
+          where: {
+            carId: tag.car.id,
+            reporterSessionToken: sessionToken,
+            status: { in: ['PENDING_ACCEPT', 'ACTIVE', 'IGNORED', 'BLOCKED'] },
+          },
+          include: {
+            messages: {
+              orderBy: { createdAt: 'desc' },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (latestChat) {
+          if (latestChat.status !== 'BLOCKED' && ChatExpiryService.isChatExpired(latestChat)) {
+            await prisma.chat.update({
+              where: { id: latestChat.id },
+              data: { status: 'EXPIRED' },
+            });
+          } else if (
+            latestChat.status === 'IGNORED' &&
+            Date.now() - latestChat.updatedAt.getTime() >= 3 * 60 * 1000
+          ) {
+            // Ignore cooldown elapsed -> allow new report
+          } else {
+            const hasOwnerReply = latestChat.messages.some((m) => m.senderType === 'OWNER');
+            existingChatInfo = {
+              id: latestChat.id,
+              status: latestChat.status,
+              contactReason: latestChat.contactReason,
+              hasOwnerReply,
+              canCreateNewReport: false,
+            };
+          }
+        }
+      }
+
       res.json({
         success: true,
         tag: {
@@ -124,6 +173,7 @@ export class ReporterController {
               allowReporterPhotos: tag.car.allowReporterPhotos ?? true,
             }
           : null,
+        existingChat: existingChatInfo,
       });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر قراءة بيانات الـ Tag' });
@@ -305,6 +355,22 @@ export class ReporterController {
           data: { status: 'EXPIRED' },
         });
       } else if (existingChat) {
+        // Check if owner has replied at least once; if not, block creating/sending duplicate reports before 5h expiry
+        const lastOwnerMsg = await prisma.message.findFirst({
+          where: { chatId: existingChat.id, senderType: 'OWNER' },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (!lastOwnerMsg) {
+          res.status(400).json({
+            success: false,
+            message: 'لقد تواصلت مع صاحب هذه السيارة بالفعل. لا يمكنك إرسال بلاغ جديد حتى يرد عليك صاحب السيارة أو بعد مرور 5 ساعات.',
+            alreadyContacted: true,
+            chatId: existingChat.id,
+          });
+          return;
+        }
+
         // Check cooldown since last reporter message
         const lastReporterMsg = await prisma.message.findFirst({
           where: { chatId: existingChat.id, senderType: 'REPORTER' },
@@ -325,16 +391,11 @@ export class ReporterController {
         }
 
         // Check unanswered quota
-        const lastOwnerMsg = await prisma.message.findFirst({
-          where: { chatId: existingChat.id, senderType: 'OWNER' },
-          orderBy: { createdAt: 'desc' },
-        });
-
         const reporterCount = await prisma.message.count({
           where: {
             chatId: existingChat.id,
             senderType: 'REPORTER',
-            ...(lastOwnerMsg ? { createdAt: { gt: lastOwnerMsg.createdAt } } : {}),
+            createdAt: { gt: lastOwnerMsg.createdAt },
           },
         });
 

@@ -6911,7 +6911,7 @@ export default function App() {
                                   boxShadow: '0 2px 8px rgba(239, 68, 68, 0.35)',
                                 }}>
                                   <Flame size={12} />
-                                  <span>خصم {discountVal}% 🔥</span>
+                                  <span>خصم {discountVal}% </span>
                                 </div>
                               )}
                             </div>
