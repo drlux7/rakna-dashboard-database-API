@@ -345,6 +345,9 @@ adminRouter.patch('/error-logs/:id/toggle-resolve', authenticateAdmin, AdminCont
 adminRouter.delete('/error-logs/clear-all', authenticateAdmin, AdminController.clearAllErrorLogs);
 adminRouter.delete('/error-logs/:id', authenticateAdmin, AdminController.deleteErrorLog);
 
+// Broadcast Notification to all app users
+adminRouter.post('/notifications/broadcast', authenticateAdmin, AdminController.broadcastNotification);
+
 apiRouter.use('/admin', adminRouter);
 
 // Mount API Prefix (/api/v1)

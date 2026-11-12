@@ -17,6 +17,7 @@ model User {
   isVerified            Boolean        @default(false)
   isBlocked             Boolean        @default(false)
   notificationsEnabled  Boolean        @default(true)
+  fcmToken              String?        // Token for Firebase Cloud Messaging push notifications
   themePreference       String         @default("system") // system, light, dark
   
   // Privacy & Security Settings

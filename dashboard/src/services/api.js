@@ -383,6 +383,14 @@ class AdminApiService {
       method: 'DELETE',
     });
   }
+
+  // Broadcast Notification to all app users
+  async broadcastNotification(title, message) {
+    return this.request('/admin/notifications/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({ title, message }),
+    });
+  }
 }
 
 export const api = new AdminApiService();

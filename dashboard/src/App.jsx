@@ -58,6 +58,8 @@ import {
   Upload,
   Image as ImageIcon,
   Mail,
+  Bell,
+  Megaphone,
 } from 'lucide-react';
 import { api } from './services/api';
 
@@ -293,6 +295,11 @@ export default function App() {
     sortOrder: 0,
   });
   const [isSavingGov, setIsSavingGov] = useState(false);
+
+  // Broadcast Notification State
+  const [broadcastModalOpen, setBroadcastModalOpen] = useState(false);
+  const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '' });
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
 
   const loadGovernorates = async () => {
     if (!token) return;
@@ -1715,6 +1722,32 @@ export default function App() {
     }
   };
 
+  const handleSendBroadcast = async (e) => {
+    e.preventDefault();
+    if (!broadcastForm.title.trim() || !broadcastForm.message.trim()) {
+      showToast('يرجى ملء عنوان ونص الإشعار أولاً');
+      return;
+    }
+    setIsSendingBroadcast(true);
+    try {
+      const res = await api.broadcastNotification(
+        broadcastForm.title.trim(),
+        broadcastForm.message.trim()
+      );
+      if (res.success) {
+        showToast(res.message || 'تم إرسال الإشعار لجميع المستخدمين بنجاح! 📢✨');
+        setBroadcastModalOpen(false);
+        setBroadcastForm({ title: '', message: '' });
+      } else {
+        alert(res.message || 'تعذر إرسال الإشعار');
+      }
+    } catch (err) {
+      alert(err.message || 'حدث خطأ أثناء إرسال الإشعار العام');
+    } finally {
+      setIsSendingBroadcast(false);
+    }
+  };
+
   const totalUnreadSupport = supportThreads.reduce((acc, t) => acc + (t.unreadCount || 0), 0);
   const pendingAbuseCount = abuseReports.filter((r) => r.status === 'PENDING').length;
 
@@ -2145,6 +2178,31 @@ export default function App() {
                 {unresolvedErrorCount}
               </span>
             )}
+          </button>
+
+          {/* زر إرسال إشعار عام لكافة المستخدمين */}
+          <button
+            onClick={() => setBroadcastModalOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 14px',
+              marginTop: '8px',
+              borderRadius: '12px',
+              border: '1px solid rgba(245, 190, 24, 0.35)',
+              background: 'linear-gradient(135deg, rgba(245, 190, 24, 0.18) 0%, rgba(245, 190, 24, 0.05) 100%)',
+              color: 'var(--gold-primary)',
+              fontWeight: 800,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              textAlign: 'right',
+              boxShadow: '0 2px 8px rgba(245, 190, 24, 0.1)',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <Megaphone size={20} color="var(--gold-primary)" />
+            <span>إرسال إشعار عام للكل 📢</span>
           </button>
         </nav>
 
@@ -9156,6 +9214,172 @@ export default function App() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────── نافذة إرسال إشعار عام لكافة المستخدمين ──────────────── */}
+      {broadcastModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(5px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '20px',
+        }}>
+          <div style={{
+            background: 'var(--bg-card)',
+            border: '1px solid rgba(245, 190, 24, 0.4)',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '540px',
+            padding: '28px',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6), var(--shadow-gold)',
+            position: 'relative',
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: 'rgba(245, 190, 24, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <Megaphone size={22} color="var(--gold-primary)" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    إرسال إشعار عام للكل
+                  </h3>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    سيصل الإشعار كـ Push Notification مباشر على هواتف جميع المستخدمين 📲
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setBroadcastModalOpen(false)}
+                disabled={isSendingBroadcast}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '8px',
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSendBroadcast}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  عنوان الإشعار (Title):
+                </label>
+                <input
+                  type="text"
+                  placeholder="مثال: تحديث هام بخصوص خدمة ركنة 🚗"
+                  value={broadcastForm.title}
+                  onChange={(e) => setBroadcastForm({ ...broadcastForm, title: e.target.value })}
+                  disabled={isSendingBroadcast}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.92rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '22px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  نص الإشعار (Message Body):
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder="اكتب رسالتك لجميع مستخدمي التطبيق هنا بالتفصيل..."
+                  value={broadcastForm.message}
+                  onChange={(e) => setBroadcastForm({ ...broadcastForm, message: e.target.value })}
+                  disabled={isSendingBroadcast}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.92rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                  }}
+                />
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => setBroadcastModalOpen(false)}
+                  disabled={isSendingBroadcast}
+                  style={{
+                    padding: '11px 20px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'transparent',
+                    color: 'var(--text-secondary)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSendingBroadcast || !broadcastForm.title.trim() || !broadcastForm.message.trim()}
+                  style={{
+                    padding: '11px 24px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: 'var(--gold-primary)',
+                    color: '#000',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    fontSize: '0.92rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: 'var(--shadow-gold)',
+                    opacity: isSendingBroadcast ? 0.7 : 1,
+                  }}
+                >
+                  <Send size={16} />
+                  <span>{isSendingBroadcast ? 'جاري الإرسال للجميع...' : 'إرسال الإشعار الآن 🚀'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

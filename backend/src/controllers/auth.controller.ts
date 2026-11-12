@@ -212,13 +212,14 @@ export class AuthController {
    */
   static async updateMe(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { name, notificationsEnabled, themePreference } = req.body;
+      const { name, notificationsEnabled, themePreference, fcmToken } = req.body;
       const updated = await prisma.user.update({
         where: { id: req.user!.id },
         data: {
           ...(name !== undefined && { name }),
           ...(notificationsEnabled !== undefined && { notificationsEnabled }),
           ...(themePreference !== undefined && { themePreference }),
+          ...(fcmToken !== undefined && { fcmToken }),
         },
       });
 

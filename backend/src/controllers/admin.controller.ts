@@ -8,6 +8,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { whatsAppService } from '../services/whatsapp.service';
 import { webRateLimitService } from '../services/webRateLimit.service';
 import { getChatIO } from '../sockets/chat.gateway';
+import { PushNotificationService } from '../services/pushNotification.service';
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -2040,6 +2041,71 @@ export class AdminController {
       res.json({ success: true, message: 'تم مسح كافة سجلات الأخطاء بنجاح 🧹' });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر مسح سجلات الأخطاء' });
+    }
+  }
+
+  /**
+   * إرسال إشعار عام (Broadcast Push Notification) لكافة مستخدمي التطبيق
+   */
+  static async broadcastNotification(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { title, message } = req.body;
+      if (!title || !title.trim() || !message || !message.trim()) {
+        res.status(400).json({ success: false, message: 'عنوان الإشعار ونص الرسالة مطلوبان' });
+        return;
+      }
+
+      const cleanTitle = title.trim();
+      const cleanMessage = message.trim();
+
+      // جلب جميع المستخدمين النشطين
+      const users = await prisma.user.findMany({
+        where: { isBlocked: false },
+        select: { id: true, fcmToken: true, notificationsEnabled: true },
+      });
+
+      if (!users.length) {
+        res.json({ success: true, message: 'لا يوجد مستخدمون حالياً لإرسال الإشعار إليهم', count: 0 });
+        return;
+      }
+
+      // 1. إضافة الإشعار في قاعدة البيانات لكل مستخدم
+      const createNotifPromises = users.map((u) =>
+        prisma.notification.create({
+          data: {
+            userId: u.id,
+            type: 'SYSTEM',
+            title: cleanTitle,
+            message: cleanMessage,
+            actionLabel: 'تنبيه عام',
+          },
+        }).catch((err) => console.error('Failed to create in-app notification for user:', u.id, err))
+      );
+
+      await Promise.all(createNotifPromises);
+
+      // 2. إرسال Push Notification عبر Firebase (FCM) لكل مستخدم يمتلك fcmToken ومفعل للإشعارات
+      let sentCount = 0;
+      for (const u of users) {
+        if (u.fcmToken && u.notificationsEnabled) {
+          PushNotificationService.sendPushToToken(u.fcmToken, {
+            title: cleanTitle,
+            body: cleanMessage,
+            data: { type: 'BROADCAST_ANNOUNCEMENT' },
+          }).then((sent) => {
+            if (sent) sentCount++;
+          }).catch(() => {});
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `تم إرسال الإشعار بنجاح إلى ${users.length} مستخدم 📢`,
+        recipientsCount: users.length,
+      });
+    } catch (error: any) {
+      console.error('Error in broadcastNotification:', error);
+      res.status(500).json({ success: false, message: 'تعذر إرسال الإشعار العام' });
     }
   }
 }

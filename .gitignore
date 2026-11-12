@@ -17,6 +17,10 @@ build/
 .env.test.local
 .env.production.local
 
+# Firebase credentials
+*firebase-service-account*.json
+*firebase-adminsdk*.json
+
 # Database files
 *.db
 *.db-journal

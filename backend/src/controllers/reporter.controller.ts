@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
 import { webRateLimitService } from '../services/webRateLimit.service';
 import { ChatExpiryService } from '../services/chatExpiry.service';
+import { PushNotificationService } from '../services/pushNotification.service';
 
 function saveBase64Image(base64Str: string): string {
   if (!base64Str || !base64Str.startsWith('data:image')) return base64Str;
@@ -89,17 +90,26 @@ export class ReporterController {
 
       // If car is linked and active and NOT scanned by the owner himself, create scan notification
       if (tag.car && tag.status === 'ACTIVE' && tag.car.isTagActive && !isOwner) {
+        const scanTitle = `تم مسح الـ Tag لسيارة ${tag.car.brand} ${tag.car.model}`;
+        const scanBody = `قام شخص ما بمسح ملصق سيارتك (${tag.tagCode}) عبر تقنية ${method}.`;
         await prisma.notification.create({
           data: {
             userId: tag.car.userId,
             carId: tag.car.id,
             tagCode: tag.tagCode,
             type: 'TAG_SCAN',
-            title: `تم مسح الـ Tag لسيارة ${tag.car.brand} ${tag.car.model}`,
-            message: `قام شخص ما بمسح ملصق سيارتك (${tag.tagCode}) عبر تقنية ${method}.`,
+            title: scanTitle,
+            message: scanBody,
             actionLabel: 'تفاصيل المسح',
           },
         });
+
+        // FCM Push Notification
+        PushNotificationService.sendPushToUser(prisma, tag.car.userId, {
+          title: scanTitle,
+          body: scanBody,
+          data: { type: 'TAG_SCAN', tagCode: tag.tagCode, carId: tag.car.id },
+        }).catch(() => {});
       }
 
       const isCarActive = tag.status === 'ACTIVE' && (tag.car?.isTagActive ?? false);
@@ -507,6 +517,7 @@ export class ReporterController {
       }
 
       // Send instant push notification to Car Owner
+      const alertMsg = initialMessage ? `بلاغ جديد: "${initialMessage.trim().substring(0, 80)}..."` : `تواصل شخص معك بخصوص: ${reasonArabic}`;
       await prisma.notification.create({
         data: {
           userId: tag.car.userId,
@@ -514,10 +525,17 @@ export class ReporterController {
           tagCode: tag.tagCode,
           type: 'CAR_ALERT',
           title: reasonArabic,
-          message: initialMessage ? `بلاغ جديد: "${initialMessage.trim().substring(0, 80)}..."` : `تواصل شخص معك بخصوص: ${reasonArabic}`,
+          message: alertMsg,
           actionLabel: 'فتح المحادثة',
         },
       });
+
+      // FCM Push Notification
+      PushNotificationService.sendPushToUser(prisma, tag.car.userId, {
+        title: reasonArabic,
+        body: alertMsg,
+        data: { type: 'CAR_ALERT', chatId: chat.id, carId: tag.car.id },
+      }).catch(() => {});
 
       const ipUsage = webRateLimitService.incrementUsage(clientIp);
       const remaining = Math.min(MAX_UNANSWERED_MESSAGES - 1, ipUsage.remaining);
@@ -679,17 +697,26 @@ export class ReporterController {
 
       // Send instant push notification to Car Owner
       try {
+        const notifTitle = 'رسالة جديدة من المُبلّغ';
+        const notifBody = content.trim().substring(0, 80);
         await prisma.notification.create({
           data: {
             userId: chat.car.userId,
             carId: chat.car.id,
             tagCode: '',
             type: 'CAR_ALERT',
-            title: 'رسالة جديدة من المُبلّغ',
-            message: content.trim().substring(0, 80),
+            title: notifTitle,
+            message: notifBody,
             actionLabel: 'فتح المحادثة',
           },
         });
+
+        // FCM Push Notification
+        PushNotificationService.sendPushToUser(prisma, chat.car.userId, {
+          title: notifTitle,
+          body: notifBody,
+          data: { type: 'CHAT_MESSAGE', chatId: chat.id, carId: chat.car.id },
+        }).catch(() => {});
       } catch (notifErr) {
         console.error('Failed to create notification for reporter message:', notifErr);
       }

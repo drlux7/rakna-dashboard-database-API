@@ -120,6 +120,11 @@ export class ChatsController {
         }
       }
 
+      const user = await prisma.user.findUnique({
+        where: { id: req.user!.id },
+        select: { blurPhotosUntilTap: true },
+      });
+
       res.json({
         success: true,
         chat: {
@@ -127,6 +132,7 @@ export class ChatsController {
           contactReason: chat.contactReason,
           status: chatStatus,
           carTitle: chat.car.nickname || `${chat.car.brand} ${chat.car.model}`,
+          blurPhotosUntilTap: user?.blurPhotosUntilTap ?? true,
           messages: chat.messages,
         },
       });
