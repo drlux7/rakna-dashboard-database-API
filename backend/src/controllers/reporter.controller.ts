@@ -14,7 +14,7 @@ function saveBase64Image(base64Str: string): string {
     const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
     const uploadDir = path.join(dataDir, 'uploads');
     if (!fs.existsSync(uploadDir)) {
-      try { fs.mkdirSync(uploadDir, { recursive: true }); } catch (_) {}
+      try { fs.mkdirSync(uploadDir, { recursive: true }); } catch (_) { }
     }
     const matches = base64Str.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
     if (!matches || matches.length !== 3) return base64Str;
@@ -74,7 +74,7 @@ export class ReporterController {
           if (decoded && (tag.userId === decoded.id || tag.car?.userId === decoded.id)) {
             isOwner = true;
           }
-        } catch (_) {}
+        } catch (_) { }
       }
 
       // Log scan activity
@@ -109,7 +109,7 @@ export class ReporterController {
           title: scanTitle,
           body: scanBody,
           data: { type: 'TAG_SCAN', tagCode: tag.tagCode, carId: tag.car.id },
-        }).catch(() => {});
+        }).catch(() => { });
       }
 
       const isCarActive = tag.status === 'ACTIVE' && (tag.car?.isTagActive ?? false);
@@ -174,14 +174,14 @@ export class ReporterController {
         },
         car: tag.car
           ? {
-              id: tag.car.id,
-              brand: tag.car.brand,
-              model: tag.car.model,
-              colorName: tag.car.colorName,
-              displayTitle: tag.car.nickname || `${tag.car.brand} ${tag.car.model}`,
-              allowFreeChat: tag.car.allowFreeChat ?? false,
-              allowReporterPhotos: tag.car.allowReporterPhotos ?? true,
-            }
+            id: tag.car.id,
+            brand: tag.car.brand,
+            model: tag.car.model,
+            colorName: tag.car.colorName,
+            displayTitle: tag.car.nickname || `${tag.car.brand} ${tag.car.model}`,
+            allowFreeChat: tag.car.allowFreeChat ?? false,
+            allowReporterPhotos: tag.car.allowReporterPhotos ?? true,
+          }
           : null,
         existingChat: existingChatInfo,
       });
@@ -243,10 +243,10 @@ export class ReporterController {
         try {
           const decoded = jwt.verify(token, process.env.JWT_SECRET || 'rakna_super_secret_jwt_key_2026_veritag') as any;
           if (decoded && (tag.userId === decoded.id || tag.car.userId === decoded.id)) {
-            res.status(400).json({ success: false, message: 'أنت صاحب هذا الملصق، لا يمكنك محادثة نفسك 😅' });
+            res.status(400).json({ success: false, message: 'أنت صاحب هذا الملصق، لا يمكنك محادثة نفسك ' });
             return;
           }
-        } catch (_) {}
+        } catch (_) { }
       }
 
       if (tag.status === 'PAUSED' || !tag.car.isTagActive) {
@@ -450,7 +450,7 @@ export class ReporterController {
                 actionLabel: 'فتح المحادثة',
               },
             });
-          } catch (_) {}
+          } catch (_) { }
         }
 
         const ipUsage = webRateLimitService.incrementUsage(clientIp);
@@ -535,7 +535,7 @@ export class ReporterController {
         title: reasonArabic,
         body: alertMsg,
         data: { type: 'CAR_ALERT', chatId: chat.id, carId: tag.car.id },
-      }).catch(() => {});
+      }).catch(() => { });
 
       const ipUsage = webRateLimitService.incrementUsage(clientIp);
       const remaining = Math.min(MAX_UNANSWERED_MESSAGES - 1, ipUsage.remaining);
@@ -716,7 +716,7 @@ export class ReporterController {
           title: notifTitle,
           body: notifBody,
           data: { type: 'CHAT_MESSAGE', chatId: chat.id, carId: chat.car.id },
-        }).catch(() => {});
+        }).catch(() => { });
       } catch (notifErr) {
         console.error('Failed to create notification for reporter message:', notifErr);
       }
