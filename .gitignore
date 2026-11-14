@@ -12,14 +12,22 @@ build/
 
 # Environment variables
 .env
+.env.*
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+**/.env
+**/.env.*
 
-# Firebase credentials
+# Firebase credentials & Service Accounts
 *firebase-service-account*.json
 *firebase-adminsdk*.json
+*serviceAccountKey*.json
+*service-account*.json
+*serviceAccount*.json
+**/*serviceAccountKey*.json
+**/*service-account*.json
 
 # Database files
 *.db
