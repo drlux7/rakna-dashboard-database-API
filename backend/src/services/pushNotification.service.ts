@@ -6,9 +6,35 @@ import fs from 'fs';
 let firebaseInitialized = false;
 
 try {
-  const serviceAccountPath = path.resolve(__dirname, '../../firebase-service-account.json');
-  if (fs.existsSync(serviceAccountPath)) {
-    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  let serviceAccount: any = null;
+
+  // 1. الأولوية الأولى: قراءة المفتاح من متغير البيئة FIREBASE_SERVICE_ACCOUNT (JSON أو Base64)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT && process.env.FIREBASE_SERVICE_ACCOUNT.trim()) {
+    try {
+      const rawEnv = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+      if (rawEnv.startsWith('{')) {
+        serviceAccount = JSON.parse(rawEnv);
+      } else {
+        // فك تشفير Base64 إذا تم تمريره كـ Base64 string لتفادي مشاكل الـ newlines
+        const decoded = Buffer.from(rawEnv, 'base64').toString('utf8');
+        serviceAccount = JSON.parse(decoded);
+      }
+      console.log('🔥 [FCM] Loaded Firebase credentials from FIREBASE_SERVICE_ACCOUNT environment variable');
+    } catch (envErr) {
+      console.error('❌ [FCM] Failed to parse FIREBASE_SERVICE_ACCOUNT env variable:', envErr);
+    }
+  }
+
+  // 2. المحاولة الثانية: قراءة الملف محلياً إذا وُجد
+  if (!serviceAccount) {
+    const serviceAccountPath = path.resolve(__dirname, '../../firebase-service-account.json');
+    if (fs.existsSync(serviceAccountPath)) {
+      serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+      console.log('🔥 [FCM] Loaded Firebase credentials from firebase-service-account.json file');
+    }
+  }
+
+  if (serviceAccount) {
     if (!getApps().length) {
       initializeApp({
         credential: cert(serviceAccount),
@@ -17,7 +43,7 @@ try {
     firebaseInitialized = true;
     console.log('🔥 [FCM] Firebase Admin SDK initialized successfully');
   } else {
-    console.warn('⚠️ [FCM] firebase-service-account.json not found at:', serviceAccountPath);
+    console.warn('⚠️ [FCM] No Firebase credentials found (neither FIREBASE_SERVICE_ACCOUNT env nor json file)');
   }
 } catch (error) {
   console.error('❌ [FCM] Error initializing Firebase Admin SDK:', error);
