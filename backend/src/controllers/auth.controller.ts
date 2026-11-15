@@ -213,13 +213,26 @@ export class AuthController {
   static async updateMe(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { name, notificationsEnabled, themePreference, fcmToken } = req.body;
+
+      if (fcmToken && typeof fcmToken === 'string' && fcmToken.trim().length > 0) {
+        const cleanFcm = fcmToken.trim();
+        // إزالة هذا الـ Token من أي حساب مستخدم قديم على نفس الجهاز لمنع التكرار
+        await prisma.user.updateMany({
+          where: {
+            fcmToken: cleanFcm,
+            id: { not: req.user!.id },
+          },
+          data: { fcmToken: null },
+        });
+      }
+
       const updated = await prisma.user.update({
         where: { id: req.user!.id },
         data: {
           ...(name !== undefined && { name }),
           ...(notificationsEnabled !== undefined && { notificationsEnabled }),
           ...(themePreference !== undefined && { themePreference }),
-          ...(fcmToken !== undefined && { fcmToken }),
+          ...(fcmToken !== undefined && { fcmToken: typeof fcmToken === 'string' ? fcmToken.trim() : fcmToken }),
         },
       });
 

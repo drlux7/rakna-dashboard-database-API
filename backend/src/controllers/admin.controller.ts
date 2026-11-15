@@ -62,6 +62,9 @@ export const syncTagsQrCodesToProduction = async (): Promise<void> => {
   }
 };
 
+let lastBroadcastTimestamp = 0;
+const BROADCAST_COOLDOWN_MS = 20 * 1000; // فترة تهدئة 20 ثانية بين كل إشعار عام لحماية السيرفر
+
 export class AdminController {
   /**
    * تسجيل دخول مشرفي لوحة التحكم
@@ -2055,6 +2058,17 @@ export class AdminController {
         return;
       }
 
+      // فحص الـ Cooldown لحماية السيرفر من الـ Overload والتكرار
+      const now = Date.now();
+      if (now - lastBroadcastTimestamp < BROADCAST_COOLDOWN_MS) {
+        const remainingSeconds = Math.ceil((BROADCAST_COOLDOWN_MS - (now - lastBroadcastTimestamp)) / 1000);
+        res.status(429).json({
+          success: false,
+          message: `يرجى الانتظار ${remainingSeconds} ثانية قبل إرسال إشعار عام جديد لحماية السيرفر من الضغط الزائد ⏳`,
+        });
+        return;
+      }
+
       const cleanTitle = title.trim();
       const cleanMessage = message.trim();
 
@@ -2084,24 +2098,36 @@ export class AdminController {
 
       await Promise.all(createNotifPromises);
 
-      // 2. إرسال Push Notification عبر Firebase (FCM) لكل مستخدم يمتلك fcmToken ومفعل للإشعارات
-      let sentCount = 0;
-      for (const u of users) {
-        if (u.fcmToken && u.notificationsEnabled) {
-          PushNotificationService.sendPushToToken(u.fcmToken, {
-            title: cleanTitle,
-            body: cleanMessage,
-            data: { type: 'BROADCAST_ANNOUNCEMENT' },
-          }).then((sent) => {
-            if (sent) sentCount++;
-          }).catch(() => {});
-        }
-      }
+      // 2. تجميع الـ Tokens الفريدة فقط لمنع تكرار الإشعار للمستخدمين (Deduplicated Unique Set)
+      const uniqueTokens = Array.from(
+        new Set(
+          users
+            .filter((u) => u.fcmToken && u.notificationsEnabled)
+            .map((u) => u.fcmToken!.trim())
+        )
+      );
+
+      // تسجيل وقت آخر إرسال لتفعيل الـ Cooldown
+      lastBroadcastTimestamp = Date.now();
+
+      // 3. إرسال Push Notification بالترتيب على دفعات مع تأخير زمني خفيف لحماية السيرفر من الـ Overload
+      PushNotificationService.sendPushInBatches(
+        uniqueTokens,
+        {
+          title: cleanTitle,
+          body: cleanMessage,
+          data: { type: 'BROADCAST_ANNOUNCEMENT' },
+          tag: 'rakna_broadcast',
+          collapseKey: 'broadcast_announcement',
+        },
+        { batchSize: 20, delayMs: 250 }
+      ).catch((err) => console.error('Error in broadcast sendPushInBatches:', err));
 
       res.json({
         success: true,
-        message: `تم إرسال الإشعار بنجاح إلى ${users.length} مستخدم 📢`,
+        message: `تم بدء إرسال الإشعار بنجاح إلى ${uniqueTokens.length} جهاز بترتيب منظم 📢`,
         recipientsCount: users.length,
+        devicesCount: uniqueTokens.length,
       });
     } catch (error: any) {
       console.error('Error in broadcastNotification:', error);

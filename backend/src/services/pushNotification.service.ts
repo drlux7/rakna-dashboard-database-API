@@ -49,22 +49,52 @@ try {
   console.error('❌ [FCM] Error initializing Firebase Admin SDK:', error);
 }
 
+// ذاكرة مؤقتة لمنع تكرار نفس الإشعار لنفس الجهاز خلال فترة وجيزة
+const recentNotificationCache = new Map<string, number>();
+
+// تنظيف دوري للذاكرة المؤقتة كل 5 دقائق
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of recentNotificationCache.entries()) {
+    if (now - timestamp > 60000) {
+      recentNotificationCache.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
+export interface PushPayload {
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  tag?: string;
+  collapseKey?: string;
+}
+
 export class PushNotificationService {
   /**
    * Send a high-priority push notification to a specific user by FCM token
    */
-  static async sendPushToToken(token: string, payload: {
-    title: string;
-    body: string;
-    data?: Record<string, string>;
-  }): Promise<boolean> {
-    if (!firebaseInitialized || !token) {
+  static async sendPushToToken(token: string, payload: PushPayload): Promise<boolean> {
+    if (!firebaseInitialized || !token || typeof token !== 'string') {
       return false;
     }
 
+    const cleanToken = token.trim();
+    if (!cleanToken) return false;
+
+    // 1. منع تكرار نفس الإشعار لنفس الجهاز (Deduplication within 15s)
+    const dedupeKey = `${cleanToken}_${payload.title}_${payload.body}_${payload.data?.type || ''}_${payload.data?.chatId || payload.data?.tagCode || ''}`;
+    const lastSentTime = recentNotificationCache.get(dedupeKey);
+    const now = Date.now();
+    if (lastSentTime && (now - lastSentTime) < 15000) {
+      console.log(`⚠️ [FCM Dedupe] Suppressed duplicate notification to token: ${cleanToken.substring(0, 10)}... (Key: ${dedupeKey})`);
+      return false;
+    }
+    recentNotificationCache.set(dedupeKey, now);
+
     try {
       await getMessaging().send({
-        token,
+        token: cleanToken,
         notification: {
           title: payload.title,
           body: payload.body,
@@ -72,16 +102,19 @@ export class PushNotificationService {
         data: payload.data || {},
         android: {
           priority: 'high',
+          collapseKey: payload.collapseKey || payload.data?.type || 'rakna_alerts',
           notification: {
             channelId: 'rakna_alerts_channel',
             priority: 'high',
             defaultSound: true,
             defaultVibrateTimings: true,
+            tag: payload.tag || payload.data?.type || 'rakna_notif',
           },
         },
         apns: {
           headers: {
             'apns-priority': '10',
+            'apns-collapse-id': payload.collapseKey || payload.data?.type || 'rakna_alerts',
           },
           payload: {
             aps: {
@@ -91,7 +124,7 @@ export class PushNotificationService {
           },
         },
       });
-      console.log(`📲 [FCM] Push notification delivered successfully to token: ${token.substring(0, 10)}...`);
+      console.log(`📲 [FCM] Push notification delivered successfully to token: ${cleanToken.substring(0, 10)}...`);
       return true;
     } catch (err: any) {
       console.error('❌ [FCM] Failed to send push notification:', err?.message || err);
@@ -100,13 +133,51 @@ export class PushNotificationService {
   }
 
   /**
+   * إرسال الإشعارات بالترتيب على دفعات مع تأخير زمني لحماية السيرفر من الضغط الزائد
+   */
+  static async sendPushInBatches(
+    tokens: string[],
+    payload: PushPayload,
+    options: { batchSize?: number; delayMs?: number } = {}
+  ): Promise<{ sent: number; total: number }> {
+    if (!firebaseInitialized || !tokens.length) {
+      return { sent: 0, total: 0 };
+    }
+
+    // إزالة التكرار من قائمة التوكنات لضمان عدم إرسال إشعارين لنفس الجهاز
+    const uniqueTokens = Array.from(new Set(tokens.filter(t => t && typeof t === 'string' && t.trim().length > 0).map(t => t.trim())));
+    const batchSize = options.batchSize || 20;
+    const delayMs = options.delayMs || 250;
+
+    let sent = 0;
+    console.log(`📦 [FCM Batch] Starting throttled delivery to ${uniqueTokens.length} unique devices (batch: ${batchSize}, delay: ${delayMs}ms)...`);
+
+    for (let i = 0; i < uniqueTokens.length; i += batchSize) {
+      const chunk = uniqueTokens.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        chunk.map(token => this.sendPushToToken(token, payload))
+      );
+
+      for (const res of results) {
+        if (res.status === 'fulfilled' && res.value === true) {
+          sent++;
+        }
+      }
+
+      // تأخير زمني بين كل دفعة وأخرى لتوزيع حمل الشبكة ومعالج السيرفر
+      if (i + batchSize < uniqueTokens.length) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+
+    console.log(`✅ [FCM Batch] Finished delivery: ${sent}/${uniqueTokens.length} successful.`);
+    return { sent, total: uniqueTokens.length };
+  }
+
+  /**
    * Send a push notification to a user using their userId
    */
-  static async sendPushToUser(prisma: any, userId: string, payload: {
-    title: string;
-    body: string;
-    data?: Record<string, string>;
-  }): Promise<boolean> {
+  static async sendPushToUser(prisma: any, userId: string, payload: PushPayload): Promise<boolean> {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId },
