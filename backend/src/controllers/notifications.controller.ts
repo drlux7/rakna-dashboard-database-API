@@ -48,6 +48,7 @@ export class NotificationsController {
           title: n.title,
           message: n.message,
           actionLabel: n.actionLabel,
+          chatId: n.chatId,
           isRead: n.isRead,
           tagCode: n.tagCode,
           carName: n.car ? (n.car.nickname || `${n.car.brand} ${n.car.model}`) : null,

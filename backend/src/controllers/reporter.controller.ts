@@ -522,6 +522,7 @@ export class ReporterController {
         data: {
           userId: tag.car.userId,
           carId: tag.car.id,
+          chatId: chat.id,
           tagCode: tag.tagCode,
           type: 'CAR_ALERT',
           title: reasonArabic,
@@ -703,6 +704,7 @@ export class ReporterController {
           data: {
             userId: chat.car.userId,
             carId: chat.car.id,
+            chatId: chat.id,
             tagCode: '',
             type: 'CAR_ALERT',
             title: notifTitle,

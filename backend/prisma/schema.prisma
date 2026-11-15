@@ -232,6 +232,7 @@ model Notification {
   carId                 String?
   car                   Car?           @relation(fields: [carId], references: [id], onDelete: SetNull)
 
+  chatId                String?
   tagCode               String?
   type                  String         @default("SYSTEM") // CAR_ALERT, TAG_SCAN, SECURITY, CHAT, SYSTEM
   title                 String
