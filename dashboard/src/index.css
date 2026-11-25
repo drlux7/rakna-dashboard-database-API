@@ -391,6 +391,33 @@ body {
     background: #ffffff !important;
   }
 
+  .sticker-template-frame {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+  }
+
+  .sticker-template-frame img {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .sticker-template-qr {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+  }
+
+  .sticker-template-qr svg {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    fill: #000000 !important;
+    background: #ffffff !important;
+  }
+
   .print-activation-card {
     border: 2px solid #000000 !important;
     border-radius: 12px !important;

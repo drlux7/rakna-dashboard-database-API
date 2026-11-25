@@ -62,6 +62,7 @@ import {
   Megaphone,
 } from 'lucide-react';
 import { api } from './services/api';
+import StickerTemplateVisual from './components/StickerTemplateVisual';
 
 // Helper to parse structured support ticket content
 const parseTicketContent = (content) => {
@@ -246,6 +247,8 @@ export default function App() {
   const [printColumns, setPrintColumns] = useState(3);
   const [printShowCutLines, setPrintShowCutLines] = useState(true);
   const [printShowHeader, setPrintShowHeader] = useState(true);
+  const [printUseTemplate, setPrintUseTemplate] = useState(true);
+  const [printShowTagCode, setPrintShowTagCode] = useState(true);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isShippingSlipOpen, setIsShippingSlipOpen] = useState(false);
   const [selectedOrderForShipping, setSelectedOrderForShipping] = useState(null);
@@ -1020,7 +1023,8 @@ export default function App() {
         markFullBatch: false,
       }
     );
-    setPrintColumns(unique.length === 1 ? 2 : 3);
+    const hasHorizontalNfc = unique.some((t) => t.hasNfc !== false);
+    setPrintColumns(unique.length === 1 || hasHorizontalNfc ? 2 : 3);
     setIsPrintStudioOpen(true);
   };
 
@@ -3076,16 +3080,9 @@ export default function App() {
                       <div className="print-sheet-grid cols-3">
                         {generatedTags.map((t) => (
                           <div key={t.id} className="print-tag-card">
-                            <div style={{ fontSize: '0.72rem', color: 'var(--gold-primary)', fontWeight: 800, letterSpacing: '1px', marginBottom: '8px' }}>
-                              RAKNA VERITAG™
+                            <div style={{ marginBottom: '10px' }}>
+                              <StickerTemplateVisual tag={t} maxHeight="190px" />
                             </div>
-                            <div
-                              className="qr-box"
-                              dangerouslySetInnerHTML={{
-                                __html: (t.qrCodeSvg || '')
-                                  .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;" ')
-                              }}
-                            />
                             <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#fff' }} className="tag-code">
                               {t.tagCode}
                             </div>
@@ -3197,16 +3194,9 @@ export default function App() {
                                 }}>
                                   IN STOCK
                                 </div>
-                                <div style={{ fontSize: '0.72rem', color: 'var(--gold-primary)', fontWeight: 800, letterSpacing: '1px', marginBottom: '8px', marginTop: '4px' }}>
-                                  RAKNA VERITAG™
+                                <div style={{ marginTop: '22px', marginBottom: '10px' }}>
+                                  <StickerTemplateVisual tag={t} maxHeight="190px" />
                                 </div>
-                                <div
-                                  className="qr-box"
-                                  dangerouslySetInnerHTML={{
-                                    __html: (t.qrCodeSvg || '')
-                                      .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;" ')
-                                  }}
-                                />
                                 <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#fff' }} className="tag-code">
                                   {t.tagCode}
                                 </div>
@@ -4122,16 +4112,9 @@ export default function App() {
                                     {t.isPrinted ? '✓ تم طبعه' : 'غير مطبوع'}
                                   </div>
 
-                                  <div style={{ fontSize: '0.72rem', color: 'var(--gold-primary)', fontWeight: 800, letterSpacing: '1px', marginBottom: '8px' }}>
-                                    RAKNA VERITAG™
+                                  <div style={{ marginBottom: '10px' }}>
+                                    <StickerTemplateVisual tag={t} maxHeight="190px" />
                                   </div>
-                                  <div
-                                    className="qr-box"
-                                    dangerouslySetInnerHTML={{
-                                      __html: (t.qrCodeSvg || '')
-                                        .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;" ')
-                                    }}
-                                  />
                                   <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#fff' }} className="tag-code">
                                     {t.tagCode}
                                   </div>
@@ -9854,6 +9837,27 @@ export default function App() {
                 🏢 الترويسة: {printShowHeader ? 'مفعّلة' : 'مخفية'}
               </button>
 
+              {printStudioType === 'stickers' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setPrintUseTemplate(!printUseTemplate)}
+                    className="btn-ghost"
+                    style={{ fontSize: '0.78rem', padding: '6px 12px', border: printUseTemplate ? '1px solid var(--gold-primary)' : '1px solid var(--border-subtle)' }}
+                  >
+                    🎨 شكل الملصق: {printUseTemplate ? 'التصميم الأصفر الرسمي' : 'أبيض وأسود مبسط'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrintShowTagCode(!printShowTagCode)}
+                    className="btn-ghost"
+                    style={{ fontSize: '0.78rem', padding: '6px 12px', border: printShowTagCode ? '1px solid var(--gold-primary)' : '1px solid var(--border-subtle)' }}
+                  >
+                    #️⃣ كود الملصق: {printShowTagCode ? 'ظاهر' : 'مخفي'}
+                  </button>
+                </>
+              )}
+
               <button
                 type="button"
                 onClick={handlePrintStudio}
@@ -9862,4 +9866,605 @@ export default function App() {
                 style={{ padding: '8px 20px', fontSize: '0.9rem', fontWeight: 800, gap: '8px', cursor: isPrinting ? 'not-allowed' : 'pointer' }}
               >
                 <Printer size={18} />
-... [truncated for diff preview]
+                <span>{isPrinting ? 'جاري التحضير للطباعة...' : 'طباعة الآن (Print)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPrintStudioOpen(false)}
+                className="btn-ghost"
+                style={{ padding: '8px 14px', fontSize: '0.9rem', color: '#f87171' }}
+                title="إغلاق المحرر"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* WYSIWYG Print Canvas (Prints to Paper) */}
+          <div
+            className="printable-area print-studio-canvas"
+            style={{
+              width: '100%',
+              maxWidth: '850px',
+              background: '#ffffff',
+              color: '#000000',
+              borderRadius: '12px',
+              padding: '30px',
+              boxShadow: '0 12px 48px rgba(0,0,0,0.8)',
+              minHeight: '600px',
+            }}
+          >
+            {/* Printable Header */}
+            {printShowHeader && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '2px solid #000000',
+                paddingBottom: '14px',
+                marginBottom: '24px',
+              }}>
+                <div>
+                  <h2 style={{ fontSize: '1.4rem', fontWeight: 900, color: '#000', margin: 0 }}>
+                    ركنة RAKNA • {printStudioTitle}
+                  </h2>
+                  <div style={{ fontSize: '0.85rem', color: '#4b5563', marginTop: '4px' }}>
+                    {printStudioSubtitle} • التاريخ: {new Date().toLocaleDateString('ar-EG')}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: '#374151' }}>
+                  <div>TOTAL: {printStudioItems.length} UNITS</div>
+                  <div style={{ fontWeight: 800 }}>VERITAG SYSTEM</div>
+                </div>
+              </div>
+            )}
+
+            {/* Printable Grid */}
+            <div className={`print-sheet-grid cols-${printColumns}`}>
+              {printStudioType === 'stickers' ? (
+                printStudioItems.map((t) => (
+                  <div
+                    key={t.id || t.tagCode}
+                    className="print-sticker-card"
+                    style={{
+                      border: printShowCutLines ? '1.5px dashed #000000' : '1px solid #d1d5db',
+                      padding: printUseTemplate ? '10px' : '16px',
+                      textAlign: 'center',
+                      borderRadius: '10px',
+                      background: '#ffffff',
+                      backgroundColor: '#ffffff',
+                      color: '#000000',
+                      pageBreakInside: 'avoid',
+                      breakInside: 'avoid',
+                      boxShadow: 'none',
+                    }}
+                  >
+                    {printUseTemplate ? (
+                      <>
+                        <StickerTemplateVisual tag={t} />
+                        {printShowTagCode && (
+                          <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', fontSize: '0.78rem', fontWeight: 800, color: '#000000' }}>
+                            <span className="tag-code" style={{ fontSize: '0.9rem', fontWeight: 900 }}>{t.tagCode}</span>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: '#374151' }}>
+                              {t.hasNfc === false ? 'QR ONLY' : 'NFC + QR'}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: '0.72rem', color: '#000000', fontWeight: 900, letterSpacing: '1px', marginBottom: '8px' }}>
+                          RAKNA VERITAG™
+                        </div>
+                        <div
+                          className="qr-box"
+                          style={{
+                            background: '#ffffff',
+                            backgroundColor: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 8px auto',
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html: (t.qrCodeSvg || '')
+                              .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;fill:#000000;" ')
+                          }}
+                        />
+                        <div style={{ fontWeight: 900, fontSize: '1.25rem', color: '#000000' }} className="tag-code">
+                          {t.tagCode}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: '#000000', fontWeight: 700, marginTop: '4px' }}>
+                          {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'} • {t.hasNfc === false ? 'QR فقط' : 'NFC + QR'}
+                        </div>
+                        {t.hasNfc === false ? (
+                          <div style={{ fontSize: '0.65rem', color: '#374151', fontFamily: 'var(--font-mono)', marginTop: '6px', fontWeight: 700 }}>
+                            QR ONLY • RAKNA VERITAG
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '0.65rem', color: '#1f2937', fontFamily: 'var(--font-mono)', marginTop: '6px', fontWeight: 600 }}>
+                            NFC: {t.secretToken?.substring(0, 16)}...
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ))
+              ) : (
+                printStudioItems.map((c) => (
+                  <div
+                    key={c.id || c.code}
+                    className="print-activation-card"
+                    style={{
+                      border: printShowCutLines ? '2px dashed #000000' : '2px solid #000000',
+                      padding: '20px',
+                      textAlign: 'center',
+                      borderRadius: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid #000000', paddingBottom: '8px', marginBottom: '12px' }}>
+                      <span style={{ fontWeight: 900, color: '#000000', fontSize: '1.05rem' }}>🚗 ركنة RAKNA</span>
+                      <span style={{ fontSize: '0.75rem', border: '1px solid #000000', padding: '2px 8px', borderRadius: '4px', fontWeight: 800 }}>
+                        كرت تفعيل باكدج
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#1f2937', fontWeight: 700, marginBottom: '6px' }}>
+                      كود التفعيل السري المخصص للعلبة:
+                    </div>
+                    <div className="act-code-box" style={{
+                      background: '#f3f4f6',
+                      border: '2px dashed #000000',
+                      color: '#000000',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '1.45rem',
+                      fontWeight: 900,
+                      letterSpacing: '2px',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      margin: '10px 0',
+                    }}>
+                      {c.code}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#374151', lineHeight: '1.6', marginTop: '10px', textAlign: 'right' }}>
+                      • <b>الخطوة 1:</b> امسح رمز الـ QR الموجود على ملصق سيارتك.<br />
+                      • <b>الخطوة 2:</b> ادخل هذا الكود داخل تطبيق ركنة لإتمام الحماية.<br />
+                      ⚠️ <i>احتفظ بهذه البطاقة ولا تكشف الكود إلا عند التفعيل.</i>
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: '10px', borderTop: '1px solid #e5e7eb', paddingTop: '6px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
+                      BATCH: {c.batchNumber || 'BATCH-ACT'} • ONE TIME ACTIVATION
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════ SHIPPING SLIP & WAYBILL PRINT MODAL (ROOT LEVEL) ════════════════ */}
+      {isShippingSlipOpen && selectedOrderForShipping && (
+        <div
+          className="shipping-slip-modal"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(5, 7, 10, 0.94)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 10000,
+            overflowY: 'auto',
+            padding: '24px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+          }}
+        >
+          {/* Toolbar (Hidden in Print) */}
+          <div
+            className="no-print shipping-slip-toolbar"
+            style={{
+              width: '100%',
+              maxWidth: '820px',
+              background: 'rgba(20, 26, 40, 0.95)',
+              border: '1px solid var(--gold-primary)',
+              borderRadius: '16px',
+              padding: '16px 22px',
+              marginBottom: '20px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '14px',
+              position: 'sticky',
+              top: '16px',
+              zIndex: 10001,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Truck size={22} color="var(--gold-primary)" />
+              <div>
+                <h4 style={{ color: '#fff', fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>
+                  بوليصة شحن وتوصيل طلب COD • {selectedOrderForShipping.orderNumber}
+                </h4>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '2px 0 0' }}>
+                  العميل: {selectedOrderForShipping.recipientName} • المحافظة: {selectedOrderForShipping.governorate}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => handleCopyShippingDetails(selectedOrderForShipping)}
+                className="btn-ghost"
+                style={{ padding: '8px 14px', fontSize: '0.85rem', gap: '6px' }}
+                title="نسخ نص بيانات الشحن للواتساب"
+              >
+                <Copy size={16} />
+                <span>نسخ للواتساب</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintShippingSlip}
+                disabled={isPrinting}
+                className="btn-gold"
+                style={{ padding: '8px 20px', fontSize: '0.9rem', fontWeight: 800, gap: '8px', cursor: isPrinting ? 'not-allowed' : 'pointer' }}
+              >
+                <Printer size={18} />
+                <span>{isPrinting ? 'جاري التحضير للطباعة...' : 'طباعة البوليصة الآن (Print)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsShippingSlipOpen(false);
+                  setSelectedOrderForShipping(null);
+                }}
+                className="btn-ghost"
+                style={{ padding: '8px 14px', fontSize: '0.9rem', color: '#f87171' }}
+                title="إغلاق"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Printable Waybill Sheet (Pure White Background & Black Text - ZERO EMOJIS) */}
+          <div
+            className="printable-area shipping-waybill-canvas"
+            style={{
+              width: '100%',
+              maxWidth: '750px',
+              background: '#ffffff',
+              backgroundColor: '#ffffff',
+              color: '#000000',
+              borderRadius: '12px',
+              padding: '28px',
+              border: '2px solid #000000',
+              boxShadow: '0 12px 48px rgba(0,0,0,0.8)',
+              direction: 'rtl',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2.5px solid #000000', paddingBottom: '14px', marginBottom: '18px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#000000' }}>ركنة RAKNA</span>
+                  <span style={{ fontSize: '0.8rem', background: '#000000', color: '#ffffff', padding: '3px 8px', borderRadius: '4px', fontWeight: 800 }}>
+                    بوليصة شحن وتوصيل
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.82rem', color: '#000000', marginTop: '4px', fontWeight: 600 }}>
+                  منظومة حماية المركبات والتواصل الذكي • إشعار تسليم COD
+                </div>
+              </div>
+              <div style={{ textAlign: 'left', direction: 'ltr' }}>
+                <div style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: 'monospace', color: '#000000', letterSpacing: '1px' }}>
+                  {selectedOrderForShipping.orderNumber}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#333333', fontWeight: 600 }}>
+                  تاريخ الطلب: {new Date(selectedOrderForShipping.createdAt || Date.now()).toLocaleDateString('ar-EG')}
+                </div>
+              </div>
+            </div>
+
+            {/* Grid: Sender & Recipient Info */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '18px' }}>
+              {/* Recipient Info (To) */}
+              <div style={{ border: '2px solid #000000', borderRadius: '8px', padding: '12px', background: '#ffffff' }}>
+                <div style={{ fontWeight: 900, fontSize: '0.95rem', borderBottom: '1.5px solid #000000', paddingBottom: '6px', marginBottom: '8px', color: '#000000' }}>
+                  بيانات المستلم (العميل)
+                </div>
+                <div style={{ fontSize: '0.88rem', marginBottom: '5px', color: '#000000' }}>
+                  <b>الاسم:</b> <span style={{ fontWeight: 800, fontSize: '0.95rem' }}>{selectedOrderForShipping.recipientName}</span>
+                </div>
+                <div style={{ fontSize: '0.88rem', marginBottom: '5px', color: '#000000' }}>
+                  <b>الهاتف:</b> <span style={{ fontWeight: 900, fontFamily: 'monospace', fontSize: '1rem', direction: 'ltr', display: 'inline-block' }}>{selectedOrderForShipping.phone}</span>
+                </div>
+                <div style={{ fontSize: '0.88rem', marginBottom: '5px', color: '#000000' }}>
+                  <b>المحافظة:</b> <span style={{ fontWeight: 800 }}>{selectedOrderForShipping.governorate}</span>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#000000', lineHeight: 1.5 }}>
+                  <b>العنوان التفصيلي:</b> {selectedOrderForShipping.addressDetails}
+                </div>
+              </div>
+
+              {/* Sender Info (From) */}
+              <div style={{ border: '1.5px solid #000000', borderRadius: '8px', padding: '12px', background: '#f9fafb' }}>
+                <div style={{ fontWeight: 900, fontSize: '0.95rem', borderBottom: '1.5px solid #000000', paddingBottom: '6px', marginBottom: '8px', color: '#000000' }}>
+                  بيانات الراسل (المتجر)
+                </div>
+                <div style={{ fontSize: '0.85rem', marginBottom: '5px', color: '#000000' }}>
+                  <b>الراسل:</b> شركة ركنة الذكية (RAKNA Tech)
+                </div>
+                <div style={{ fontSize: '0.85rem', marginBottom: '5px', color: '#000000' }}>
+                  <b>خدمة العملاء:</b> دعم متجر وتطبيق ركنة الرسمي
+                </div>
+                <div style={{ fontSize: '0.85rem', marginBottom: '5px', color: '#000000' }}>
+                  <b>الموقع الإلكتروني:</b> rakna.tech
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#374151', marginTop: '6px', lineHeight: 1.4 }}>
+                  <b>طبيعة الشحنة:</b> ملصقات ذكية مشفرة لحماية السيارات وكروت تفعيل
+                </div>
+              </div>
+            </div>
+
+            {/* Package Contents Table */}
+            <div style={{ border: '1.5px solid #000000', borderRadius: '8px', overflow: 'hidden', marginBottom: '18px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
+                <thead>
+                  <tr style={{ background: '#f3f4f6', borderBottom: '1.5px solid #000000', fontSize: '0.85rem', color: '#000000' }}>
+                    <th style={{ padding: '8px 12px' }}>م</th>
+                    <th style={{ padding: '8px 12px' }}>المنتج / محتويات الطرد</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center' }}>الكمية</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left' }}>سعر الوحدة</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left' }}>الإجمالي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedOrderForShipping.items && selectedOrderForShipping.items.length > 0 ? (
+                    selectedOrderForShipping.items.map((it, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb', fontSize: '0.85rem', color: '#000000' }}>
+                        <td style={{ padding: '8px 12px', fontWeight: 700 }}>{idx + 1}</td>
+                        <td style={{ padding: '8px 12px', fontWeight: 800 }}>{it.productName || 'ملصق ركنة الذكي'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 900 }}>{it.quantity || 1}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace' }}>{it.unitPrice || selectedOrderForShipping.totalPrice} EGP</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace', fontWeight: 800 }}>
+                          {(it.unitPrice ? it.unitPrice * (it.quantity || 1) : selectedOrderForShipping.totalPrice)} EGP
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr style={{ fontSize: '0.85rem', color: '#000000' }}>
+                      <td style={{ padding: '8px 12px', fontWeight: 700 }}>1</td>
+                      <td style={{ padding: '8px 12px', fontWeight: 800 }}>ملصق حماية المركبات ركنة (Tag)</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 900 }}>1</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace' }}>{selectedOrderForShipping.totalPrice} EGP</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace', fontWeight: 800 }}>{selectedOrderForShipping.totalPrice} EGP</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Big COD Cash Collection Banner (NO EMOJIS) */}
+            <div style={{
+              border: '2.5px solid #000000',
+              borderRadius: '10px',
+              padding: '14px 18px',
+              background: '#f9fafb',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '18px',
+            }}>
+              <div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 900, color: '#000000' }}>
+                  المبلغ المطلوب تحصيله نقداً عند الاستلام (COD):
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#374151', marginTop: '2px' }}>
+                  طريقة الدفع: الدفع عند الاستلام • شامل مصاريف الشحن والتوصيل
+                </div>
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#000000', fontFamily: 'monospace', letterSpacing: '1px' }}>
+                  {selectedOrderForShipping.totalPrice} EGP
+                </div>
+              </div>
+            </div>
+
+            {/* Courier Instructions & Signatures (NO EMOJIS) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '14px', borderTop: '1.5px dashed #000000', paddingTop: '12px' }}>
+              <div style={{ fontSize: '0.78rem', color: '#1f2937', lineHeight: 1.6 }}>
+                <b>تعليمات هامة لمندوب شركة الشحن:</b><br />
+                • يرجى الاتصال بالعميل قبل التحرك للتسليم للتأكد من تواجده بالعنوان.<br />
+                • لا يُسمح بفتح الطرد أو العبث بالملصق الأمني إلا بعد تحصيل كامل المبلغ.<br />
+                • في حال تعذر الوصول، يرجى إعادة المحاولة أو التواصل مع خدمة العملاء.
+              </div>
+              <div style={{ borderRight: '1.5px dashed #000000', paddingRight: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '0.8rem', color: '#000000' }}>
+                  <b>توقيع مستلم الشحنة:</b> ..............................
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#000000', marginTop: '8px' }}>
+                  <b>توقيع وتاريخ المندوب:</b> ..............................
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────── نافذة إرسال إشعار عام لكافة المستخدمين ──────────────── */}
+      {broadcastModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(5px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '20px',
+        }}>
+          <div style={{
+            background: 'var(--bg-card)',
+            border: '1px solid rgba(245, 190, 24, 0.4)',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '540px',
+            padding: '28px',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6), var(--shadow-gold)',
+            position: 'relative',
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: 'rgba(245, 190, 24, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <Megaphone size={22} color="var(--gold-primary)" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    إرسال إشعار عام للكل
+                  </h3>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    سيصل الإشعار كـ Push Notification مباشر على هواتف جميع المستخدمين 📲
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setBroadcastModalOpen(false)}
+                disabled={isSendingBroadcast}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '8px',
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSendBroadcast}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  عنوان الإشعار (Title):
+                </label>
+                <input
+                  type="text"
+                  placeholder="مثال: تحديث هام بخصوص خدمة ركنة 🚗"
+                  value={broadcastForm.title}
+                  onChange={(e) => setBroadcastForm({ ...broadcastForm, title: e.target.value })}
+                  disabled={isSendingBroadcast}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.92rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '22px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  نص الإشعار (Message Body):
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder="اكتب رسالتك لجميع مستخدمي التطبيق هنا بالتفصيل..."
+                  value={broadcastForm.message}
+                  onChange={(e) => setBroadcastForm({ ...broadcastForm, message: e.target.value })}
+                  disabled={isSendingBroadcast}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.92rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                  }}
+                />
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => setBroadcastModalOpen(false)}
+                  disabled={isSendingBroadcast}
+                  style={{
+                    padding: '11px 20px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'transparent',
+                    color: 'var(--text-secondary)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSendingBroadcast || !broadcastForm.title.trim() || !broadcastForm.message.trim()}
+                  style={{
+                    padding: '11px 24px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: 'var(--gold-primary)',
+                    color: '#000',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    fontSize: '0.92rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: 'var(--shadow-gold)',
+                    opacity: isSendingBroadcast ? 0.7 : 1,
+                  }}
+                >
+                  <Send size={16} />
+                  <span>{isSendingBroadcast ? 'جاري الإرسال للجميع...' : 'إرسال الإشعار الآن 🚀'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
