@@ -102,6 +102,77 @@ const parseTicketContent = (content) => {
   return { problemType, phone, email, description, isStructured };
 };
 
+// Generate a guaranteed new sequential batch name that doesn't collide with existing batches
+const buildNextBatchName = (prefix, existingNames = []) => {
+  const year = new Date().getFullYear();
+  const existingSet = new Set(
+    (existingNames || []).map((n) => String(n || '').trim().toUpperCase()).filter(Boolean)
+  );
+  let seq = 1;
+  const regex = new RegExp(`^${prefix}-${year}-(\\d+)$`, 'i');
+  existingSet.forEach((name) => {
+    const match = name.match(regex);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!Number.isNaN(num) && num >= seq) seq = num + 1;
+    }
+  });
+  let candidate = `${prefix}-${year}-${String(seq).padStart(3, '0')}`;
+  while (existingSet.has(candidate.toUpperCase())) {
+    seq += 1;
+    candidate = `${prefix}-${year}-${String(seq).padStart(3, '0')}`;
+  }
+  return candidate;
+};
+
+// Group raw tags list by batchNumber as a fallback if /admin/batches is unavailable
+const groupTagsIntoBatches = (tagsList = []) => {
+  const groups = new Map();
+  for (const t of tagsList) {
+    const key = (t.batchNumber || '').trim() || 'UNBATCHED';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  }
+  const result = Array.from(groups.entries()).map(([batchNumber, list]) => {
+    const totalCount = list.length;
+    const inStockCount = list.filter((t) => t.status === 'IN_STOCK').length;
+    const activeCount = list.filter((t) => t.status === 'ACTIVE').length;
+    const printedTagsCount = list.filter((t) => t.isPrinted).length;
+    const unprintedTagsCount = totalCount - printedTagsCount;
+    const types = new Set(list.map((t) => t.tagType));
+    const tagType = types.size > 1 ? 'MIXED' : (list[0]?.tagType || 'TRUNK_BADGE');
+    const nfcCount = list.filter((t) => t.hasNfc !== false).length;
+    const qrOnlyCount = list.filter((t) => t.hasNfc === false).length;
+    const techType = nfcCount > 0 && qrOnlyCount > 0 ? 'MIXED' : qrOnlyCount > 0 ? 'QR_ONLY' : 'NFC_QR';
+    const earliestCreatedAt = list
+      .map((t) => new Date(t.createdAt || Date.now()).getTime())
+      .reduce((a, b) => Math.min(a, b), Date.now());
+    const latestPrintedAt = list
+      .map((t) => (t.printedAt ? new Date(t.printedAt).getTime() : 0))
+      .reduce((a, b) => Math.max(a, b), 0);
+
+    return {
+      batchNumber,
+      tagType,
+      techType,
+      nfcCount,
+      qrOnlyCount,
+      totalCount,
+      inStockCount,
+      activeCount,
+      printedTagsCount,
+      unprintedTagsCount,
+      isPrinted: totalCount > 0 && printedTagsCount === totalCount,
+      printedAt: latestPrintedAt ? new Date(latestPrintedAt).toISOString() : null,
+      printCount: printedTagsCount > 0 ? 1 : 0,
+      createdAt: new Date(earliestCreatedAt).toISOString(),
+      tags: list,
+    };
+  });
+  result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return result;
+};
+
 export default function App() {
   const [admin, setAdmin] = useState(api.admin);
   const [token, setToken] = useState(api.token);
@@ -139,13 +210,26 @@ export default function App() {
   // Vehicle Stickers (Tags) Generator
   const [genQuantity, setGenQuantity] = useState(10);
   const [genType, setGenType] = useState('TRUNK_BADGE');
-  const [genBatch, setGenBatch] = useState('BATCH-2026-Q1');
+  const [genHasNfc, setGenHasNfc] = useState(true); // true = NFC + QR, false = QR only
+  const [genBatch, setGenBatch] = useState(() => buildNextBatchName('BATCH', []));
+  const [lastGeneratedBatch, setLastGeneratedBatch] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedTags, setGeneratedTags] = useState([]);
 
+  // Batches Management & Selective Printing Screen
+  const [tagBatches, setTagBatches] = useState([]);
+  const [batchFilter, setBatchFilter] = useState('ALL'); // 'ALL' | 'UNPRINTED' | 'PARTIAL' | 'PRINTED'
+  const [batchTechFilter, setBatchTechFilter] = useState('ALL'); // 'ALL' | 'NFC_QR' | 'QR_ONLY'
+  const [batchSearch, setBatchSearch] = useState('');
+  const [selectedBatchName, setSelectedBatchName] = useState(null);
+  const [batchTagFilter, setBatchTagFilter] = useState('ALL'); // 'ALL' | 'UNPRINTED' | 'PRINTED' | 'IN_STOCK'
+  const [batchTagSearch, setBatchTagSearch] = useState('');
+  const [selectedTagIdsByBatch, setSelectedTagIdsByBatch] = useState({});
+
   // Activation Codes (Packaging Cards) Generator
   const [actQuantity, setActQuantity] = useState(25);
-  const [actBatch, setActBatch] = useState('ACT-BATCH-2026-01');
+  const [actBatch, setActBatch] = useState(() => buildNextBatchName('ACT-BATCH', []));
+  const [lastGeneratedActBatch, setLastGeneratedActBatch] = useState('');
   const [isGeneratingAct, setIsGeneratingAct] = useState(false);
   const [generatedActCodes, setGeneratedActCodes] = useState([]);
   const [activationCodesList, setActivationCodesList] = useState([]);
@@ -158,6 +242,7 @@ export default function App() {
   const [printStudioTitle, setPrintStudioTitle] = useState('');
   const [printStudioSubtitle, setPrintStudioSubtitle] = useState('');
   const [printStudioItems, setPrintStudioItems] = useState([]);
+  const [printStudioContext, setPrintStudioContext] = useState(null); // { batchNumber, tagIds, markFullBatch }
   const [printColumns, setPrintColumns] = useState(3);
   const [printShowCutLines, setPrintShowCutLines] = useState(true);
   const [printShowHeader, setPrintShowHeader] = useState(true);
@@ -486,9 +571,10 @@ export default function App() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const [statsRes, tagsRes, ordersRes, usersRes, waRes, govsRes, waConfRes, supportRes, abuseRes, quickRes, prodRes, banRes, actRes] = await Promise.all([
+      const [statsRes, tagsRes, batchesRes, ordersRes, usersRes, waRes, govsRes, waConfRes, supportRes, abuseRes, quickRes, prodRes, banRes, actRes] = await Promise.all([
         api.getStats().catch(() => null),
         api.listTags().catch(() => null),
+        api.listBatches().catch(() => null),
         api.listOrders().catch(() => null),
         api.listUsers().catch(() => null),
         api.getWhatsAppOutbox().catch(() => null),
@@ -504,9 +590,46 @@ export default function App() {
 
       if (statsRes && statsRes.stats) setStats(statsRes.stats);
       if (tagsRes && tagsRes.tags) setTags(tagsRes.tags);
+
+      const resolvedBatches = (batchesRes && Array.isArray(batchesRes.batches))
+        ? batchesRes.batches
+        : (tagsRes && tagsRes.tags ? groupTagsIntoBatches(tagsRes.tags) : []);
+      setTagBatches(resolvedBatches);
+
+      if (resolvedBatches.length > 0) {
+        setSelectedBatchName((prev) => {
+          if (prev && resolvedBatches.some((b) => b.batchNumber === prev)) return prev;
+          return resolvedBatches[0].batchNumber;
+        });
+      }
+
+      const existingBatchNames = [
+        ...resolvedBatches.map((b) => b.batchNumber),
+        ...(tagsRes?.tags || []).map((t) => t.batchNumber),
+      ].filter(Boolean);
+      setGenBatch((prev) => {
+        const normalized = (prev || '').trim().toUpperCase();
+        const exists = existingBatchNames.some((n) => String(n).trim().toUpperCase() === normalized);
+        if (!normalized || exists) {
+          return buildNextBatchName('BATCH', existingBatchNames);
+        }
+        return prev;
+      });
+
       if (ordersRes && ordersRes.orders) setOrders(ordersRes.orders);
       if (usersRes && usersRes.users) setUsersList(usersRes.users);
-      if (actRes && actRes.codes) setActivationCodesList(actRes.codes);
+      if (actRes && actRes.codes) {
+        setActivationCodesList(actRes.codes);
+        const existingActNames = actRes.codes.map((c) => c.batchNumber).filter(Boolean);
+        setActBatch((prev) => {
+          const normalized = (prev || '').trim().toUpperCase();
+          const exists = existingActNames.some((n) => String(n).trim().toUpperCase() === normalized);
+          if (!normalized || exists) {
+            return buildNextBatchName('ACT-BATCH', existingActNames);
+          }
+          return prev;
+        });
+      }
       if (govsRes && govsRes.governorates) setGovernorates(govsRes.governorates);
       if (waRes && waRes.messages) {
         setWhatsappMessages(waRes.messages);
@@ -674,11 +797,18 @@ export default function App() {
     e.preventDefault();
     setIsGenerating(true);
     try {
-      const res = await api.generateTagsBatch(Number(genQuantity), genType, genBatch);
+      const existingNames = tagBatches.map((b) => b.batchNumber).filter(Boolean);
+      const batchToCreate = (genBatch || '').trim() || buildNextBatchName('BATCH', existingNames);
+      const res = await api.generateTagsBatch(Number(genQuantity), genType, batchToCreate, genHasNfc);
       if (res.success) {
+        const createdBatchName = res.batchNumber || batchToCreate;
         setGeneratedTags(res.tags);
-        showToast(`تم بنجاح توليد ${res.count} ملصق ذكي وجاهز للطباعة! 🎉`);
-        loadAllData();
+        setLastGeneratedBatch(createdBatchName);
+        setSelectedBatchName(createdBatchName);
+        const nextName = buildNextBatchName('BATCH', [...existingNames, createdBatchName]);
+        setGenBatch(nextName);
+        showToast(`تم بنجاح توليد ${res.count} ملصق (${genHasNfc ? 'NFC + QR' : 'QR فقط'}) في دفعة جديدة (${createdBatchName}) 🎉`);
+        await loadAllData();
       }
     } catch (err) {
       alert(err.message || 'تعذر توليد الدفعة');
@@ -691,11 +821,16 @@ export default function App() {
     e.preventDefault();
     setIsGeneratingAct(true);
     try {
-      const res = await api.generateActivationCodesBatch(Number(actQuantity), actBatch);
+      const existingActNames = activationCodesList.map((c) => c.batchNumber).filter(Boolean);
+      const batchToCreate = (actBatch || '').trim() || buildNextBatchName('ACT-BATCH', existingActNames);
+      const res = await api.generateActivationCodesBatch(Number(actQuantity), batchToCreate);
       if (res.success) {
+        const createdBatchName = res.batchNumber || batchToCreate;
         setGeneratedActCodes(res.codes);
-        showToast(`تم بنجاح توليد ${res.count} كود تفعيل سري وجاهز للطباعة والتعليب! 🎉`);
-        loadAllData();
+        setLastGeneratedActBatch(createdBatchName);
+        setActBatch(buildNextBatchName('ACT-BATCH', [...existingActNames, createdBatchName]));
+        showToast(`تم بنجاح توليد ${res.count} كود تفعيل سري في الدفعة (${createdBatchName}) 🎉`);
+        await loadAllData();
       }
     } catch (err) {
       alert(err.message || 'تعذر توليد دفعة كروت التفعيل');
@@ -758,10 +893,109 @@ export default function App() {
     });
   };
 
-  const handlePrintStudio = () => {
+  const applyLocalPrintState = (context, printed = true) => {
+    if (!context) return;
+    const printedIdSet = new Set(context.tagIds || []);
+    const nowIso = printed ? new Date().toISOString() : null;
+
+    setTags((prev) =>
+      prev.map((t) => {
+        const matchesId = printedIdSet.has(t.id);
+        const matchesBatch = context.markFullBatch && context.batchNumber && t.batchNumber === context.batchNumber;
+        if (!matchesId && !matchesBatch) return t;
+        return {
+          ...t,
+          isPrinted: printed,
+          printedAt: nowIso,
+          printCount: printed ? (t.printCount || 0) + 1 : 0,
+        };
+      })
+    );
+
+    setTagBatches((prev) =>
+      prev.map((b) => {
+        const isTargetBatch = context.batchNumber && b.batchNumber === context.batchNumber;
+        const updatedTags = (b.tags || []).map((t) => {
+          const matchesId = printedIdSet.has(t.id);
+          const matchesBatch = context.markFullBatch && isTargetBatch;
+          if (!matchesId && !matchesBatch) return t;
+          return {
+            ...t,
+            isPrinted: printed,
+            printedAt: nowIso,
+            printCount: printed ? (t.printCount || 0) + 1 : 0,
+          };
+        });
+        const printedTagsCount = updatedTags.filter((t) => t.isPrinted).length;
+        const totalCount = updatedTags.length;
+        const batchIsPrinted = isTargetBatch && context.markFullBatch
+          ? printed
+          : (totalCount > 0 && printedTagsCount === totalCount);
+
+        return {
+          ...b,
+          tags: updatedTags,
+          printedTagsCount,
+          unprintedTagsCount: totalCount - printedTagsCount,
+          isPrinted: batchIsPrinted,
+          printedAt: batchIsPrinted ? (nowIso || b.printedAt) : (printed ? b.printedAt : null),
+          printCount: (isTargetBatch && context.markFullBatch && printed) ? (b.printCount || 0) + 1 : b.printCount,
+        };
+      })
+    );
+  };
+
+  const handleToggleBatchPrinted = async (batch, targetPrinted) => {
+    const context = {
+      batchNumber: batch.batchNumber,
+      tagIds: (batch.tags || []).map((t) => t.id).filter(Boolean),
+      markFullBatch: true,
+      printed: targetPrinted,
+    };
+    applyLocalPrintState(context, targetPrinted);
+    try {
+      await api.markBatchPrinted(context);
+      showToast(targetPrinted ? `تم وضع علامة "تم الطبع" على الدفعة (${batch.batchNumber}) ✅` : `تم إلغاء علامة الطبع عن الدفعة (${batch.batchNumber})`);
+      const batchesRes = await api.listBatches().catch(() => null);
+      if (batchesRes && batchesRes.batches) setTagBatches(batchesRes.batches);
+    } catch (err) {
+      showToast('تم التحديث محلياً — تعذر مزامنة حالة الطباعة مع الخادم');
+    }
+  };
+
+  const toggleBatchTagSelection = (batchNumber, tagId) => {
+    setSelectedTagIdsByBatch((prev) => {
+      const current = prev[batchNumber] || [];
+      const exists = current.includes(tagId);
+      return {
+        ...prev,
+        [batchNumber]: exists ? current.filter((id) => id !== tagId) : [...current, tagId],
+      };
+    });
+  };
+
+  const selectTagsInBatch = (batchNumber, ids) => {
+    setSelectedTagIdsByBatch((prev) => ({
+      ...prev,
+      [batchNumber]: Array.from(new Set(ids)),
+    }));
+  };
+
+  const handlePrintStudio = async () => {
     if (isPrinting) return;
     setIsPrinting(true);
     document.body.classList.add('print-studio-active');
+
+    if (printStudioType === 'stickers' && printStudioContext) {
+      applyLocalPrintState(printStudioContext, true);
+      api.markBatchPrinted({ ...printStudioContext, printed: true })
+        .then(async () => {
+          const batchesRes = await api.listBatches().catch(() => null);
+          if (batchesRes && batchesRes.batches) setTagBatches(batchesRes.batches);
+        })
+        .catch(() => {});
+    }
+
     setTimeout(() => {
       window.print();
       setTimeout(() => {
@@ -771,7 +1005,7 @@ export default function App() {
     }, 150);
   };
 
-  const openPrintStudioForStickers = (items, title, subtitle) => {
+  const openPrintStudioForStickers = (items, title, subtitle, context = null) => {
     setPrintStudioType('stickers');
     setPrintStudioTitle(title || 'شيت طباعة ملصقات السيارات والـ QR');
     setPrintStudioSubtitle(subtitle || 'جاهزة للقص واللصق على هياكل وزجاج السيارات');
@@ -780,7 +1014,13 @@ export default function App() {
       new Map((items || []).map((t) => [t.id || t.tagCode, t])).values()
     );
     setPrintStudioItems(unique);
-    setPrintColumns(3);
+    setPrintStudioContext(
+      context || {
+        tagIds: unique.map((t) => t.id).filter(Boolean),
+        markFullBatch: false,
+      }
+    );
+    setPrintColumns(unique.length === 1 ? 2 : 3);
     setIsPrintStudioOpen(true);
   };
 
@@ -793,6 +1033,7 @@ export default function App() {
       new Map((items || []).map((c) => [c.id || c.code, c])).values()
     );
     setPrintStudioItems(unique);
+    setPrintStudioContext(null);
     setPrintColumns(2);
     setIsPrintStudioOpen(true);
   };
@@ -1856,6 +2097,41 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setCurrentTab('batches')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '11px 14px',
+              borderRadius: '10px',
+              border: 'none',
+              background: currentTab === 'batches' ? 'rgba(245, 190, 24, 0.15)' : 'transparent',
+              color: currentTab === 'batches' ? 'var(--gold-primary)' : 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              textAlign: 'right',
+              transition: 'all 0.18s ease',
+            }}
+          >
+            <Printer size={20} />
+            <span>دفعات الـ Tags (Batches)</span>
+            {tagBatches.length > 0 && (
+              <span style={{
+                marginRight: 'auto',
+                background: 'rgba(245, 190, 24, 0.2)',
+                color: 'var(--gold-primary)',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                padding: '2px 8px',
+                borderRadius: '12px',
+              }}>
+                {tagBatches.length}
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setCurrentTab('orders')}
             style={{
               display: 'flex',
@@ -2259,6 +2535,7 @@ export default function App() {
             <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff' }}>
               {currentTab === 'overview' && 'نظرة عامة على النظام'}
               {currentTab === 'generator' && 'توليد دفعات ملصقات الـ Tags والطباعة للمطابع'}
+              {currentTab === 'batches' && 'إدارة دفعات الـ Tags والطباعة الفردية والمجمعة'}
               {currentTab === 'orders' && 'سجل طلبات المتجر والشحن بالمحافظات المصرية'}
               {currentTab === 'tags' && 'سجل وفهرس ملصقات الـ Tags'}
               {currentTab === 'users' && 'سجل المستخدمين ومالكي المركبات'}
@@ -2644,9 +2921,27 @@ export default function App() {
                       </div>
 
                       <div>
-                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                          رقم دفعة الإنتاج (Batch No.)
-                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '8px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                            رقم دفعة الإنتاج (Batch No.)
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setGenBatch(buildNextBatchName('BATCH', tagBatches.map((b) => b.batchNumber)))}
+                            style={{
+                              background: 'rgba(245, 190, 24, 0.12)',
+                              color: 'var(--gold-primary)',
+                              border: '1px solid rgba(245, 190, 24, 0.3)',
+                              borderRadius: '6px',
+                              padding: '2px 8px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            ✨ اسم جديد تلقائي
+                          </button>
+                        </div>
                         <input
                           type="text"
                           required
@@ -2663,16 +2958,69 @@ export default function App() {
                             direction: 'ltr',
                           }}
                         />
+                        {tagBatches.some((b) => (b.batchNumber || '').toUpperCase() === (genBatch || '').trim().toUpperCase()) && (
+                          <div style={{ fontSize: '0.72rem', color: '#fbbf24', marginTop: '5px' }}>
+                            ⚠️ اسم الدفعة مستخدم مسبقاً — اضغط "اسم جديد تلقائي" لإنشاء دفعة منفصلة.
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                          تقنية المنتج (التوليد)
+                        </label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setGenHasNfc(true)}
+                            style={{
+                              padding: '11px 10px',
+                              borderRadius: '10px',
+                              border: genHasNfc ? '1.5px solid #a78bfa' : '1px solid var(--border-subtle)',
+                              background: genHasNfc ? 'rgba(139, 92, 246, 0.18)' : 'var(--bg-input)',
+                              color: genHasNfc ? '#ddd6fe' : 'var(--text-secondary)',
+                              fontWeight: 800,
+                              fontSize: '0.82rem',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-arabic)',
+                            }}
+                          >
+                            📡 NFC + QR
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setGenHasNfc(false)}
+                            style={{
+                              padding: '11px 10px',
+                              borderRadius: '10px',
+                              border: !genHasNfc ? '1.5px solid #22d3ee' : '1px solid var(--border-subtle)',
+                              background: !genHasNfc ? 'rgba(6, 182, 212, 0.18)' : 'var(--bg-input)',
+                              color: !genHasNfc ? '#cffafe' : 'var(--text-secondary)',
+                              fontWeight: 800,
+                              fontSize: '0.82rem',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-arabic)',
+                            }}
+                          >
+                            📷 QR فقط
+                          </button>
+                        </div>
                       </div>
 
                       <button
                         type="submit"
                         disabled={isGenerating}
                         className="btn-gold"
-                        style={{ height: '48px', fontSize: '0.95rem' }}
+                        style={{ height: '48px', fontSize: '0.92rem' }}
                       >
                         <QrCode size={18} />
-                        <span>{isGenerating ? 'جاري التوليد...' : 'توليد ملصقات الـ QR الآن'}</span>
+                        <span>
+                          {isGenerating
+                            ? 'جاري التوليد...'
+                            : genHasNfc
+                              ? 'توليد ملصقات NFC + QR الآن'
+                              : 'توليد ملصقات QR فقط الآن'}
+                        </span>
                       </button>
                     </form>
                   </div>
@@ -2683,22 +3031,43 @@ export default function App() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                         <div>
                           <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff' }}>
-                            الدفعة المولدة حديثاً: {genBatch} ({generatedTags.length} ملصق)
+                            الدفعة المولدة حديثاً: {lastGeneratedBatch || genBatch} ({generatedTags.length} ملصق)
                           </h3>
                           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                             رموز QR عالية الدقة المتجهة جاهزة للتصدير والطباعة.
                           </p>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                           <button
                             type="button"
-                            onClick={() => openPrintStudioForStickers(generatedTags, `دفعة ملصقات: ${genBatch}`, 'جاهزة للطباعة على ورق الملصقات للمطابع')}
+                            onClick={() => openPrintStudioForStickers(
+                              generatedTags,
+                              `دفعة ملصقات: ${lastGeneratedBatch || genBatch}`,
+                              'جاهزة للطباعة على ورق الملصقات للمطابع',
+                              {
+                                batchNumber: lastGeneratedBatch || genBatch,
+                                tagIds: generatedTags.map((t) => t.id).filter(Boolean),
+                                markFullBatch: true,
+                              }
+                            )}
                             className="btn-gold"
                             style={{ fontSize: '0.88rem', gap: '8px' }}
                           >
                             <Printer size={16} />
-                            <span>فتح محرر الطباعة للدفعة ({generatedTags.length})</span>
+                            <span>طباعة الدفعة الآن ({generatedTags.length})</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedBatchName(lastGeneratedBatch || genBatch);
+                              setCurrentTab('batches');
+                            }}
+                            className="btn-ghost"
+                            style={{ fontSize: '0.86rem', gap: '8px' }}
+                          >
+                            <Layers size={16} />
+                            <span>إدارة في شاشة الدفعات</span>
                           </button>
                         </div>
                       </div>
@@ -2723,19 +3092,32 @@ export default function App() {
                             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                               {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
                             </div>
-                            <div
-                              style={{ fontSize: '0.65rem', color: '#9ca3af', fontFamily: 'var(--font-mono)', marginTop: '6px', cursor: 'pointer' }}
-                              title={`اضغط لنسخ الرمز المشفر بالكامل: ${t.secretToken}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (t.secretToken) {
-                                  navigator.clipboard.writeText(t.secretToken);
-                                  alert(`تم نسخ رمز الشريحة الكامل:\n${t.secretToken}`);
-                                }
-                              }}
-                            >
-                              NFC: {t.secretToken?.substring(0, 16)}... 📋
+                            <div style={{ marginTop: '6px' }}>
+                              {t.hasNfc === false ? (
+                                <span style={{ fontSize: '0.66rem', background: 'rgba(6, 182, 212, 0.16)', color: '#22d3ee', border: '1px solid rgba(6, 182, 212, 0.35)', padding: '2px 8px', borderRadius: '6px', fontWeight: 800 }}>
+                                  📷 QR فقط (بدون NFC)
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: '0.66rem', background: 'rgba(139, 92, 246, 0.16)', color: '#c4b5fd', border: '1px solid rgba(139, 92, 246, 0.35)', padding: '2px 8px', borderRadius: '6px', fontWeight: 800 }}>
+                                  📡 NFC + QR
+                                </span>
+                              )}
                             </div>
+                            {t.hasNfc !== false && (
+                              <div
+                                style={{ fontSize: '0.65rem', color: '#9ca3af', fontFamily: 'var(--font-mono)', marginTop: '6px', cursor: 'pointer' }}
+                                title={`اضغط لنسخ الرمز المشفر بالكامل: ${t.secretToken}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (t.secretToken) {
+                                    navigator.clipboard.writeText(t.secretToken);
+                                    alert(`تم نسخ رمز الشريحة الكامل:\n${t.secretToken}`);
+                                  }
+                                }}
+                              >
+                                NFC: {t.secretToken?.substring(0, 16)}... 📋
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -2758,6 +3140,15 @@ export default function App() {
                             </p>
                           </div>
                           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => setCurrentTab('batches')}
+                              className="btn-ghost"
+                              style={{ fontSize: '0.86rem', borderColor: 'rgba(245, 190, 24, 0.35)', color: 'var(--gold-primary)' }}
+                            >
+                              <Layers size={15} />
+                              <span>شاشة الدفعات المنفصلة ({tagBatches.length})</span>
+                            </button>
                             {inStockTags.length > 0 && (
                               <button
                                 type="button"
@@ -2822,19 +3213,32 @@ export default function App() {
                                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                                   {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
                                 </div>
-                                <div
-                                  style={{ fontSize: '0.62rem', color: '#9ca3af', fontFamily: 'var(--font-mono)', marginTop: '6px', cursor: 'pointer' }}
-                                  title={`اضغط لنسخ الرمز المشفر بالكامل: ${t.secretToken}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (t.secretToken) {
-                                      navigator.clipboard.writeText(t.secretToken);
-                                      alert(`تم نسخ رمز الشريحة الكامل:\n${t.secretToken}`);
-                                    }
-                                  }}
-                                >
-                                  NFC: {t.secretToken?.substring(0, 16)}... 📋
+                                <div style={{ marginTop: '5px' }}>
+                                  {t.hasNfc === false ? (
+                                    <span style={{ fontSize: '0.64rem', background: 'rgba(6, 182, 212, 0.16)', color: '#22d3ee', border: '1px solid rgba(6, 182, 212, 0.35)', padding: '2px 7px', borderRadius: '6px', fontWeight: 800 }}>
+                                      📷 QR فقط
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontSize: '0.64rem', background: 'rgba(139, 92, 246, 0.16)', color: '#c4b5fd', border: '1px solid rgba(139, 92, 246, 0.35)', padding: '2px 7px', borderRadius: '6px', fontWeight: 800 }}>
+                                      📡 NFC + QR
+                                    </span>
+                                  )}
                                 </div>
+                                {t.hasNfc !== false && (
+                                  <div
+                                    style={{ fontSize: '0.62rem', color: '#9ca3af', fontFamily: 'var(--font-mono)', marginTop: '6px', cursor: 'pointer' }}
+                                    title={`اضغط لنسخ الرمز المشفر بالكامل: ${t.secretToken}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (t.secretToken) {
+                                        navigator.clipboard.writeText(t.secretToken);
+                                        alert(`تم نسخ رمز الشريحة الكامل:\n${t.secretToken}`);
+                                      }
+                                    }}
+                                  >
+                                    NFC: {t.secretToken?.substring(0, 16)}... 📋
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -2928,7 +3332,7 @@ export default function App() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                         <div>
                           <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff' }}>
-                            كروت التفعيل المولدة حديثاً: {actBatch} ({generatedActCodes.length} كرت)
+                            كروت التفعيل المولدة حديثاً: {lastGeneratedActBatch || actBatch} ({generatedActCodes.length} كرت)
                           </h3>
                           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                             كروت جاهزة للطباعة على ورق كوشيه مقوى لقصها ووضعها داخل علبة المنتج.
@@ -2938,7 +3342,7 @@ export default function App() {
                         <div style={{ display: 'flex', gap: '10px' }}>
                           <button
                             type="button"
-                            onClick={() => openPrintStudioForActCards(generatedActCodes, `دفعة كروت التفعيل: ${actBatch}`, 'كروت التفعيل السرية داخل العلبة')}
+                            onClick={() => openPrintStudioForActCards(generatedActCodes, `دفعة كروت التفعيل: ${lastGeneratedActBatch || actBatch}`, 'كروت التفعيل السرية داخل العلبة')}
                             className="btn-gold"
                             style={{ fontSize: '0.88rem', gap: '8px' }}
                           >
@@ -3153,263 +3557,656 @@ export default function App() {
                 </div>
               )}
 
-              {/* ════════════════ INTERACTIVE PRINT STUDIO MODAL ════════════════ */}
-              {isPrintStudioOpen && (
-                <div
-                  className="print-studio-modal"
-                  style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'rgba(5, 7, 10, 0.94)',
-                    backdropFilter: 'blur(10px)',
-                    zIndex: 10000,
-                    overflowY: 'auto',
-                    padding: '24px 16px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                  }}
-                >
-                  {/* Sticky Studio Toolbar (Hidden in Print) */}
-                  <div
-                    className="no-print print-studio-toolbar"
-                    style={{
-                      width: '100%',
-                      maxWidth: '920px',
-                      background: 'rgba(20, 26, 40, 0.95)',
-                      border: '1px solid var(--gold-primary)',
-                      borderRadius: '16px',
-                      padding: '16px 22px',
-                      marginBottom: '20px',
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '14px',
-                      position: 'sticky',
-                      top: '16px',
-                      zIndex: 10001,
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Printer size={20} color="var(--gold-primary)" />
-                        <h4 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 800 }}>
-                          محرر الطباعة المباشر • Print Studio
-                        </h4>
-                      </div>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginTop: '3px' }}>
-                        {printStudioTitle} • ({printStudioItems.length} عنصر جاهز للطباعة)
-                      </p>
-                    </div>
+            </div>
+          )}
 
-                    {/* Toolbar Controls */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', borderRadius: '8px', padding: '3px', border: '1px solid var(--border-subtle)' }}>
-                        <button
-                          type="button"
-                          onClick={() => setPrintColumns(3)}
-                          className={printColumns === 3 ? 'btn-gold' : 'btn-ghost'}
-                          style={{ fontSize: '0.75rem', padding: '5px 10px', borderRadius: '6px' }}
-                        >
-                          3 أعمدة (A4)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPrintColumns(2)}
-                          className={printColumns === 2 ? 'btn-gold' : 'btn-ghost'}
-                          style={{ fontSize: '0.75rem', padding: '5px 10px', borderRadius: '6px' }}
-                        >
-                          عمودين (كروت عريضة)
-                        </button>
-                      </div>
+          {/* ════════════════ TAB 2B: TAG BATCHES & INDIVIDUAL PRINTING ════════════════ */}
+          {currentTab === 'batches' && (() => {
+            const printedBatchesCount = tagBatches.filter((b) => b.isPrinted).length;
+            const unprintedBatchesCount = tagBatches.filter((b) => !b.isPrinted && b.printedTagsCount === 0).length;
+            const partialBatchesCount = tagBatches.filter((b) => !b.isPrinted && b.printedTagsCount > 0).length;
+            const nfcBatchesCount = tagBatches.filter((b) => b.techType === 'NFC_QR').length;
+            const qrOnlyBatchesCount = tagBatches.filter((b) => b.techType === 'QR_ONLY').length;
+            const totalTagsCount = tagBatches.reduce((sum, b) => sum + (b.totalCount || 0), 0);
 
-                      <button
-                        type="button"
-                        onClick={() => setPrintShowCutLines(!printShowCutLines)}
-                        className="btn-ghost"
-                        style={{ fontSize: '0.78rem', padding: '6px 12px', border: printShowCutLines ? '1px solid var(--gold-primary)' : '1px solid var(--border-subtle)' }}
-                      >
-                        ✂️ خطوط القص: {printShowCutLines ? 'مفعّلة' : 'مخفية'}
-                      </button>
+            const filteredBatches = tagBatches.filter((b) => {
+              if (batchFilter === 'PRINTED' && !b.isPrinted) return false;
+              if (batchFilter === 'UNPRINTED' && (b.isPrinted || b.printedTagsCount > 0)) return false;
+              if (batchFilter === 'PARTIAL' && (b.isPrinted || b.printedTagsCount === 0)) return false;
+              if (batchTechFilter === 'NFC_QR' && b.techType !== 'NFC_QR') return false;
+              if (batchTechFilter === 'QR_ONLY' && b.techType !== 'QR_ONLY') return false;
+              if (batchSearch.trim()) {
+                const q = batchSearch.trim().toLowerCase();
+                const matchesName = (b.batchNumber || '').toLowerCase().includes(q);
+                const matchesTag = (b.tags || []).some((t) => (t.tagCode || '').toLowerCase().includes(q));
+                if (!matchesName && !matchesTag) return false;
+              }
+              return true;
+            });
 
-                      <button
-                        type="button"
-                        onClick={() => setPrintShowHeader(!printShowHeader)}
-                        className="btn-ghost"
-                        style={{ fontSize: '0.78rem', padding: '6px 12px', border: printShowHeader ? '1px solid var(--gold-primary)' : '1px solid var(--border-subtle)' }}
-                      >
-                        🏢 الترويسة: {printShowHeader ? 'مفعّلة' : 'مخفية'}
-                      </button>
+            const activeBatch =
+              filteredBatches.find((b) => b.batchNumber === selectedBatchName) ||
+              tagBatches.find((b) => b.batchNumber === selectedBatchName) ||
+              filteredBatches[0] ||
+              null;
 
-                      <button
-                        type="button"
-                        onClick={handlePrintStudio}
-                        disabled={isPrinting}
-                        className="btn-gold"
-                        style={{ padding: '8px 20px', fontSize: '0.9rem', fontWeight: 800, gap: '8px', cursor: isPrinting ? 'not-allowed' : 'pointer' }}
-                      >
-                        <Printer size={18} />
-                        <span>{isPrinting ? 'جاري التحضير للطباعة...' : 'طباعة الآن (Print)'}</span>
-                      </button>
+            const activeBatchTags = activeBatch ? (activeBatch.tags || []) : [];
+            const visibleBatchTags = activeBatchTags.filter((t) => {
+              if (batchTagFilter === 'UNPRINTED' && t.isPrinted) return false;
+              if (batchTagFilter === 'PRINTED' && !t.isPrinted) return false;
+              if (batchTagFilter === 'IN_STOCK' && t.status !== 'IN_STOCK') return false;
+              if (batchTagSearch.trim()) {
+                const q = batchTagSearch.trim().toLowerCase();
+                const matchesCode = (t.tagCode || '').toLowerCase().includes(q);
+                const matchesSecret = (t.secretToken || '').toLowerCase().includes(q);
+                if (!matchesCode && !matchesSecret) return false;
+              }
+              return true;
+            });
 
-                      <button
-                        type="button"
-                        onClick={() => setIsPrintStudioOpen(false)}
-                        className="btn-ghost"
-                        style={{ padding: '8px 14px', fontSize: '0.9rem', color: '#f87171' }}
-                        title="إغلاق المحرر"
-                      >
-                        <X size={18} />
-                      </button>
-                    </div>
+            const activeSelectedIds = activeBatch ? (selectedTagIdsByBatch[activeBatch.batchNumber] || []) : [];
+            const activeSelectedSet = new Set(activeSelectedIds);
+            const selectedTagsForPrint = activeBatchTags.filter((t) => activeSelectedSet.has(t.id));
+
+            return (
+              <div className="fade-in">
+                {/* Summary KPIs */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                  <div className="glass-panel" style={{ padding: '18px 20px' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>إجمالي الدفعات (Batches)</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#fff', marginTop: '4px' }} className="number-latin">{tagBatches.length}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>إجمالي {totalTagsCount} ملصق</div>
                   </div>
+                  <div className="glass-panel" style={{ padding: '18px 20px', borderColor: 'rgba(16, 185, 129, 0.3)' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 700 }}>دفعات تم طباعتها ✅</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#34d399', marginTop: '4px' }} className="number-latin">{printedBatchesCount}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>مكتملة الطباعة</div>
+                  </div>
+                  <div className="glass-panel" style={{ padding: '18px 20px', borderColor: 'rgba(245, 158, 11, 0.3)' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: 700 }}>بانتظار الطباعة ⏳</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#fbbf24', marginTop: '4px' }} className="number-latin">{unprintedBatchesCount}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{partialBatchesCount > 0 ? `+ ${partialBatchesCount} مطبوعة جزئياً` : 'لم تُطبع بعد'}</div>
+                  </div>
+                  <div className="glass-panel" style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentTab('generator')}
+                      className="btn-gold"
+                      style={{ width: '100%', padding: '12px 16px', fontSize: '0.9rem' }}
+                    >
+                      <PlusCircle size={18} />
+                      <span>توليد Batch جديد الآن</span>
+                    </button>
+                  </div>
+                </div>
 
-                  {/* WYSIWYG Print Canvas (Prints to Paper) */}
-                  <div
-                    className="printable-area print-studio-canvas"
-                    style={{
-                      width: '100%',
-                      maxWidth: '850px',
-                      background: '#ffffff',
-                      color: '#000000',
-                      borderRadius: '12px',
-                      padding: '30px',
-                      boxShadow: '0 12px 48px rgba(0,0,0,0.8)',
-                      minHeight: '600px',
-                    }}
-                  >
-                    {/* Printable Header */}
-                    {printShowHeader && (
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        borderBottom: '2px solid #000000',
-                        paddingBottom: '14px',
-                        marginBottom: '24px',
-                      }}>
-                        <div>
-                          <h2 style={{ fontSize: '1.4rem', fontWeight: 900, color: '#000', margin: 0 }}>
-                            ركنة RAKNA • {printStudioTitle}
-                          </h2>
-                          <div style={{ fontSize: '0.85rem', color: '#4b5563', marginTop: '4px' }}>
-                            {printStudioSubtitle} • التاريخ: {new Date().toLocaleDateString('ar-EG')}
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: '#374151' }}>
-                          <div>TOTAL: {printStudioItems.length} UNITS</div>
-                          <div style={{ fontWeight: 800 }}>VERITAG SYSTEM</div>
-                        </div>
-                      </div>
-                    )}
+                {/* Filter & Search Bar */}
+                <div className="glass-panel" style={{ padding: '18px 22px', marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {[
+                        { key: 'ALL', label: `كل الدفعات (${tagBatches.length})` },
+                        { key: 'UNPRINTED', label: `لم يُطبع (${unprintedBatchesCount})` },
+                        { key: 'PARTIAL', label: `طُبع جزئياً (${partialBatchesCount})` },
+                        { key: 'PRINTED', label: `تم الطبع (${printedBatchesCount})` },
+                      ].map((f) => (
+                        <button
+                          key={f.key}
+                          type="button"
+                          onClick={() => setBatchFilter(f.key)}
+                          className={batchFilter === f.key ? 'btn-gold' : 'btn-ghost'}
+                          style={{ fontSize: '0.82rem', padding: '7px 14px', borderRadius: '8px' }}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
 
-                    {/* Printable Grid */}
-                    <div className={`print-sheet-grid cols-${printColumns}`}>
-                      {printStudioType === 'stickers' ? (
-                        printStudioItems.map((t) => (
-                          <div
-                            key={t.id || t.tagCode}
-                            className="print-sticker-card"
-                            style={{
-                              border: printShowCutLines ? '1.5px dashed #000000' : '1px solid #d1d5db',
-                              padding: '16px',
-                              textAlign: 'center',
-                              borderRadius: '10px',
-                              background: '#ffffff',
-                              backgroundColor: '#ffffff',
-                              color: '#000000',
-                              pageBreakInside: 'avoid',
-                              breakInside: 'avoid',
-                              boxShadow: 'none',
-                            }}
-                          >
-                            <div style={{ fontSize: '0.72rem', color: '#000000', fontWeight: 900, letterSpacing: '1px', marginBottom: '8px' }}>
-                              RAKNA VERITAG™
-                            </div>
-                            <div
-                              className="qr-box"
-                              style={{
-                                background: '#ffffff',
-                                backgroundColor: '#ffffff',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                margin: '0 auto 8px auto',
-                              }}
-                              dangerouslySetInnerHTML={{
-                                __html: (t.qrCodeSvg || '')
-                                  .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;fill:#000000;" ')
-                              }}
-                            />
-                            <div style={{ fontWeight: 900, fontSize: '1.25rem', color: '#000000' }} className="tag-code">
-                              {t.tagCode}
-                            </div>
-                            <div style={{ fontSize: '0.78rem', color: '#000000', fontWeight: 700, marginTop: '4px' }}>
-                              {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
-                            </div>
-                            <div style={{ fontSize: '0.65rem', color: '#1f2937', fontFamily: 'var(--font-mono)', marginTop: '6px', fontWeight: 600 }}>
-                              NFC: {t.secretToken?.substring(0, 16)}...
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        printStudioItems.map((c) => (
-                          <div
-                            key={c.id || c.code}
-                            className="print-activation-card"
-                            style={{
-                              border: printShowCutLines ? '2px dashed #000000' : '2px solid #000000',
-                              padding: '20px',
-                              textAlign: 'center',
-                              borderRadius: '12px',
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid #000000', paddingBottom: '8px', marginBottom: '12px' }}>
-                              <span style={{ fontWeight: 900, color: '#000000', fontSize: '1.05rem' }}>🚗 ركنة RAKNA</span>
-                              <span style={{ fontSize: '0.75rem', border: '1px solid #000000', padding: '2px 8px', borderRadius: '4px', fontWeight: 800 }}>
-                                كرت تفعيل باكدج
-                              </span>
-                            </div>
-                            <div style={{ fontSize: '0.85rem', color: '#1f2937', fontWeight: 700, marginBottom: '6px' }}>
-                              كود التفعيل السري المخصص للعلبة:
-                            </div>
-                            <div className="act-code-box" style={{
-                              background: '#f3f4f6',
-                              border: '2px dashed #000000',
-                              color: '#000000',
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '1.45rem',
-                              fontWeight: 900,
-                              letterSpacing: '2px',
-                              padding: '10px 14px',
-                              borderRadius: '8px',
-                              margin: '10px 0',
-                            }}>
-                              {c.code}
-                            </div>
-                            <div style={{ fontSize: '0.78rem', color: '#374151', lineHeight: '1.6', marginTop: '10px', textAlign: 'right' }}>
-                              • <b>الخطوة 1:</b> امسح رمز الـ QR الموجود على ملصق سيارتك.<br />
-                              • <b>الخطوة 2:</b> ادخل هذا الكود داخل تطبيق ركنة لإتمام الحماية.<br />
-                              ⚠️ <i>احتفظ بهذه البطاقة ولا تكشف الكود إلا عند التفعيل.</i>
-                            </div>
-                            <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: '10px', borderTop: '1px solid #e5e7eb', paddingTop: '6px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-                              BATCH: {c.batchNumber || 'BATCH-ACT'} • ONE TIME ACTIVATION
-                            </div>
-                          </div>
-                        ))
-                      )}
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => setBatchTechFilter('ALL')}
+                        className={batchTechFilter === 'ALL' ? 'btn-gold' : 'btn-ghost'}
+                        style={{ fontSize: '0.78rem', padding: '6px 12px', borderRadius: '8px' }}
+                      >
+                        كل التقنيات
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBatchTechFilter('NFC_QR')}
+                        style={{
+                          fontSize: '0.78rem',
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          border: batchTechFilter === 'NFC_QR' ? '1.5px solid #a78bfa' : '1px solid var(--border-subtle)',
+                          background: batchTechFilter === 'NFC_QR' ? 'rgba(139, 92, 246, 0.25)' : 'transparent',
+                          color: batchTechFilter === 'NFC_QR' ? '#ede9fe' : 'var(--text-secondary)',
+                        }}
+                      >
+                        📡 NFC + QR ({nfcBatchesCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBatchTechFilter('QR_ONLY')}
+                        style={{
+                          fontSize: '0.78rem',
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          border: batchTechFilter === 'QR_ONLY' ? '1.5px solid #22d3ee' : '1px solid var(--border-subtle)',
+                          background: batchTechFilter === 'QR_ONLY' ? 'rgba(6, 182, 212, 0.25)' : 'transparent',
+                          color: batchTechFilter === 'QR_ONLY' ? '#cffafe' : 'var(--text-secondary)',
+                        }}
+                      >
+                        📷 QR فقط ({qrOnlyBatchesCount})
+                      </button>
+                    </div>
+
+                    <div style={{ position: 'relative', minWidth: '280px', flex: '0 1 340px' }}>
+                      <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', right: '12px', top: '12px' }} />
+                      <input
+                        type="text"
+                        placeholder="ابحث باسم الدفعة أو كود الـ Tag (#...)..."
+                        value={batchSearch}
+                        onChange={(e) => setBatchSearch(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 36px 10px 14px',
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          fontSize: '0.85rem',
+                          fontFamily: 'var(--font-arabic)',
+                        }}
+                      />
                     </div>
                   </div>
                 </div>
-              )}
 
-            </div>
-          )}
+                {filteredBatches.length === 0 ? (
+                  <div className="glass-panel" style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <Package size={48} style={{ opacity: 0.35, marginBottom: '12px' }} />
+                    <p style={{ fontSize: '1.05rem', color: '#fff', fontWeight: 700 }}>لا توجد دفعات مطابقة</p>
+                    <p style={{ fontSize: '0.85rem', marginTop: '6px' }}>يمكنك توليد Batch جديد من شاشة المولّد أو تغيير فلاتر البحث.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 370px) minmax(0, 1fr)', gap: '20px', alignItems: 'start' }}>
+                    {/* RIGHT PANEL: ALL BATCHES LIST */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '78vh', overflowY: 'auto', paddingLeft: '4px' }}>
+                      {filteredBatches.map((b) => {
+                        const isActive = activeBatch && activeBatch.batchNumber === b.batchNumber;
+                        const isPartial = !b.isPrinted && b.printedTagsCount > 0;
+                        const displayName = b.batchNumber === 'UNBATCHED' ? 'بدون اسم دفعة' : b.batchNumber;
+                        return (
+                          <div
+                            key={b.batchNumber}
+                            onClick={() => {
+                              setSelectedBatchName(b.batchNumber);
+                              setBatchTagSearch('');
+                              setBatchTagFilter('ALL');
+                            }}
+                            className="glass-panel"
+                            style={{
+                              padding: '16px',
+                              cursor: 'pointer',
+                              border: isActive
+                                ? '2px solid var(--gold-primary)'
+                                : b.isPrinted
+                                  ? '1px solid rgba(16, 185, 129, 0.35)'
+                                  : '1px solid var(--border-subtle)',
+                              background: isActive
+                                ? 'rgba(245, 190, 24, 0.08)'
+                                : 'rgba(19, 26, 39, 0.85)',
+                              transition: 'all 0.16s ease',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
+                              <div>
+                                <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 900, fontSize: '0.98rem', color: '#fff', direction: 'ltr', textAlign: 'right' }}>
+                                  {displayName}
+                                </div>
+                                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                  {b.tagType === 'TRUNK_BADGE' && 'ملصق شنطة مدرع'}
+                                  {b.tagType === 'NANO_GLASS' && 'ملصق زجاج نانو'}
+                                  {b.tagType === 'MIXED' && 'أنواع مختلطة'}
+                                  {' • '}
+                                  {new Date(b.createdAt).toLocaleDateString('ar-EG')}
+                                </div>
+                              </div>
+
+                              {/* Printed Mark on Batch */}
+                              {b.isPrinted ? (
+                                <span className="badge badge-active" style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>
+                                  <CheckCheck size={13} />
+                                  <span>تم الطبع {b.printCount > 1 ? `(${b.printCount}×)` : ''}</span>
+                                </span>
+                              ) : isPartial ? (
+                                <span className="badge badge-instock" style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>
+                                  <Printer size={13} />
+                                  <span>جزئي ({b.printedTagsCount}/{b.totalCount})</span>
+                                </span>
+                              ) : (
+                                <span className="badge badge-paused" style={{ whiteSpace: 'nowrap', fontSize: '0.72rem' }}>
+                                  <Clock size={13} />
+                                  <span>لم يُطبع</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '0.76rem', color: 'var(--text-secondary)', marginBottom: '12px', flexWrap: 'wrap' }}>
+                              {b.techType === 'QR_ONLY' ? (
+                                <span style={{ fontSize: '0.68rem', background: 'rgba(6, 182, 212, 0.16)', color: '#22d3ee', border: '1px solid rgba(6, 182, 212, 0.35)', padding: '2px 7px', borderRadius: '6px', fontWeight: 800 }}>
+                                  📷 QR فقط
+                                </span>
+                              ) : b.techType === 'MIXED' ? (
+                                <span style={{ fontSize: '0.68rem', background: 'rgba(245, 190, 24, 0.16)', color: '#fde68a', border: '1px solid rgba(245, 190, 24, 0.35)', padding: '2px 7px', borderRadius: '6px', fontWeight: 800 }}>
+                                  🔀 مختلط
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: '0.68rem', background: 'rgba(139, 92, 246, 0.16)', color: '#c4b5fd', border: '1px solid rgba(139, 92, 246, 0.35)', padding: '2px 7px', borderRadius: '6px', fontWeight: 800 }}>
+                                  📡 NFC + QR
+                                </span>
+                              )}
+                              <span>الكل: <b style={{ color: '#fff' }}>{b.totalCount}</b></span>
+                              <span>•</span>
+                              <span>بالمخزن: <b style={{ color: '#38bdf8' }}>{b.inStockCount}</b></span>
+                              <span>•</span>
+                              <span>مطبوع: <b style={{ color: '#34d399' }}>{b.printedTagsCount}/{b.totalCount}</b></span>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openPrintStudioForStickers(
+                                    b.tags,
+                                    `دفعة ملصقات: ${displayName}`,
+                                    `طباعة الدفعة بالكامل (${b.totalCount} ملصق)`,
+                                    {
+                                      batchNumber: b.batchNumber,
+                                      tagIds: (b.tags || []).map((t) => t.id).filter(Boolean),
+                                      markFullBatch: true,
+                                    }
+                                  );
+                                }}
+                                className="btn-gold"
+                                style={{ flex: 1, fontSize: '0.78rem', padding: '7px 10px', borderRadius: '8px' }}
+                              >
+                                <Printer size={14} />
+                                <span>طباعة الباتش ({b.totalCount})</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleBatchPrinted(b, !b.isPrinted);
+                                }}
+                                className="btn-ghost"
+                                title={b.isPrinted ? 'إلغاء علامة الطبع' : 'تحديد الباتش كمطبوع'}
+                                style={{
+                                  fontSize: '0.75rem',
+                                  padding: '7px 10px',
+                                  borderRadius: '8px',
+                                  color: b.isPrinted ? '#34d399' : 'var(--text-secondary)',
+                                  borderColor: b.isPrinted ? 'rgba(16, 185, 129, 0.4)' : 'var(--border-subtle)',
+                                }}
+                              >
+                                <Check size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* LEFT PANEL: SELECTED BATCH DETAILS & INDIVIDUAL / SELECTIVE PRINTING */}
+                    {activeBatch && (
+                      <div className="glass-panel" style={{ padding: '24px' }}>
+                        {/* Batch Header */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', paddingBottom: '18px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '18px' }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                              <h3 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#fff', fontFamily: 'var(--font-mono)', direction: 'ltr' }}>
+                                {activeBatch.batchNumber === 'UNBATCHED' ? 'بدون اسم دفعة' : activeBatch.batchNumber}
+                              </h3>
+                              {activeBatch.techType === 'QR_ONLY' ? (
+                                <span className="badge" style={{ background: 'rgba(6, 182, 212, 0.18)', color: '#22d3ee', border: '1px solid rgba(6, 182, 212, 0.4)' }}>
+                                  📷 منتج QR فقط (بدون NFC)
+                                </span>
+                              ) : activeBatch.techType === 'MIXED' ? (
+                                <span className="badge" style={{ background: 'rgba(245, 190, 24, 0.18)', color: '#fde68a', border: '1px solid rgba(245, 190, 24, 0.4)' }}>
+                                  🔀 مختلط ({activeBatch.nfcCount} NFC + {activeBatch.qrOnlyCount} QR)
+                                </span>
+                              ) : (
+                                <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.18)', color: '#c4b5fd', border: '1px solid rgba(139, 92, 246, 0.4)' }}>
+                                  📡 منتج NFC + QR
+                                </span>
+                              )}
+                              {activeBatch.isPrinted ? (
+                                <span className="badge badge-active">
+                                  <CheckCheck size={14} />
+                                  <span>تم طبع الباتش بالكامل</span>
+                                </span>
+                              ) : activeBatch.printedTagsCount > 0 ? (
+                                <span className="badge badge-instock">
+                                  <Printer size={14} />
+                                  <span>طُبع {activeBatch.printedTagsCount} من {activeBatch.totalCount}</span>
+                                </span>
+                              ) : (
+                                <span className="badge badge-paused">
+                                  <Clock size={14} />
+                                  <span>لم يُطبع بعد</span>
+                                </span>
+                              )}
+                            </div>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.84rem', marginTop: '6px' }}>
+                              اختر ملصقات محددة للطباعة الجزئية، أو اضغط "طباعة فردية" على أي ملصق، أو اطبع الباتش بالكامل.
+                              {activeBatch.printedAt && (
+                                <span style={{ color: '#34d399', marginRight: '8px' }}>
+                                  • آخر طباعة: {new Date(activeBatch.printedAt).toLocaleString('ar-EG')}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              disabled={selectedTagsForPrint.length === 0}
+                              onClick={() =>
+                                openPrintStudioForStickers(
+                                  selectedTagsForPrint,
+                                  `مختارات من دفعة: ${activeBatch.batchNumber}`,
+                                  `طباعة ${selectedTagsForPrint.length} ملصق مختار من الدفعة`,
+                                  {
+                                    batchNumber: activeBatch.batchNumber,
+                                    tagIds: selectedTagsForPrint.map((t) => t.id).filter(Boolean),
+                                    markFullBatch: selectedTagsForPrint.length === activeBatchTags.length,
+                                  }
+                                )
+                              }
+                              className="btn-gold"
+                              style={{
+                                fontSize: '0.86rem',
+                                padding: '9px 16px',
+                                opacity: selectedTagsForPrint.length === 0 ? 0.45 : 1,
+                                cursor: selectedTagsForPrint.length === 0 ? 'not-allowed' : 'pointer',
+                                background: selectedTagsForPrint.length > 0 ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : undefined,
+                                color: selectedTagsForPrint.length > 0 ? '#fff' : undefined,
+                              }}
+                            >
+                              <Printer size={16} />
+                              <span>طباعة المحدد فقط ({selectedTagsForPrint.length})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openPrintStudioForStickers(
+                                  activeBatchTags,
+                                  `دفعة ملصقات: ${activeBatch.batchNumber}`,
+                                  `طباعة الدفعة بالكامل (${activeBatchTags.length} ملصق)`,
+                                  {
+                                    batchNumber: activeBatch.batchNumber,
+                                    tagIds: activeBatchTags.map((t) => t.id).filter(Boolean),
+                                    markFullBatch: true,
+                                  }
+                                )
+                              }
+                              className="btn-gold"
+                              style={{ fontSize: '0.86rem', padding: '9px 16px' }}
+                            >
+                              <Printer size={16} />
+                              <span>طباعة الباتش بالكامل ({activeBatchTags.length})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleToggleBatchPrinted(activeBatch, !activeBatch.isPrinted)}
+                              className="btn-ghost"
+                              style={{ fontSize: '0.82rem', padding: '9px 14px' }}
+                            >
+                              <Check size={15} />
+                              <span>{activeBatch.isPrinted ? 'إلغاء علامة الطبع' : 'تحديد كمطبوع'}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Inside-Batch Filter & Selection Controls */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {[
+                              { key: 'ALL', label: `الكل (${activeBatchTags.length})` },
+                              { key: 'UNPRINTED', label: `غير مطبوع (${activeBatch.unprintedTagsCount})` },
+                              { key: 'PRINTED', label: `تم طبعه (${activeBatch.printedTagsCount})` },
+                              { key: 'IN_STOCK', label: `بالمخزن (${activeBatch.inStockCount})` },
+                            ].map((st) => (
+                              <button
+                                key={st.key}
+                                type="button"
+                                onClick={() => setBatchTagFilter(st.key)}
+                                style={{
+                                  background: batchTagFilter === st.key ? 'var(--gold-primary)' : 'rgba(255,255,255,0.05)',
+                                  color: batchTagFilter === st.key ? '#000' : 'var(--text-secondary)',
+                                  border: 'none',
+                                  padding: '6px 12px',
+                                  borderRadius: '8px',
+                                  fontWeight: 700,
+                                  fontSize: '0.8rem',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {st.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <input
+                              type="text"
+                              placeholder="بحث بكود التاج (#...)"
+                              value={batchTagSearch}
+                              onChange={(e) => setBatchTagSearch(e.target.value)}
+                              style={{
+                                padding: '7px 12px',
+                                background: 'var(--bg-input)',
+                                color: '#fff',
+                                border: '1px solid var(--border-subtle)',
+                                borderRadius: '8px',
+                                fontSize: '0.82rem',
+                                width: '170px',
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => selectTagsInBatch(activeBatch.batchNumber, visibleBatchTags.map((t) => t.id))}
+                              className="btn-ghost"
+                              style={{ fontSize: '0.78rem', padding: '6px 10px' }}
+                            >
+                              تحديد الكل ({visibleBatchTags.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => selectTagsInBatch(activeBatch.batchNumber, activeBatchTags.filter((t) => !t.isPrinted).map((t) => t.id))}
+                              className="btn-ghost"
+                              style={{ fontSize: '0.78rem', padding: '6px 10px' }}
+                            >
+                              تحديد غير المطبوع
+                            </button>
+                            {activeSelectedIds.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => selectTagsInBatch(activeBatch.batchNumber, [])}
+                                className="btn-ghost"
+                                style={{ fontSize: '0.78rem', padding: '6px 10px', color: '#f87171' }}
+                              >
+                                إلغاء التحديد
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Tags Grid Inside Active Batch */}
+                        {visibleBatchTags.length === 0 ? (
+                          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                            لا توجد ملصقات مطابقة للبحث أو الفلتر داخل هذه الدفعة.
+                          </div>
+                        ) : (
+                          <div className="print-sheet-grid cols-3">
+                            {visibleBatchTags.map((t) => {
+                              const isSelected = activeSelectedSet.has(t.id);
+                              return (
+                                <div
+                                  key={t.id}
+                                  onClick={() => toggleBatchTagSelection(activeBatch.batchNumber, t.id)}
+                                  className="print-tag-card"
+                                  style={{
+                                    cursor: 'pointer',
+                                    border: isSelected
+                                      ? '2px solid var(--gold-primary)'
+                                      : t.isPrinted
+                                        ? '1px solid rgba(16, 185, 129, 0.4)'
+                                        : '1px solid var(--border-subtle)',
+                                    background: isSelected ? 'rgba(245, 190, 24, 0.08)' : undefined,
+                                    boxShadow: isSelected ? '0 0 18px rgba(245, 190, 24, 0.2)' : undefined,
+                                    transition: 'all 0.15s ease',
+                                    paddingTop: '40px',
+                                  }}
+                                >
+                                  {/* Selection Checkbox */}
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      top: '10px',
+                                      right: '10px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '5px',
+                                      background: isSelected ? 'var(--gold-primary)' : 'rgba(255,255,255,0.08)',
+                                      color: isSelected ? '#000' : 'var(--text-secondary)',
+                                      fontSize: '0.68rem',
+                                      fontWeight: 800,
+                                      padding: '3px 8px',
+                                      borderRadius: '6px',
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {}}
+                                      style={{ accentColor: '#000', cursor: 'pointer' }}
+                                    />
+                                    <span>{isSelected ? 'محدد' : 'اختيار'}</span>
+                                  </div>
+
+                                  {/* Printed Status Badge */}
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      top: '10px',
+                                      left: '10px',
+                                      background: t.isPrinted ? 'rgba(16, 185, 129, 0.18)' : 'rgba(245, 158, 11, 0.15)',
+                                      border: t.isPrinted ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(245, 158, 11, 0.35)',
+                                      color: t.isPrinted ? '#34d399' : '#fbbf24',
+                                      fontSize: '0.62rem',
+                                      fontWeight: 800,
+                                      padding: '2px 7px',
+                                      borderRadius: '6px',
+                                    }}
+                                  >
+                                    {t.isPrinted ? '✓ تم طبعه' : 'غير مطبوع'}
+                                  </div>
+
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--gold-primary)', fontWeight: 800, letterSpacing: '1px', marginBottom: '8px' }}>
+                                    RAKNA VERITAG™
+                                  </div>
+                                  <div
+                                    className="qr-box"
+                                    dangerouslySetInnerHTML={{
+                                      __html: (t.qrCodeSvg || '')
+                                        .replace('<svg ', '<svg width="128" height="128" style="display:block;width:128px;height:128px;" ')
+                                    }}
+                                  />
+                                  <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#fff' }} className="tag-code">
+                                    {t.tagCode}
+                                  </div>
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                    {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'} • {t.status}
+                                  </div>
+                                  <div style={{ marginTop: '5px' }}>
+                                    {t.hasNfc === false ? (
+                                      <span style={{ fontSize: '0.65rem', background: 'rgba(6, 182, 212, 0.16)', color: '#22d3ee', border: '1px solid rgba(6, 182, 212, 0.35)', padding: '2px 7px', borderRadius: '6px', fontWeight: 800 }}>
+                                        📷 QR فقط
+                                      </span>
+                                    ) : (
+                                      <span style={{ fontSize: '0.65rem', background: 'rgba(139, 92, 246, 0.16)', color: '#c4b5fd', border: '1px solid rgba(139, 92, 246, 0.35)', padding: '2px 7px', borderRadius: '6px', fontWeight: 800 }}>
+                                        📡 NFC + QR
+                                      </span>
+                                    )}
+                                  </div>
+                                  {t.hasNfc !== false && (
+                                    <div
+                                      style={{ fontSize: '0.62rem', color: '#9ca3af', fontFamily: 'var(--font-mono)', marginTop: '6px' }}
+                                      title={`اضغط لنسخ الرمز المشفر بالكامل: ${t.secretToken}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (t.secretToken) {
+                                          navigator.clipboard.writeText(t.secretToken);
+                                          showToast(`تم نسخ رمز NFC: ${t.tagCode}`);
+                                        }
+                                      }}
+                                    >
+                                      NFC: {t.secretToken?.substring(0, 14)}... 📋
+                                    </div>
+                                  )}
+
+                                  {/* Individual Single-Tag Print Button */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openPrintStudioForStickers(
+                                        [t],
+                                        `طباعة فردية: ${t.tagCode}`,
+                                        `ملصق منفرد من الدفعة (${activeBatch.batchNumber})`,
+                                        {
+                                          batchNumber: activeBatch.batchNumber,
+                                          tagIds: [t.id].filter(Boolean),
+                                          markFullBatch: activeBatchTags.length === 1,
+                                        }
+                                      );
+                                    }}
+                                    className="btn-ghost"
+                                    style={{
+                                      width: '100%',
+                                      justifyContent: 'center',
+                                      marginTop: '10px',
+                                      padding: '6px 10px',
+                                      fontSize: '0.78rem',
+                                      borderColor: 'rgba(245, 190, 24, 0.35)',
+                                      color: 'var(--gold-primary)',
+                                    }}
+                                  >
+                                    <Printer size={14} />
+                                    <span>طباعة فردية ({t.tagCode})</span>
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ════════════════ TAB 3: ORDERS & LOGISTICS ════════════════ */}
           {currentTab === 'orders' && (
@@ -3718,7 +4515,10 @@ export default function App() {
                             )}
                           </td>
                           <td style={{ padding: '14px 12px' }}>
-                            {t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}
+                            <div>{t.tagType === 'TRUNK_BADGE' ? 'ملصق شنطة مدرع' : 'ملصق زجاج نانو'}</div>
+                            <div style={{ fontSize: '0.72rem', marginTop: '2px', color: t.hasNfc === false ? '#22d3ee' : '#c4b5fd', fontWeight: 700 }}>
+                              {t.hasNfc === false ? '📷 QR فقط' : '📡 NFC + QR'}
+                            </div>
                           </td>
                           <td style={{ padding: '14px 12px' }}>
                             {t.status === 'ACTIVE' && <span className="badge badge-active">نشط 🟢</span>}
@@ -8961,10 +9761,10 @@ export default function App() {
         </div>
       </main>
 
-      {/* ════════════════ SHIPPING SLIP & WAYBILL PRINT MODAL (ROOT LEVEL) ════════════════ */}
-      {isShippingSlipOpen && selectedOrderForShipping && (
+      {/* ════════════════ INTERACTIVE PRINT STUDIO MODAL (ROOT LEVEL) ════════════════ */}
+      {isPrintStudioOpen && (
         <div
-          className="shipping-slip-modal"
+          className="print-studio-modal"
           style={{
             position: 'fixed',
             top: 0,
@@ -8981,12 +9781,12 @@ export default function App() {
             alignItems: 'center',
           }}
         >
-          {/* Toolbar (Hidden in Print) */}
+          {/* Sticky Studio Toolbar (Hidden in Print) */}
           <div
-            className="no-print shipping-slip-toolbar"
+            className="no-print print-studio-toolbar"
             style={{
               width: '100%',
-              maxWidth: '820px',
+              maxWidth: '920px',
               background: 'rgba(20, 26, 40, 0.95)',
               border: '1px solid var(--gold-primary)',
               borderRadius: '16px',
@@ -9003,387 +9803,63 @@ export default function App() {
               zIndex: 10001,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Truck size={22} color="var(--gold-primary)" />
-              <div>
-                <h4 style={{ color: '#fff', fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>
-                  بوليصة شحن وتوصيل طلب COD • {selectedOrderForShipping.orderNumber}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Printer size={20} color="var(--gold-primary)" />
+                <h4 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 800 }}>
+                  محرر الطباعة المباشر • Print Studio
                 </h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '2px 0 0' }}>
-                  العميل: {selectedOrderForShipping.recipientName} • المحافظة: {selectedOrderForShipping.governorate}
-                </p>
               </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginTop: '3px' }}>
+                {printStudioTitle} • ({printStudioItems.length} عنصر جاهز للطباعة)
+              </p>
             </div>
 
+            {/* Toolbar Controls */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', borderRadius: '8px', padding: '3px', border: '1px solid var(--border-subtle)' }}>
+                <button
+                  type="button"
+                  onClick={() => setPrintColumns(3)}
+                  className={printColumns === 3 ? 'btn-gold' : 'btn-ghost'}
+                  style={{ fontSize: '0.75rem', padding: '5px 10px', borderRadius: '6px' }}
+                >
+                  3 أعمدة (A4)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintColumns(2)}
+                  className={printColumns === 2 ? 'btn-gold' : 'btn-ghost'}
+                  style={{ fontSize: '0.75rem', padding: '5px 10px', borderRadius: '6px' }}
+                >
+                  عمودين (كروت عريضة)
+                </button>
+              </div>
+
               <button
                 type="button"
-                onClick={() => handleCopyShippingDetails(selectedOrderForShipping)}
+                onClick={() => setPrintShowCutLines(!printShowCutLines)}
                 className="btn-ghost"
-                style={{ padding: '8px 14px', fontSize: '0.85rem', gap: '6px' }}
-                title="نسخ نص بيانات الشحن للواتساب"
+                style={{ fontSize: '0.78rem', padding: '6px 12px', border: printShowCutLines ? '1px solid var(--gold-primary)' : '1px solid var(--border-subtle)' }}
               >
-                <Copy size={16} />
-                <span>نسخ للواتساب</span>
+                ✂️ خطوط القص: {printShowCutLines ? 'مفعّلة' : 'مخفية'}
               </button>
 
               <button
                 type="button"
-                onClick={handlePrintShippingSlip}
+                onClick={() => setPrintShowHeader(!printShowHeader)}
+                className="btn-ghost"
+                style={{ fontSize: '0.78rem', padding: '6px 12px', border: printShowHeader ? '1px solid var(--gold-primary)' : '1px solid var(--border-subtle)' }}
+              >
+                🏢 الترويسة: {printShowHeader ? 'مفعّلة' : 'مخفية'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintStudio}
                 disabled={isPrinting}
                 className="btn-gold"
                 style={{ padding: '8px 20px', fontSize: '0.9rem', fontWeight: 800, gap: '8px', cursor: isPrinting ? 'not-allowed' : 'pointer' }}
               >
                 <Printer size={18} />
-                <span>{isPrinting ? 'جاري التحضير للطباعة...' : 'طباعة البوليصة الآن (Print)'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsShippingSlipOpen(false);
-                  setSelectedOrderForShipping(null);
-                }}
-                className="btn-ghost"
-                style={{ padding: '8px 14px', fontSize: '0.9rem', color: '#f87171' }}
-                title="إغلاق"
-              >
-                <X size={18} />
-              </button>
-            </div>
-          </div>
-
-          {/* Printable Waybill Sheet (Pure White Background & Black Text - ZERO EMOJIS) */}
-          <div
-            className="printable-area shipping-waybill-canvas"
-            style={{
-              width: '100%',
-              maxWidth: '750px',
-              background: '#ffffff',
-              backgroundColor: '#ffffff',
-              color: '#000000',
-              borderRadius: '12px',
-              padding: '28px',
-              border: '2px solid #000000',
-              boxShadow: '0 12px 48px rgba(0,0,0,0.8)',
-              direction: 'rtl',
-            }}
-          >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2.5px solid #000000', paddingBottom: '14px', marginBottom: '18px' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#000000' }}>ركنة RAKNA</span>
-                  <span style={{ fontSize: '0.8rem', background: '#000000', color: '#ffffff', padding: '3px 8px', borderRadius: '4px', fontWeight: 800 }}>
-                    بوليصة شحن وتوصيل
-                  </span>
-                </div>
-                <div style={{ fontSize: '0.82rem', color: '#000000', marginTop: '4px', fontWeight: 600 }}>
-                  منظومة حماية المركبات والتواصل الذكي • إشعار تسليم COD
-                </div>
-              </div>
-              <div style={{ textAlign: 'left', direction: 'ltr' }}>
-                <div style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: 'monospace', color: '#000000', letterSpacing: '1px' }}>
-                  {selectedOrderForShipping.orderNumber}
-                </div>
-                <div style={{ fontSize: '0.78rem', color: '#333333', fontWeight: 600 }}>
-                  تاريخ الطلب: {new Date(selectedOrderForShipping.createdAt || Date.now()).toLocaleDateString('ar-EG')}
-                </div>
-              </div>
-            </div>
-
-            {/* Grid: Sender & Recipient Info */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '18px' }}>
-              {/* Recipient Info (To) */}
-              <div style={{ border: '2px solid #000000', borderRadius: '8px', padding: '12px', background: '#ffffff' }}>
-                <div style={{ fontWeight: 900, fontSize: '0.95rem', borderBottom: '1.5px solid #000000', paddingBottom: '6px', marginBottom: '8px', color: '#000000' }}>
-                  بيانات المستلم (العميل)
-                </div>
-                <div style={{ fontSize: '0.88rem', marginBottom: '5px', color: '#000000' }}>
-                  <b>الاسم:</b> <span style={{ fontWeight: 800, fontSize: '0.95rem' }}>{selectedOrderForShipping.recipientName}</span>
-                </div>
-                <div style={{ fontSize: '0.88rem', marginBottom: '5px', color: '#000000' }}>
-                  <b>الهاتف:</b> <span style={{ fontWeight: 900, fontFamily: 'monospace', fontSize: '1rem', direction: 'ltr', display: 'inline-block' }}>{selectedOrderForShipping.phone}</span>
-                </div>
-                <div style={{ fontSize: '0.88rem', marginBottom: '5px', color: '#000000' }}>
-                  <b>المحافظة:</b> <span style={{ fontWeight: 800 }}>{selectedOrderForShipping.governorate}</span>
-                </div>
-                <div style={{ fontSize: '0.85rem', color: '#000000', lineHeight: 1.5 }}>
-                  <b>العنوان التفصيلي:</b> {selectedOrderForShipping.addressDetails}
-                </div>
-              </div>
-
-              {/* Sender Info (From) */}
-              <div style={{ border: '1.5px solid #000000', borderRadius: '8px', padding: '12px', background: '#f9fafb' }}>
-                <div style={{ fontWeight: 900, fontSize: '0.95rem', borderBottom: '1.5px solid #000000', paddingBottom: '6px', marginBottom: '8px', color: '#000000' }}>
-                  بيانات الراسل (المتجر)
-                </div>
-                <div style={{ fontSize: '0.85rem', marginBottom: '5px', color: '#000000' }}>
-                  <b>الراسل:</b> شركة ركنة الذكية (RAKNA Tech)
-                </div>
-                <div style={{ fontSize: '0.85rem', marginBottom: '5px', color: '#000000' }}>
-                  <b>خدمة العملاء:</b> دعم متجر وتطبيق ركنة الرسمي
-                </div>
-                <div style={{ fontSize: '0.85rem', marginBottom: '5px', color: '#000000' }}>
-                  <b>الموقع الإلكتروني:</b> rakna.tech
-                </div>
-                <div style={{ fontSize: '0.8rem', color: '#374151', marginTop: '6px', lineHeight: 1.4 }}>
-                  <b>طبيعة الشحنة:</b> ملصقات ذكية مشفرة لحماية السيارات وكروت تفعيل
-                </div>
-              </div>
-            </div>
-
-            {/* Package Contents Table */}
-            <div style={{ border: '1.5px solid #000000', borderRadius: '8px', overflow: 'hidden', marginBottom: '18px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
-                <thead>
-                  <tr style={{ background: '#f3f4f6', borderBottom: '1.5px solid #000000', fontSize: '0.85rem', color: '#000000' }}>
-                    <th style={{ padding: '8px 12px' }}>م</th>
-                    <th style={{ padding: '8px 12px' }}>المنتج / محتويات الطرد</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'center' }}>الكمية</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'left' }}>سعر الوحدة</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'left' }}>الإجمالي</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedOrderForShipping.items && selectedOrderForShipping.items.length > 0 ? (
-                    selectedOrderForShipping.items.map((it, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb', fontSize: '0.85rem', color: '#000000' }}>
-                        <td style={{ padding: '8px 12px', fontWeight: 700 }}>{idx + 1}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 800 }}>{it.productName || 'ملصق ركنة الذكي'}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 900 }}>{it.quantity || 1}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace' }}>{it.unitPrice || selectedOrderForShipping.totalPrice} EGP</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace', fontWeight: 800 }}>
-                          {(it.unitPrice ? it.unitPrice * (it.quantity || 1) : selectedOrderForShipping.totalPrice)} EGP
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr style={{ fontSize: '0.85rem', color: '#000000' }}>
-                      <td style={{ padding: '8px 12px', fontWeight: 700 }}>1</td>
-                      <td style={{ padding: '8px 12px', fontWeight: 800 }}>ملصق حماية المركبات ركنة (Tag)</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 900 }}>1</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace' }}>{selectedOrderForShipping.totalPrice} EGP</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'left', fontFamily: 'monospace', fontWeight: 800 }}>{selectedOrderForShipping.totalPrice} EGP</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Big COD Cash Collection Banner (NO EMOJIS) */}
-            <div style={{
-              border: '2.5px solid #000000',
-              borderRadius: '10px',
-              padding: '14px 18px',
-              background: '#f9fafb',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '18px',
-            }}>
-              <div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 900, color: '#000000' }}>
-                  المبلغ المطلوب تحصيله نقداً عند الاستلام (COD):
-                </div>
-                <div style={{ fontSize: '0.78rem', color: '#374151', marginTop: '2px' }}>
-                  طريقة الدفع: الدفع عند الاستلام • شامل مصاريف الشحن والتوصيل
-                </div>
-              </div>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#000000', fontFamily: 'monospace', letterSpacing: '1px' }}>
-                  {selectedOrderForShipping.totalPrice} EGP
-                </div>
-              </div>
-            </div>
-
-            {/* Courier Instructions & Signatures (NO EMOJIS) */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '14px', borderTop: '1.5px dashed #000000', paddingTop: '12px' }}>
-              <div style={{ fontSize: '0.78rem', color: '#1f2937', lineHeight: 1.6 }}>
-                <b>تعليمات هامة لمندوب شركة الشحن:</b><br />
-                • يرجى الاتصال بالعميل قبل التحرك للتسليم للتأكد من تواجده بالعنوان.<br />
-                • لا يُسمح بفتح الطرد أو العبث بالملصق الأمني إلا بعد تحصيل كامل المبلغ.<br />
-                • في حال تعذر الوصول، يرجى إعادة المحاولة أو التواصل مع خدمة العملاء.
-              </div>
-              <div style={{ borderRight: '1.5px dashed #000000', paddingRight: '14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: '0.8rem', color: '#000000' }}>
-                  <b>توقيع مستلم الشحنة:</b> ..............................
-                </div>
-                <div style={{ fontSize: '0.8rem', color: '#000000', marginTop: '8px' }}>
-                  <b>توقيع وتاريخ المندوب:</b> ..............................
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ──────────────── نافذة إرسال إشعار عام لكافة المستخدمين ──────────────── */}
-      {broadcastModalOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(5px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000,
-          padding: '20px',
-        }}>
-          <div style={{
-            background: 'var(--bg-card)',
-            border: '1px solid rgba(245, 190, 24, 0.4)',
-            borderRadius: '20px',
-            width: '100%',
-            maxWidth: '540px',
-            padding: '28px',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6), var(--shadow-gold)',
-            position: 'relative',
-          }}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '12px',
-                  background: 'rgba(245, 190, 24, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  <Megaphone size={22} color="var(--gold-primary)" />
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    إرسال إشعار عام للكل
-                  </h3>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                    سيصل الإشعار كـ Push Notification مباشر على هواتف جميع المستخدمين 📲
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setBroadcastModalOpen(false)}
-                disabled={isSendingBroadcast}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  borderRadius: '8px',
-                }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleSendBroadcast}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                  عنوان الإشعار (Title):
-                </label>
-                <input
-                  type="text"
-                  placeholder="مثال: تحديث هام بخصوص خدمة ركنة 🚗"
-                  value={broadcastForm.title}
-                  onChange={(e) => setBroadcastForm({ ...broadcastForm, title: e.target.value })}
-                  disabled={isSendingBroadcast}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    border: '1px solid var(--border-subtle)',
-                    background: 'var(--bg-primary)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.92rem',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '22px' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                  نص الإشعار (Message Body):
-                </label>
-                <textarea
-                  rows={4}
-                  placeholder="اكتب رسالتك لجميع مستخدمي التطبيق هنا بالتفصيل..."
-                  value={broadcastForm.message}
-                  onChange={(e) => setBroadcastForm({ ...broadcastForm, message: e.target.value })}
-                  disabled={isSendingBroadcast}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    border: '1px solid var(--border-subtle)',
-                    background: 'var(--bg-primary)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.92rem',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    resize: 'vertical',
-                    fontFamily: 'inherit',
-                  }}
-                />
-              </div>
-
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  onClick={() => setBroadcastModalOpen(false)}
-                  disabled={isSendingBroadcast}
-                  style={{
-                    padding: '11px 20px',
-                    borderRadius: '12px',
-                    border: '1px solid var(--border-subtle)',
-                    background: 'transparent',
-                    color: 'var(--text-secondary)',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                  }}
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSendingBroadcast || !broadcastForm.title.trim() || !broadcastForm.message.trim()}
-                  style={{
-                    padding: '11px 24px',
-                    borderRadius: '12px',
-                    border: 'none',
-                    background: 'var(--gold-primary)',
-                    color: '#000',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    fontSize: '0.92rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    boxShadow: 'var(--shadow-gold)',
-                    opacity: isSendingBroadcast ? 0.7 : 1,
-                  }}
-                >
-                  <Send size={16} />
-                  <span>{isSendingBroadcast ? 'جاري الإرسال للجميع...' : 'إرسال الإشعار الآن 🚀'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-}
+... [truncated for diff preview]

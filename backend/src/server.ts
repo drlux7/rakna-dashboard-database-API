@@ -279,6 +279,8 @@ adminRouter.post('/login', AdminController.login);
 adminRouter.get('/stats', authenticateAdmin, AdminController.getStats);
 adminRouter.post('/tags/batch', authenticateAdmin, AdminController.generateTagsBatch);
 adminRouter.get('/tags', authenticateAdmin, AdminController.listTags);
+adminRouter.get('/batches', authenticateAdmin, AdminController.listBatches);
+adminRouter.post('/batches/mark-printed', authenticateAdmin, AdminController.markTagsPrinted);
 adminRouter.post('/activation-codes/batch', authenticateAdmin, AdminController.generateActivationCodesBatch);
 adminRouter.get('/activation-codes', authenticateAdmin, AdminController.listActivationCodes);
 adminRouter.get('/orders', authenticateAdmin, AdminController.listOrders);

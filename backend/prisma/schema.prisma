@@ -90,6 +90,10 @@ model Tag {
   
   batchNumber           String?
   qrCodeSvg             String?        // Pre-generated SVG QR for printing
+  hasNfc                Boolean        @default(true) // true = NFC + QR, false = QR only
+  isPrinted             Boolean        @default(false)
+  printedAt             DateTime?
+  printCount            Int            @default(0)
 
   userId                String?
   user                  User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -106,6 +110,20 @@ model Tag {
   activationCode        ActivationCode? // The single activation code that was used to activate this tag
 
   @@map("tags")
+}
+
+model TagBatch {
+  id                    String         @id @default(uuid())
+  batchNumber           String         @unique
+  tagType               String         @default("TRUNK_BADGE") // TRUNK_BADGE, NANO_GLASS, MIXED
+  techType              String         @default("NFC_QR") // NFC_QR, QR_ONLY, MIXED
+  isPrinted             Boolean        @default(false)
+  printedAt             DateTime?
+  printCount            Int            @default(0)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@map("tag_batches")
 }
 
 // Activation codes printed on the cards inside the package

@@ -290,6 +290,8 @@ body {
   }
 
   /* 3. When Print Studio is Active: Hide entire dashboard layout content */
+  body.print-studio-active aside,
+  body.print-studio-active main,
   body.print-studio-active .dashboard-layout,
   body.print-studio-active .main-content > .fade-in > *:not(.print-studio-modal),
   body.print-studio-active .glass-panel {

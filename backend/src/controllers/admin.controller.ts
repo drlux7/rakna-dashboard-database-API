@@ -188,9 +188,13 @@ export class AdminController {
   static async generateTagsBatch(req: AuthRequest, res: Response): Promise<void> {
     try {
       const rawCount = req.body.count ?? req.body.quantity;
-      const rawBatch = req.body.batchName || req.body.batchNumber;
+      const rawBatch = typeof (req.body.batchName || req.body.batchNumber) === 'string'
+        ? (req.body.batchName || req.body.batchNumber).trim()
+        : '';
       const amount = Math.min(Math.max(parseInt(rawCount) || 10, 1), 500); // 1 to 500 per batch
       const type = req.body.tagType === 'NANO_GLASS' ? 'NANO_GLASS' : 'TRUNK_BADGE';
+      const hasNfc = req.body.techType === 'QR_ONLY' || req.body.hasNfc === false ? false : true;
+      const techType = hasNfc ? 'NFC_QR' : 'QR_ONLY';
       const batchNumber = rawBatch || `BATCH-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
       const withCodes = req.body.generatePairedCodes === true;
 
@@ -250,6 +254,7 @@ export class AdminController {
             tagCode,
             secretToken,
             tagType: type,
+            hasNfc,
             status: 'IN_STOCK',
             batchNumber,
             qrCodeSvg: qrSvg,
@@ -261,17 +266,32 @@ export class AdminController {
           tagCode: tag.tagCode,
           activationCode: activationCodeStr,
           tagType: tag.tagType,
+          hasNfc: tag.hasNfc,
+          techType,
           status: tag.status,
           batchNumber: tag.batchNumber,
+          isPrinted: tag.isPrinted,
+          printedAt: tag.printedAt,
+          printCount: tag.printCount,
           scanUrl,
           qrCodeSvg: tag.qrCodeSvg,
         });
       }
 
+      if (createdTags.length > 0) {
+        await prisma.tagBatch.upsert({
+          where: { batchNumber },
+          create: { batchNumber, tagType: type, techType, isPrinted: false },
+          update: { isPrinted: false, techType },
+        });
+      }
+
       res.status(201).json({
         success: true,
-        message: `تم توليد ${createdTags.length} ملصق Tag جديد بنجاح للدفعة (${batchNumber})`,
+        message: `تم توليد ${createdTags.length} ملصق Tag (${hasNfc ? 'NFC + QR' : 'QR فقط'}) بنجاح للدفعة (${batchNumber})`,
         batchNumber,
+        hasNfc,
+        techType,
         count: createdTags.length,
         tags: createdTags,
       });
@@ -354,7 +374,7 @@ export class AdminController {
           activationCode: { select: { code: true, isRedeemed: true, redeemedAt: true } },
         },
         orderBy: { createdAt: 'desc' },
-        take: 100,
+        take: 2000,
       });
 
       const serverBaseUrl = getPublicScanBaseUrl(req);
@@ -387,6 +407,194 @@ export class AdminController {
       res.json({ success: true, count: formattedTags.length, tags: formattedTags });
     } catch (error) {
       res.status(500).json({ success: false, message: 'تعذر جلب ملصقات الـ Tags' });
+    }
+  }
+
+  /**
+   * استعراض كافة دفعات الـ Tags مجمعة كل دفعة على حدة مع حالة الطباعة
+   */
+  static async listBatches(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const [allTags, batchMetas] = await Promise.all([
+        prisma.tag.findMany({
+          include: {
+            user: { select: { name: true, phone: true } },
+            car: { select: { brand: true, model: true, colorName: true, plateNumber: true } },
+            activationCode: { select: { code: true, isRedeemed: true, redeemedAt: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.tagBatch.findMany(),
+      ]);
+
+      const metaMap = new Map<string, any>();
+      for (const m of batchMetas) {
+        metaMap.set(m.batchNumber, m);
+      }
+
+      const serverBaseUrl = getPublicScanBaseUrl(req);
+      const formattedTags = await Promise.all(
+        allTags.map(async (t: any) => {
+          const cleanCodeWithoutHash = (t.tagCode || '').replace(/^#/, '');
+          const scanUrl = `${serverBaseUrl}/t/${encodeURIComponent(cleanCodeWithoutHash)}`;
+          let qrCodeSvg = t.qrCodeSvg;
+          if (!qrCodeSvg) {
+            qrCodeSvg = await QRCode.toString(scanUrl, {
+              type: 'svg',
+              width: 140,
+              margin: 1,
+              color: { dark: '#000000', light: '#FFFFFF' },
+            });
+            prisma.tag.update({ where: { id: t.id }, data: { qrCodeSvg } }).catch(() => {});
+          }
+
+          return {
+            ...t,
+            scanUrl,
+            qrCodeSvg,
+            activationCode: t.activationCode?.code || null,
+            isRedeemed: t.activationCode?.isRedeemed || false,
+            redeemedAt: t.activationCode?.redeemedAt || null,
+          };
+        })
+      );
+
+      const groups = new Map<string, any[]>();
+      for (const t of formattedTags) {
+        const key = (t.batchNumber || '').trim() || 'UNBATCHED';
+        if (!groups.has(key)) {
+          groups.set(key, []);
+        }
+        groups.get(key)!.push(t);
+      }
+
+      const batches = Array.from(groups.entries()).map(([batchNumber, tags]) => {
+        const meta = metaMap.get(batchNumber);
+        const totalCount = tags.length;
+        const inStockCount = tags.filter((t) => t.status === 'IN_STOCK').length;
+        const activeCount = tags.filter((t) => t.status === 'ACTIVE').length;
+        const printedTagsCount = tags.filter((t) => t.isPrinted).length;
+        const unprintedTagsCount = totalCount - printedTagsCount;
+
+        const types = new Set(tags.map((t) => t.tagType));
+        const tagType = types.size > 1 ? 'MIXED' : (tags[0]?.tagType || meta?.tagType || 'TRUNK_BADGE');
+
+        const nfcCount = tags.filter((t) => t.hasNfc !== false).length;
+        const qrOnlyCount = tags.filter((t) => t.hasNfc === false).length;
+        const techType =
+          nfcCount > 0 && qrOnlyCount > 0
+            ? 'MIXED'
+            : qrOnlyCount > 0
+              ? 'QR_ONLY'
+              : (meta?.techType || 'NFC_QR');
+
+        const latestTagPrintedAt = tags
+          .map((t) => (t.printedAt ? new Date(t.printedAt).getTime() : 0))
+          .reduce((a, b) => Math.max(a, b), 0);
+
+        const earliestCreatedAt = tags
+          .map((t) => new Date(t.createdAt).getTime())
+          .reduce((a, b) => Math.min(a, b), Date.now());
+
+        const isPrinted = Boolean(meta?.isPrinted) || (totalCount > 0 && printedTagsCount === totalCount);
+
+        return {
+          batchNumber,
+          tagType,
+          techType,
+          nfcCount,
+          qrOnlyCount,
+          totalCount,
+          inStockCount,
+          activeCount,
+          printedTagsCount,
+          unprintedTagsCount,
+          isPrinted,
+          printedAt: meta?.printedAt || (latestTagPrintedAt ? new Date(latestTagPrintedAt).toISOString() : null),
+          printCount: meta?.printCount || (isPrinted ? 1 : 0),
+          createdAt: meta?.createdAt || new Date(earliestCreatedAt).toISOString(),
+          tags,
+        };
+      });
+
+      batches.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      res.json({ success: true, count: batches.length, batches });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر جلب دفعات الـ Tags' });
+    }
+  }
+
+  /**
+   * تحديث حالة الطباعة لدفعة كاملة أو ملصقات محددة داخل الدفعة
+   */
+  static async markTagsPrinted(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { batchNumber, tagIds, markFullBatch, printed } = req.body || {};
+      const isPrinted = printed !== false;
+      const now = isPrinted ? new Date() : null;
+
+      if (Array.isArray(tagIds) && tagIds.length > 0) {
+        await prisma.tag.updateMany({
+          where: { id: { in: tagIds } },
+          data: isPrinted
+            ? { isPrinted: true, printedAt: now, printCount: { increment: 1 } }
+            : { isPrinted: false, printedAt: null, printCount: 0 },
+        });
+      }
+
+      if (batchNumber && typeof batchNumber === 'string' && batchNumber.trim() && batchNumber !== 'UNBATCHED') {
+        const cleanBatch = batchNumber.trim();
+        if (markFullBatch) {
+          if (!Array.isArray(tagIds) || tagIds.length === 0) {
+            await prisma.tag.updateMany({
+              where: { batchNumber: cleanBatch },
+              data: isPrinted
+                ? { isPrinted: true, printedAt: now, printCount: { increment: 1 } }
+                : { isPrinted: false, printedAt: null, printCount: 0 },
+            });
+          }
+
+          await prisma.tagBatch.upsert({
+            where: { batchNumber: cleanBatch },
+            create: {
+              batchNumber: cleanBatch,
+              isPrinted,
+              printedAt: now,
+              printCount: isPrinted ? 1 : 0,
+            },
+            update: isPrinted
+              ? { isPrinted: true, printedAt: now, printCount: { increment: 1 } }
+              : { isPrinted: false, printedAt: null, printCount: 0 },
+          });
+        } else {
+          const [totalInBatch, printedInBatch] = await Promise.all([
+            prisma.tag.count({ where: { batchNumber: cleanBatch } }),
+            prisma.tag.count({ where: { batchNumber: cleanBatch, isPrinted: true } }),
+          ]);
+          const allPrinted = totalInBatch > 0 && printedInBatch === totalInBatch;
+          await prisma.tagBatch.upsert({
+            where: { batchNumber: cleanBatch },
+            create: {
+              batchNumber: cleanBatch,
+              isPrinted: allPrinted,
+              printedAt: allPrinted ? now : null,
+              printCount: allPrinted ? 1 : 0,
+            },
+            update: {
+              isPrinted: allPrinted,
+              ...(allPrinted ? { printedAt: now, printCount: { increment: 1 } } : {}),
+            },
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        message: isPrinted ? 'تم تسجيل علامة الطباعة بنجاح ✅' : 'تم إلغاء علامة الطباعة',
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'تعذر تحديث حالة الطباعة' });
     }
   }
 

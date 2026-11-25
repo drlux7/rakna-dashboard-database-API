@@ -67,10 +67,18 @@ class AdminApiService {
   }
 
   // Batch Tag Generator (Vehicle Stickers & QR Codes)
-  async generateTagsBatch(quantity, tagType, batchNumber) {
+  async generateTagsBatch(quantity, tagType, batchNumber, hasNfc = true) {
     return this.request('/admin/tags/batch', {
       method: 'POST',
-      body: JSON.stringify({ quantity, count: quantity, tagType, batchNumber, batchName: batchNumber }),
+      body: JSON.stringify({
+        quantity,
+        count: quantity,
+        tagType,
+        batchNumber,
+        batchName: batchNumber,
+        hasNfc,
+        techType: hasNfc ? 'NFC_QR' : 'QR_ONLY',
+      }),
     });
   }
 
@@ -85,6 +93,19 @@ class AdminApiService {
   // List all Tags
   async listTags() {
     return this.request('/admin/tags');
+  }
+
+  // List all Tag Batches with print status
+  async listBatches() {
+    return this.request('/admin/batches');
+  }
+
+  // Mark a batch or specific tag IDs as printed/unprinted
+  async markBatchPrinted(payload) {
+    return this.request('/admin/batches/mark-printed', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   // List all Activation Codes
